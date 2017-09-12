@@ -40,6 +40,8 @@ public class VarInt {
     private static final long MAX_7_BYTE_VALUE = MAX_6_BYTE_VALUE + (1L << 49);
     private static final long MAX_8_BYTE_VALUE = MAX_7_BYTE_VALUE + (1L << 57);
 
+    public static final long MAX_VALUE = MAX_8_BYTE_VALUE;
+
     private final long decodedValue;
     private final byte[] encodedValue;
 
