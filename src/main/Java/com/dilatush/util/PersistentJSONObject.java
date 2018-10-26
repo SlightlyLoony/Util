@@ -4,6 +4,8 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import static com.dilatush.util.Strings.isNonEmpty;
 
@@ -13,6 +15,8 @@ import static com.dilatush.util.Strings.isNonEmpty;
  * @author Tom Dilatush  tom@dilatush.com
  */
 public class PersistentJSONObject extends JSONObject {
+
+    final static private Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
 
     private final File file;
 
@@ -98,7 +102,7 @@ public class PersistentJSONObject extends JSONObject {
             return true;
         }
         catch( JSONException _e ) {
-            Logger.log( _e );
+            LOGGER.log( Level.SEVERE, "Problem in JSON string: " + _json, _e );
             return false;
         }
 

@@ -15,7 +15,7 @@ import java.util.logging.Logger;
 public class PersistentSQLConnection {
 
 
-    private static final Logger LOG = Logger.getLogger( PersistentSQLConnection.class.getSimpleName() );
+    private static final Logger LOG = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getSimpleName() );
 
     final private String password;
     final private String userName;
@@ -73,7 +73,7 @@ public class PersistentSQLConnection {
     private void createConnection() {
         try {
             Class.forName( "com.mysql.cj.jdbc.Driver" ).newInstance();
-            String sqlURL = "jdbc:mysql://beast.dilatush.com/events?autoReconnect=true&useSSL=false";
+            String sqlURL = "jdbc:mysql://beast.dilatush.com?autoReconnect=true&useSSL=false";
             connection = DriverManager.getConnection( sqlURL, userName, password );
         }
         catch( Exception _e ) {

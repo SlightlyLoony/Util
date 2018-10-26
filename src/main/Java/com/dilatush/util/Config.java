@@ -4,8 +4,6 @@ import org.json.JSONException;
 
 import java.io.File;
 
-import static com.dilatush.util.Strings.isEmpty;
-
 /**
  * Implements a generic configuration using JSON encoding for the persistent file.  This class extends {@link HJSONObject} to provide getters,
  * setters, and testers that use dotted identifiers to represent elements within a hierarchy.
@@ -23,9 +21,9 @@ public class Config extends HJSONObject {
      */
     public static Config fromJSONFile( final String _configFilePath ) {
 
-        if( isEmpty( _configFilePath ) ) throw new IllegalArgumentException( "Configuration file path missing or empty" );
+        if( Strings.isEmpty( _configFilePath ) ) throw new IllegalArgumentException( "Configuration file path missing or empty" );
         String json = Files.readToString( new File( _configFilePath ) );
-        if( isEmpty( json ) ) throw new IllegalArgumentException( "Configuration file missing or empty: " + _configFilePath );
+        if( Strings.isEmpty( json ) ) throw new IllegalArgumentException( "Configuration file missing or empty: " + _configFilePath );
         return new Config( json );
     }
 
