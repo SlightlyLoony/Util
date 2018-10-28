@@ -35,10 +35,8 @@ public class Averager {
     public Averager( final double _weightingFactor, final int _numberOfSamples ) {
 
         // sanity check...
-        if( _numberOfSamples < 1 )
-            throw new IllegalArgumentException( "Averager number of samples must be >=1" );
-        if( !Double.isFinite( _weightingFactor ) )
-            throw new IllegalArgumentException( "Averager weighting factor must be a finite number" );
+        Checks.isTrue( _numberOfSamples >= 1, "Averager number of samples must be >=1" );
+        Checks.isTrue( Double.isFinite( _weightingFactor ), "Averager weighting factor must be a finite number" );
 
         weightingFactor = _weightingFactor;
         numberOfSamples = _numberOfSamples;

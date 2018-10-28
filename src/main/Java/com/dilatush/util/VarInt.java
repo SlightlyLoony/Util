@@ -1,7 +1,5 @@
 package com.dilatush.util;
 
-import static com.dilatush.util.General.isNull;
-
 /**
  * <p>Instances of this class represent integer values in the range [0..144,682,570,706,075,775] as sequences of one to eight bytes.  Note that all
  * valid values are positive; instances of this class cannot represent negative values.  This class is useful in applications where smaller values are
@@ -54,8 +52,7 @@ public class VarInt {
      */
     public VarInt( final long _value ) {
 
-        if( (_value < 0) || (_value > MAX_8_BYTE_VALUE) )
-            throw new IllegalArgumentException( "Value is out of range: " + _value );
+        Checks.inBounds( _value, 0, MAX_8_BYTE_VALUE, "Value is out of range: " + _value );
 
         decodedValue = _value;
 
@@ -144,8 +141,8 @@ public class VarInt {
      */
     public VarInt( final byte[] _bytes ) {
 
-        if( isNull( (Object) _bytes ) || (_bytes.length == 0) )
-            throw new IllegalArgumentException( "Bytes are missing or empty" );
+        Checks.required( (Object) _bytes );
+        Checks.isTrue( _bytes.length > 0, "Bytes are empty" );
 
         int bytes = numberOfEncodedBytes( _bytes[0] );
 
@@ -233,8 +230,8 @@ public class VarInt {
     /**
      * Given the first byte of an encoded instance of this class, returns the number of bytes required for the complete encoding.
      *
-     * @param _firstByte
-     * @return
+     * @param _firstByte the first byte of a variable integer
+     * @return the number of bytes required for the complete encoding
      */
     public static int numberOfEncodedBytes( final byte _firstByte ) {
         return Integer.numberOfLeadingZeros( ~(0xFFFFFF00 | (0xFE & _firstByte) ) ) - 23;
