@@ -42,6 +42,17 @@ public class Conversions {
 
 
     /**
+     * Converts the given value in grams per cubic meter to ounces per cubic yard.
+     *
+     * @param _gm3 the value in grams per cubic meter
+     * @return the value in ounces per cubic yard
+     */
+    public static double fromGM3toOY3( final double _gm3 ) {
+        return _gm3 * 0.02696892f;
+    }
+
+
+    /**
      * Converts the given value in kilopascals to the equivalent value in inches of mercury.
      *
      * @param _kp the value in kilopascals
