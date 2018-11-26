@@ -17,6 +17,7 @@ public class PersistentSQLConnection {
 
     private static final Logger LOG = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getSimpleName() );
 
+    final private String host;
     final private String password;
     final private String userName;
 
@@ -24,14 +25,27 @@ public class PersistentSQLConnection {
 
 
     /**
-     * Creates a new instance of this class with the given SQL user name and password.
+     * Creates a new instance of this class with the given SQL user name and password, assuming beast.dilatush.com.
+     *
+     * @param _host  the host of the SQL server
+     * @param _userName the SQL user name to use for this connection
+     * @param _password the SQL password to use for this connection
+     */
+    public PersistentSQLConnection( final String _host, final String _userName, final String _password ) {
+        host = _host;
+        userName = _userName;
+        password = _password;
+    }
+
+
+    /**
+     * Creates a new instance of this class with the given SQL user name and password, assuming beast.dilatush.com.
      *
      * @param _userName the SQL user name to use for this connection
      * @param _password the SQL password to use for this connection
      */
     public PersistentSQLConnection( final String _userName, final String _password ) {
-        userName = _userName;
-        password = _password;
+        this( "beast.dilatush.com", _userName, _password );
     }
 
 
@@ -73,7 +87,7 @@ public class PersistentSQLConnection {
     private void createConnection() {
         try {
             Class.forName( "com.mysql.cj.jdbc.Driver" ).newInstance();
-            String sqlURL = "jdbc:mysql://beast.dilatush.com?autoReconnect=true&useSSL=false";
+            String sqlURL = "jdbc:mysql://" + host + "?autoReconnect=true&useSSL=false";
             connection = DriverManager.getConnection( sqlURL, userName, password );
         }
         catch( Exception _e ) {
