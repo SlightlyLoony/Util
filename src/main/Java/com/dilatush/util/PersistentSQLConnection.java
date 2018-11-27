@@ -21,7 +21,7 @@ public class PersistentSQLConnection {
     final private String password;
     final private String userName;
 
-    private Connection connection;
+    final private ThreadLocal<Connection> perThreadConnection;
 
 
     /**
@@ -32,6 +32,7 @@ public class PersistentSQLConnection {
      * @param _password the SQL password to use for this connection
      */
     public PersistentSQLConnection( final String _host, final String _userName, final String _password ) {
+        perThreadConnection = new ThreadLocal<>();
         host = _host;
         userName = _userName;
         password = _password;
@@ -54,17 +55,22 @@ public class PersistentSQLConnection {
      *
      * @return the ready to use SQL connection
      */
-    public synchronized Connection getConnection() {
+    public Connection getConnection() {
+
+        // get the connection, if any, for this thread...
+        Connection connection = perThreadConnection.get();
 
         // first we do our best to ensure we have a valid connection...
         try {
             // if we don't have a connection ready to go, then create it...
             if( (connection == null) || !connection.isValid( 500 ) ) {
-                createConnection();
+                connection = createConnection();
+                perThreadConnection.set( connection );
             }
         }
         catch( SQLException _e ) {
-            createConnection();
+            connection = createConnection();
+            perThreadConnection.set( connection );
         }
 
         // then we check to make sure it's valid, and if not we make a catastrophe...
@@ -84,15 +90,31 @@ public class PersistentSQLConnection {
     }
 
 
-    private void createConnection() {
+    public String getHost() {
+        return host;
+    }
+
+
+    public String getPassword() {
+        return password;
+    }
+
+
+    public String getUserName() {
+        return userName;
+    }
+
+
+    private Connection createConnection() {
         try {
             Class.forName( "com.mysql.cj.jdbc.Driver" ).newInstance();
             String sqlURL = "jdbc:mysql://" + host + "?autoReconnect=true&useSSL=false";
-            connection = DriverManager.getConnection( sqlURL, userName, password );
+            return DriverManager.getConnection( sqlURL, userName, password );
         }
         catch( Exception _e ) {
             LOG.log( Level.SEVERE, "Could not get SQL connection", _e );
             System.exit( 1 );
+            return null;  // makes the compiler's error-checking happy...
         }
     }
 }
