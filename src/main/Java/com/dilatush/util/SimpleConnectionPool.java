@@ -117,8 +117,24 @@ public class SimpleConnectionPool {
     }
 
 
+    @Override
     public String toString() {
         return " (created: " + created.get() + ", cached: " + cache.size() + ")";
+    }
+
+
+    public String getHost() {
+        return host;
+    }
+
+
+    public String getPassword() {
+        return password;
+    }
+
+
+    public String getUserName() {
+        return userName;
     }
 
 
