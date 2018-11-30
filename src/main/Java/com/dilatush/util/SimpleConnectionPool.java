@@ -47,7 +47,7 @@ public class SimpleConnectionPool {
         userName  = _userName;
         maxCached = _maxCached;
         maxExtant = _maxExtant;
-        timer     = new Timer();
+        timer     = new Timer( "Tickler", true );
 
         created   = new AtomicInteger( 0 );
 
