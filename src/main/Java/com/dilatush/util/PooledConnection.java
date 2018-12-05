@@ -2,6 +2,7 @@ package com.dilatush.util;
 
 import java.sql.*;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.logging.Logger;
 
@@ -30,7 +31,7 @@ public class PooledConnection implements Connection {
 
 
     protected void finalize() throws Throwable {
-        // TODO: put warning for leakage here
+        LOGGER.finer( "SQL connection being finalized" );
         super.finalize();
     }
 
@@ -53,6 +54,23 @@ public class PooledConnection implements Connection {
     @Override
     public void close() throws SQLException {
         pool.release( this );
+    }
+
+
+    @Override
+    public boolean equals( final Object _o ) {
+        if( this == _o ) return true;
+        if( !(_o instanceof PooledConnection) ) return false;
+        PooledConnection that = (PooledConnection) _o;
+        return obtained == that.obtained &&
+                Objects.equals( connection, that.connection ) &&
+                Objects.equals( pool, that.pool );
+    }
+
+
+    @Override
+    public int hashCode() {
+        return Objects.hash( connection, pool, obtained );
     }
 
 

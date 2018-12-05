@@ -3,6 +3,8 @@ package com.dilatush.util;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -37,7 +39,8 @@ public class SimpleConnectionPool {
     final private AtomicInteger created;  // count of connections created...
     final private Timer         timer;
 
-    final private LinkedBlockingDeque<PooledConnection> cache;
+    final private LinkedBlockingDeque<PooledConnection> cache;  // cache of unused, available connections...
+    final private Set<PooledConnection> extant;                 // set of all created connections...
 
 
     public SimpleConnectionPool( final String _host, final String _password, final String _userName, final int _maxCached, final int _maxExtant ) {
@@ -52,9 +55,13 @@ public class SimpleConnectionPool {
         created   = new AtomicInteger( 0 );
 
         cache     = new LinkedBlockingDeque<>();
+        extant    = new HashSet<>();
 
         // schedule our 10 second "tickler"...
         timer.scheduleAtFixedRate( new Tickler(), TICKLER_PERIOD, TICKLER_PERIOD );
+
+        // add our shutdown hook...
+        Runtime.getRuntime().addShutdownHook( new Shutdown() );
     }
 
 
@@ -80,6 +87,7 @@ public class SimpleConnectionPool {
         // create a new connection, if we still allowed to create more of them?
         if( created.accumulateAndGet(1, (a, b) ->  (a >= maxExtant) ? a : a + b ) <= maxExtant ) {
             connection = createConnection();
+            synchronized( extant ) { extant.add( connection ); }
             LOGGER.finer( "Creating new connection" + toString() );
             connection.obtained();
             return connection;
@@ -165,12 +173,12 @@ public class SimpleConnectionPool {
 
         try {
 
-            // if it's already closed, we have nothing to do...
-            if( _connection.isClosed() )
-                return;
-
             // it's not closed, so we need to do it ourselves...
-            _connection.reallyClose();
+            if( ! _connection.isClosed() )
+                _connection.reallyClose();
+
+            // remove it from our set of extant connections...
+            synchronized( extant ) { extant.remove( _connection ); }
         }
 
         // if we get ANY error while closing, we just leave...
@@ -223,6 +231,29 @@ public class SimpleConnectionPool {
             // otherwise, getting here means we have a good connection, so toss it back into the cache...
             cache.addFirst( connection );
             LOGGER.finer( "Re-cached validated, tickled connection" + SimpleConnectionPool.this.toString() );
+        }
+    }
+
+
+    /**
+     * Implements a simple shutdown hook to close all extant connections...
+     */
+    private class Shutdown extends Thread {
+
+        @Override
+        public void run() {
+
+            LOGGER.fine( "Shutdown hook: closing all MySQL connections" );
+
+            // close all the extant connections, ignoring any exceptions...
+            extant.forEach( connection -> {
+                try {
+                    connection.reallyClose();
+                }
+                catch( SQLException _e ) {
+                    // do nothing; we're just gonna ignore problems during shutdown...
+                }
+            } );
         }
     }
 }
