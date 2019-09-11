@@ -2,6 +2,7 @@
   <dictionary name="tom">
     <words>
       <w>kilopascals</w>
+      <w>multibyte</w>
     </words>
   </dictionary>
 </component>
