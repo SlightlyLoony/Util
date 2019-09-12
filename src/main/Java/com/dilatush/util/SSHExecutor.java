@@ -9,6 +9,9 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
+import static com.dilatush.util.General.isNull;
+import static com.dilatush.util.SSHClientOptions.*;
+import static com.dilatush.util.SSHClientOptions.ServerAliveCountMax;
 import static com.dilatush.util.Streams.toUTF8String;
 import static com.dilatush.util.Strings.isEmpty;
 import static java.lang.ProcessBuilder.Redirect;
@@ -17,17 +20,23 @@ import static java.lang.ProcessBuilder.Redirect;
  * Configure and execute an SSH command.  This class provides methods to configure the SSH command using either individual command line tokens
  * ({@link #addToken(String)}) or bash-style command line fragments ({@link #addFragment(String)}).  In addition, this class provides numerous
  * convenience methods for configuring particular SSH options.
- * <p>Note that there are two rather different ways of executing commands on the remote computer:</p>
+ * <p>Note that there are three rather different ways of using instances of this class to communicate with the remote computer:</p>
  * <ol>
- *     <li>Direct host execution (no login shell): Generally this is the simplest and most useful way to execute remotely.  The specified command is
- *     executed; when it completes, SSH then immediately terminates the connection.  Multiple commands can be separated by either newlines or
- *     semicolons.  The exit code of the last program executed will be the exit code from SSH.  The safest way to wait for the command to complete
- *     is to use {@link #waitFor(long, TimeUnit)}, eliminating the possibility of a hang.</li>
+ *     <li>Direct host execution (no login shell): Generally this is the simplest and most useful way to execute commands remotely.  The specified
+ *     command is executed; when it completes, SSH then immediately terminates the connection.  Multiple commands can be separated by either newlines
+ *     or semicolons.  The exit code of the last program executed will be the exit code from SSH.  The safest way to wait for the command to complete
+ *     is to use {@link #waitFor(long, TimeUnit)}, eliminating the possibility of a hang.  To use this method, get an instance of this class
+ *     via {@link #SSHExecutor(String, String)}.</li>
  *     <li>Interactive execution (with login shell): This is possible, but complicated by several things - most especially the fact that you must find
  *     a way to determine that the remote shell is at a login prompt so you can know when to send input to it.  When you are finished using an
  *     interactive instance, be certain to execute the <code>exit</code> command on the remote shell, so that SSH will terminate normally (as opposed
- *     to invoking {@link #destroyForcibly()}.</li>
+ *     to invoking {@link #destroyForcibly()}.  To use this method, get an instance of this class via {@link #SSHExecutor(String)}.</li>
+ *     <li>Port forwarding: This establishes an SSH connection that is used <i>only</i> for forwarding ports (i.e., a "tunnel").  In this mode it
+ *     is not possible to execute any commands on the remote host.  To use this method, get an instance of this class via
+ *     {@link #SSHExecutor(String, int, int)}.</li>
  * </ol>
+ * <p>The SSH user <i>must</i> be authenticated via private key in order to use this class.  There is no provision for handling password
+ * authentication.</p>
  * <p>Instances of this class are mutable and <i>not</i> threadsafe.</p>
  *
  * @author Tom Dilatush  tom@dilatush.com
@@ -36,71 +45,349 @@ public class SSHExecutor {
 
     final static private Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
 
-    final static private String SSH                    = "/usr/bin/ssh";   // path to the ssh executable...
-    final static private String FORCE_TERMINAL_AND_TTY = "-tt";
+    final static private String DEFAULT_SSH_PATH       = "/usr/bin/ssh";   // default path to the ssh executable...
 
     private final List<String> elements;
     private final boolean      interactive;
+    private final boolean      forwarding;
 
     private Process process;
     private String  command;
     private String  host;
 
+    private boolean onlyIPv4;
+    private boolean onlyIPv6;
+    private boolean compression;
+    private boolean user;
+    private boolean quiet;
+    private int     verbose;
+
 
     /**
-     * Creates a new instance of this class that will connect to the specified host.  If interactive is specified as <code>false</code>, then the
-     * instance will be in direct host execution mode (no login shell will be used, and commands cannot be executed interactively).  If interactive is
-     * specified as <code>true</code>, then the instance will be in interactive mode and no direct host execution command may be specified.
+     * Creates a new instance of this class that will connect to the specified host and directly execute the specified command without using a login
+     * shell.  Note that multiple commands may be included if separated by semicolons.  The command should be in usual format, including quotes as
+     * needed.  Because no login shell is used, paths may not be present and it's safest to provide the path to executables.  Also, note that there
+     * will be no expansions, including globbing.  However, the command <i>may</i> run a script, which <i>will</i> run in a shell, and will have all
+     * the usual shell features available.  The SSH session will terminate immediately upon the commands completing, and the exit code will be the
+     * exit code of the last command run.  If there was an SSH error of some kind, the exit code will be 255.
      *
      * @param _host the host name (or dotted-form IP) of the host to connect to
-     * @param _interactive if <code>true</code>, specifies interactive mode
+     * @param _command the command to be directly executed on the remote host
      */
-    public SSHExecutor( final String _host, final boolean _interactive ) {
+    public SSHExecutor( final String _host, final String _command ) {
+
+        // sanity check...
+        if( isEmpty( _host ) )
+            throw new IllegalArgumentException( "No host specified" );
+        if( isEmpty( _command ) )
+            throw new IllegalArgumentException( "No command specified" );
+
+        host        = _host;
+        command     = _command;
+        interactive = false;
+        forwarding  = false;
+        elements    = new ArrayList<>();
+        elements.add( DEFAULT_SSH_PATH );
+    }
+
+
+    /**
+     * Creates a new instance of this class that will connect to the specified host and enters interactive mode, meaning that commands may be sent to
+     * the remote host (via {@link #sendRemoteInput(String)}), and results read from the remote host (via {@link #getRemoteOutput()}.  Note that in
+     * interactive sessions, the commands sent to the host are echoed to the results (along with any command line prompts).
+     *
+     * @param _host the host name (or dotted-form IP) of the host to connect to
+     */
+    public SSHExecutor( final String _host ) {
 
         // sanity check...
         if( isEmpty( _host ) )
             throw new IllegalArgumentException( "No host specified" );
 
-        host = _host;
-        interactive = _interactive;
-        elements = new ArrayList<>();
-        elements.add( SSH );
-        if( interactive )
-            elements.add( FORCE_TERMINAL_AND_TTY );
+        host        = _host;
+        interactive = true;
+        forwarding  = false;
+        elements    = new ArrayList<>();
+        elements.add( DEFAULT_SSH_PATH );
+        elements.add( "-tt" );  // force allocation of a pseudo-terminal and tty...
     }
 
 
     /**
-     * Creates a new instance of this class that will connect to the specified host.  The instance will be in direct host execution mode: no login
-     * shell will be used, and commands cannot be executed interactively. This is exactly the same as {@link #SSHExecutor(String, boolean)} with a
-     * <code>false</code> interactive argument.
-     */
-    public SSHExecutor( final String _host ) {
-        this( _host, false );
-    }
-
-
-    /**
-     * Sets the command to be directly executed on the remote host (in direct host command execution mode).  Note that multiple commands may be
-     * included if separated by semicolons.  The command should be in usual format, including quotes as needed.  However, do <i>not</i> surround the
-     * entire command with quotes.  For example, the strings <i>ls -l</i> and <i>cp "My File" /tmp/a.txt</i> are correctly formatted, but the string
-     * <i>"ls -l"</i> is not.
+     * Creates an instance of this class that will connect to the specified host in direct host execution mode, but configured for port forwarding
+     * (local or remote).  The specified alive interval controls how often (in seconds) the SSH client will check to see if the SSH server (on the
+     * remote host) is still alive, and the specified alive count max controls how many times one of those checks can fail before the SSH client will
+     * disconnect and exit with an error.  The product of these to values is approximately how long the SSH connection can be down before the SSH
+     * client will disconnect.
      *
-     * @param _command the command to be directly executed on the remote host
-     * @throws IllegalStateException if instance is in interactive mode
+     * @param _host the host name (or dotted-form IP) of the host to connect to
+     * @param _serverAliveInterval interval between SSH server checks
+     * @param _serverAliveCountMax how many checks can fail before disconnecting
      */
-    public void setCommand( final String _command ) {
+    public SSHExecutor( final String _host, final int _serverAliveInterval, final int _serverAliveCountMax ) {
 
-        // mode check...
-        if( interactive )
-            throw new IllegalStateException( "Direct host execution command may not be set in interactive mode" );
+        // sanity check...
+        if( isEmpty( _host ) )
+            throw new IllegalArgumentException( "No host specified" );
 
-        command = _command;
+        host        = _host;
+        interactive = false;
+        forwarding  = true;
+        elements    = new ArrayList<>();
+        elements.add( DEFAULT_SSH_PATH );
+        elements.add( "-nNT" );  // don't execute any remote commands, prevent reading from stdin, disable pseudo-terminal allocation...
+        setOption( ServerAliveCountMax, Integer.toString( _serverAliveCountMax ) );
+        setOption( ServerAliveInterval, Integer.toString( _serverAliveInterval ) );
     }
 
 
-    public void setForceIPv4() {
+    public void setOption( final SSHClientOptions _option, final String _optionValue ) {
+
+        // sanity check...
+        if( isNull( _option ) )
+            throw new IllegalArgumentException( "No option specified" );
+        if( isEmpty( _optionValue ) )
+            throw new IllegalArgumentException( "No option value specified" );
+
+        elements.add( "-o" );
+        elements.add( _option + " " + _optionValue );
+    }
+
+
+    /**
+     * By default, this class uses <code>/usr/bin/ssh</code> as the path for SSH on the remote host.  This method allows overriding that default to
+     * set the path to anything desired.
+     *
+     * @param _sshPath the path to the <code>ssh</code> executable (on the remote host)
+     */
+    public void setSSHPath( final String _sshPath ) {
+
+        // sanity check...
+        if( isEmpty( _sshPath ) )
+            throw new IllegalArgumentException( "No SSH path specified" );
+
+        elements.set( 0, _sshPath );
+    }
+
+
+    /**
+     * Tells this instance to use only IPv4 as a transport.
+     */
+    public void setOnlyIPv4() {
+        if( onlyIPv6 )
+            throw new IllegalStateException( "Cannot use only IPv4 if already set to use IPv6 only" );
+        if( onlyIPv4 )
+            return;
         elements.add( "-4" );
+        onlyIPv4 = true;
+    }
+
+
+    /**
+     * Tells this instance to use only IPv6 as a transport.
+     */
+    public void setOnlyIPv6() {
+        if( onlyIPv4 )
+            throw new IllegalStateException( "Cannot use only IPv6 if already set to use IPv4 only" );
+        if( onlyIPv6 )
+            return;
+        elements.add( "-6" );
+        onlyIPv6 = true;
+    }
+
+
+    /**
+     * Tells this instance to compress all data, in both directions, on the SSH connection.  Generally this only makes sense for very slow
+     * connections, such as acoustic modems.
+     */
+    public void setCompression() {
+        if( compression )
+            return;
+        elements.add( "-C" );
+        compression = true;
+    }
+
+
+    /**
+     * Sets a path to an identity file to use when authenticating the SSH connection made by this instance.  Multiple identity files may be specified.
+     * Each needs to be a complete path to the identity file.
+     *
+     * @param _identityFilePath path to an identity file to use when authenticating the SSH connection made by this instance
+     */
+    public void setIdentityFilePath( final String _identityFilePath ) {
+
+        if( isEmpty( _identityFilePath ) )
+            throw new IllegalArgumentException( "No identity file path specified" );
+
+        elements.add( "-i" );
+        elements.add( _identityFilePath );
+    }
+
+
+    /**
+     * Sets the user for this instance to use when connecting to the remote host.  If no user is specified, then SSH will attempt to connect to the
+     * remote host using the same local user that this SSH instance is running as.
+     *
+     * @param _user the user for this instance to use when connecting to the remote host
+     */
+    public void setUser( final String _user ) {
+
+        if( user )
+            throw new IllegalStateException( "Attempted to set user that was already set" );
+        if( isEmpty( _user ) )
+            throw new IllegalArgumentException( "No user specified" );
+
+        elements.add( "-l" );
+        elements.add( _user );
+        user = true;
+    }
+
+
+    /**
+     * Tells this instance to operate in quiet mode, minimizing SSH's messages.
+     */
+    public void setQuiet() {
+        if( quiet )
+            return;
+        elements.add( "-q" );
+        quiet = true;
+    }
+
+
+    /**
+     * Tells this instance to output messages about it's progress.  Valid levels are 1..3, with higher levels giving more detailed output.  The output
+     * is sent to the error output.
+     *
+     * @param _level the level of verbosity
+     */
+    public void setVerbose( final int _level ) {
+        if( verbose > 0 )
+            throw new IllegalStateException( "Attempted to set verbose that was already set" );
+        if( (_level < 1) || (_level > 3) )
+            throw new IllegalArgumentException( "Invalid verboseness level: " + _level );
+
+        switch( _level ) {
+            case 1: elements.add( "-v"   ); break;
+            case 2: elements.add( "-vv"  ); break;
+            case 3: elements.add( "-vvv" ); break;
+        }
+        verbose = _level;
+    }
+
+
+    /**
+     * Tells this instance to forward connections to a local TCP port to the remote host, and from there forward them to a TCP port on another host.
+     * This is useful when a server is accessible from the remote host, but not the local host.  Once this port forwarding is set up, processes on the
+     * local host, or other hosts with network access to the local host, can access the server normally only accessible from the remote host.  See
+     * <a href="https://en.wikipedia.org/wiki/Port_forwarding" target="_top">Wikipedia</a> for more information.
+     * <p>The local binding address can be the IP address of a particular interface to bind only to that interface, "*" to bind to all interfaces,
+     * or "localhost" to bind only to the localhost address (127.0.0.1) for local use only.  Note that the SSH client's <b>GatewayPorts</b> setting
+     * may have to be changed to allow this to work.</p>
+     * <p>The local port address specifies the TCP port that will be listening on the local host.</p>
+     * <p>The remote host specifies the host name or IP address of the remote server that connections will be forwarded to.</p>
+     * <p>The remote port specifies the TCP port on the remote host that connections will be forwarded to.</p>
+     *
+     * @param _localBindAddress the IP address to bind to on the local host
+     * @param _localPort the TCP port on the local host to listen on
+     * @param _remoteHost the host name or IP address of the remote server to forward connections to
+     * @param _remotePort the TCP port on the remote server to forward connections to
+     */
+    public void setLocalPortForwarding( final String _localBindAddress, final int _localPort, final String _remoteHost, final int _remotePort ) {
+
+        // sanity checks...
+        if( !forwarding )
+            throw new IllegalStateException( "Attempted to set local port forwarding when instance is not in forwarding mode" );
+        if( isEmpty( _localBindAddress ) )
+            throw new IllegalArgumentException( "No local bind address specified" );
+        if( isEmpty( _remoteHost ) )
+            throw new IllegalArgumentException( "No remote host specified" );
+
+        elements.add( "-L" );
+        elements.add( _localBindAddress + ":" + Integer.toString( _localPort ) + ":" + _remoteHost + ":" +Integer.toString( _remotePort ));
+    }
+
+
+    /**
+     * Tells this instance to forward connections to a local TCP port to the remote host, and from there forward them to a TCP port on another host.
+     * This is useful when a server is accessible from the remote host, but not the local host.  Once this port forwarding is set up, processes on the
+     * local host, or other hosts with network access to the local host, can access the server normally only accessible from the remote host.  See
+     * <a href="https://en.wikipedia.org/wiki/Port_forwarding" target="_top">Wikipedia</a> for more information.
+     * <p>The local port address specifies the TCP port that will be listening on the local host.</p>
+     * <p>The remote host specifies the host name or IP address of the remote server that connections will be forwarded to.</p>
+     * <p>The remote port specifies the TCP port on the remote host that connections will be forwarded to.</p>
+     *
+     * @param _localPort the TCP port on the local host to listen on, bound to localhost (127.0.0.1) so that only local processes may connect to it
+     * @param _remoteHost the host name or IP address of the remote server to forward connections to
+     * @param _remotePort the TCP port on the remote server to forward connections to
+     */
+    public void setLocalPortForwarding( final int _localPort, final String _remoteHost, final int _remotePort ) {
+
+        // sanity checks...
+        if( !forwarding )
+            throw new IllegalStateException( "Attempted to set local port forwarding when instance is not in forwarding mode" );
+        if( isEmpty( _remoteHost ) )
+            throw new IllegalArgumentException( "No remote host specified" );
+
+        elements.add( "-L" );
+        elements.add( Integer.toString( _localPort ) + ":" + _remoteHost + ":" +Integer.toString( _remotePort ));
+    }
+
+
+    /**
+     * Tells this instance to forward connections from a TCP port on the remote host to the local host, and from there forward them to a TCP port on
+     * another host.  This is useful when a server is accessible from the local host, but not the remote host.  Once this port forwarding is set up,
+     * processes on the remote host, or other hosts with network access to the remote host, can access the server normally only accessible from the
+     * local host.  See <a href="https://en.wikipedia.org/wiki/Port_forwarding" target="_top">Wikipedia</a> for more information.
+     * <p>The remote binding address can be the IP address of a particular interface to bind only to that interface, "*" to bind to all interfaces,
+     * or "localhost" to bind only to the localhost address (127.0.0.1) for local use only.  Note that the SSH server's <b>GatewayPorts</b> setting
+     * may have to be changed to allow this to work.</p>
+     * <p>The remote port address specifies the TCP port that will be listening on the remote host.</p>
+     * <p>The local host specifies the host name or IP address of the local server that connections will be forwarded to.</p>
+     * <p>The local port specifies the TCP port on the local server that connections will be forwarded to.</p>
+     *
+     * @param _remoteBindAddress the IP address to bind to on the remote host
+     * @param _remotePort the TCP port on the remote host to listen on
+     * @param _localHost the host name or IP address of the local server to forward connections to
+     * @param _localPort the TCP port on the local server to forward connections to
+     */
+    public void setRemotePortForwarding( final String _remoteBindAddress, final int _remotePort, final String _localHost, final int _localPort ) {
+
+        // sanity checks...
+        if( !forwarding )
+            throw new IllegalStateException( "Attempted to set remote port forwarding when instance is not in forwarding mode" );
+        if( isEmpty( _remoteBindAddress ) )
+            throw new IllegalArgumentException( "No remote bind address specified" );
+        if( isEmpty( _localHost ) )
+            throw new IllegalArgumentException( "No local host specified" );
+
+        elements.add( "-R" );
+        elements.add( _remoteBindAddress + ":" + Integer.toString( _remotePort ) + ":" + _localHost + ":" + Integer.toString( _localPort ) );
+    }
+
+
+    /**
+     * Tells this instance to forward connections from a TCP port on the remote host to the local host, and from there forward them to a TCP port on
+     * another host.  This is useful when a server is accessible from the local host, but not the remote host.  Once this port forwarding is set up,
+     * processes on the remote host, or other hosts with network access to the remote host, can access the server normally only accessible from the
+     * local host.  See <a href="https://en.wikipedia.org/wiki/Port_forwarding" target="_top">Wikipedia</a> for more information.
+     * <p>The remote port address specifies the TCP port that will be listening on the remote host.</p>
+     * <p>The local host specifies the host name or IP address of the local server that connections will be forwarded to.</p>
+     * <p>The local port specifies the TCP port on the local server that connections will be forwarded to.</p>
+     *
+     * @param _remotePort the TCP port on the remote host to listen on, bound to localhost (127.0.0.1) so that only local processes may connect to it
+     * @param _localHost the host name or IP address of the local server to forward connections to
+     * @param _localPort the TCP port on the local server to forward connections to
+     */
+    public void setRemotePortForwarding( final int _remotePort, final String _localHost, final int _localPort ) {
+
+        // sanity checks...
+        if( !forwarding )
+            throw new IllegalStateException( "Attempted to set remote port forwarding when instance is not in forwarding mode" );
+        if( isEmpty( _localHost ) )
+            throw new IllegalArgumentException( "No local host specified" );
+
+        elements.add( "-R" );
+        elements.add( Integer.toString( _remotePort ) + ":" + _localHost + ":" + Integer.toString( _localPort ) );
     }
 
 
@@ -153,7 +440,7 @@ public class SSHExecutor {
         elements.add( host );
 
         // if we're in direct mode, add the command...
-        if( !interactive )
+        if( !interactive && !forwarding )
             elements.add( command );
 
         ProcessBuilder builder = new ProcessBuilder( elements );
@@ -169,7 +456,7 @@ public class SSHExecutor {
      * @return the process output
      * @throws IOException on any I/O error
      */
-    public String getSSHOutput() throws IOException {
+    public String getRemoteOutput() throws IOException {
         return toUTF8String( process.getInputStream() );
     }
 
@@ -188,13 +475,13 @@ public class SSHExecutor {
 
 
     /**
-     * Write the specified string to the SSH input, encoding it as UTF-8.
+     * Write the specified string to the remote host shell's input, encoding it as UTF-8.  This command is only usable in interactive mode.
      *
      * @param _input the string to input to SSH
      * @throws IOException on any I/O error
      * @throws IllegalStateException if this instance is in direct host command execution mode
      */
-    public void putSSHInput( final String _input ) throws IOException {
+    public void sendRemoteInput( final String _input ) throws IOException {
 
         // mode check...
         if( !interactive )
@@ -407,14 +694,67 @@ public class SSHExecutor {
     }
 
 
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        for( String element : elements ) {
+            if( sb.length() > 0 )
+                sb.append( " " );
+            sb.append( quoteIfNecessary( element ) );
+        }
+        if( !interactive && !forwarding ) {
+            sb.append( " " );
+            sb.append( quoteIfNecessary( command ) );
+        }
+        return sb.toString();
+    }
+
+
+    private String quoteIfNecessary( final String _str ) {
+        String result = _str;
+        if( (result.length() == 0) || ((result.charAt( 0 ) != '"') && result.contains( " " )) )
+            result = Bash.doubleQuote( result );
+        return result;
+    }
+
+
+    /**
+     * Simple test code.
+     * 
+     * @param _args
+     * @throws IOException
+     * @throws InterruptedException
+     */
     public static void main( String[] _args ) throws IOException, InterruptedException {
 
-        SSHExecutor ssh = new SSHExecutor( "beast" );
-        ssh.setCommand( "ls -l ; ls" );
-        ssh.setForceIPv4();
+        // direct mode example...
+        SSHExecutor ssh = new SSHExecutor( "beast", 5, 2 );
+        ssh.setOnlyIPv4();
         ssh.start();
+        ssh.waitFor( 100, TimeUnit.MILLISECONDS );
+        String directOutput = ssh.getRemoteOutput();
+
+        // interactive mode example...
+        ssh = new SSHExecutor( "beast" );
+        ssh.start();
+        Thread.sleep( 100 );  // allow time to connect...
+        ssh.sendRemoteInput( "ls -l /apps\n" );
+        Thread.sleep( 100 );  // allow time to execute...
+        String interactiveOutput = ssh.getRemoteOutput();
+        ssh.sendRemoteInput( "exit\n" );
+        ssh.waitFor( 100, TimeUnit.MILLISECONDS );
+
+        // port forwarding example...
+        ssh = new SSHExecutor( "paradise", 5, 2 );
+        ssh.setRemotePortForwarding( 5432, "beast", 22 );
+        ssh.setLocalPortForwarding( 5432, "localhost", 5432 );
+        ssh.setVerbose( 3 );
+        ssh.start();
+        String portForwardSSH = ssh.toString();
+        Thread.sleep( 100 );
+        String portForwardOutput = ssh.getRemoteOutput();
+        String portForwardError = ssh.getSSHErrorOutput();
         ssh.waitFor();
-        String output = ssh.getSSHOutput();
+
         ssh.hashCode();
     }
 }
