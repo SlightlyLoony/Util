@@ -77,7 +77,7 @@ public class LogFormatter extends Formatter {
         sb.append( ' ' );
 
         // now the message, left truncated...
-        sb.append( leftTrunc( safe( _record.getMessage() ), messageWidth ) );
+        sb.append( getMessage( _record ) );
 
         // if we have a throwable, add the stack trace...
         if( _record.getThrown() != null )
@@ -92,6 +92,31 @@ public class LogFormatter extends Formatter {
 
     private String safe( final String _arg ) {
         return (_arg == null) ? "" : _arg;
+    }
+
+
+    /**
+     * If the given log record's message contains no newlines, and is less than the max message width, then just return it.  Otherwise,
+     * return the message formatted to print indented on the following lines.
+     *
+     * @param _record the log record in question
+     * @return the formatted message
+     */
+    private String getMessage( final LogRecord _record ) {
+
+        String msg = safe( _record.getMessage() );
+        if( (msg.length() < messageWidth) && !msg.contains( "\n" ) )
+            return msg;
+
+        String[] lines = msg.split( "\\R" );
+        StringBuilder result = new StringBuilder( msg.length() + 2 + 2 * (6 + lines.length) );
+        result.append( System.lineSeparator() );
+        for( String line : lines ) {
+            result.append( "    " );
+            result.append( line );
+            result.append( System.lineSeparator() );
+        }
+        return result.toString();
     }
 
 

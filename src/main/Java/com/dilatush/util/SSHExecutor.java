@@ -694,6 +694,11 @@ public class SSHExecutor {
     }
 
 
+    /**
+     * Returns a string representing the manually executed SSH command that is exactly equivalent to the state of this instance.
+     *
+     * @return a string representing the manually executed SSH command that is exactly equivalent to the state of this instance
+     */
     public String toString() {
         StringBuilder sb = new StringBuilder();
         for( String element : elements ) {
@@ -719,7 +724,7 @@ public class SSHExecutor {
 
     /**
      * Simple test code.
-     * 
+     *
      * @param _args
      * @throws IOException
      * @throws InterruptedException
