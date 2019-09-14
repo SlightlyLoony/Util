@@ -105,16 +105,16 @@ public class LogFormatter extends Formatter {
     private String getMessage( final LogRecord _record ) {
 
         String msg = safe( _record.getMessage() );
-        if( (msg.length() < messageWidth) && !msg.contains( "\n" ) )
+        if( (msg.length() <= messageWidth) && !msg.contains( "\n" ) )
             return msg;
 
         String[] lines = msg.split( "\\R" );
         StringBuilder result = new StringBuilder( msg.length() + 2 + 2 * (6 + lines.length) );
-        result.append( System.lineSeparator() );
+        result.append( "Message follows: " );
         for( String line : lines ) {
+            result.append( System.lineSeparator() );
             result.append( "    " );
             result.append( line );
-            result.append( System.lineSeparator() );
         }
         return result.toString();
     }
