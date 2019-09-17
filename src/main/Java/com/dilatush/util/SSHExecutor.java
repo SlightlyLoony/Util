@@ -136,12 +136,18 @@ public class SSHExecutor {
         elements    = new ArrayList<>();
         elements.add( DEFAULT_SSH_PATH );
         elements.add( "-nNT" );  // don't execute any remote commands, prevent reading from stdin, disable pseudo-terminal allocation...
-        setOption( ServerAliveCountMax, Integer.toString( _serverAliveCountMax ) );
-        setOption( ServerAliveInterval, Integer.toString( _serverAliveInterval ) );
+        addOption( ServerAliveCountMax, Integer.toString( _serverAliveCountMax ) );
+        addOption( ServerAliveInterval, Integer.toString( _serverAliveInterval ) );
     }
 
 
-    public void setOption( final SSHClientOptions _option, final String _optionValue ) {
+    /**
+     * Add an SSH client option to this instance.  Multiple options may be added.
+     *
+     * @param _option  the SSH client option to add
+     * @param _optionValue the value of the added client option
+     */
+    public void addOption( final SSHClientOptions _option, final String _optionValue ) {
 
         // sanity check...
         if( isNull( _option ) )
@@ -214,7 +220,7 @@ public class SSHExecutor {
      *
      * @param _identityFilePath path to an identity file to use when authenticating the SSH connection made by this instance
      */
-    public void setIdentityFilePath( final String _identityFilePath ) {
+    public void addIdentityFilePath( final String _identityFilePath ) {
 
         if( isEmpty( _identityFilePath ) )
             throw new IllegalArgumentException( "No identity file path specified" );
@@ -292,7 +298,7 @@ public class SSHExecutor {
      * @param _remoteHost the host name or IP address of the remote server to forward connections to
      * @param _remotePort the TCP port on the remote server to forward connections to
      */
-    public void setLocalPortForwarding( final String _localBindAddress, final int _localPort, final String _remoteHost, final int _remotePort ) {
+    public void addLocalPortForwarding( final String _localBindAddress, final int _localPort, final String _remoteHost, final int _remotePort ) {
 
         // sanity checks...
         if( !forwarding )
@@ -320,7 +326,7 @@ public class SSHExecutor {
      * @param _remoteHost the host name or IP address of the remote server to forward connections to
      * @param _remotePort the TCP port on the remote server to forward connections to
      */
-    public void setLocalPortForwarding( final int _localPort, final String _remoteHost, final int _remotePort ) {
+    public void addLocalPortForwarding( final int _localPort, final String _remoteHost, final int _remotePort ) {
 
         // sanity checks...
         if( !forwarding )
@@ -350,7 +356,7 @@ public class SSHExecutor {
      * @param _localHost the host name or IP address of the local server to forward connections to
      * @param _localPort the TCP port on the local server to forward connections to
      */
-    public void setRemotePortForwarding( final String _remoteBindAddress, final int _remotePort, final String _localHost, final int _localPort ) {
+    public void addRemotePortForwarding( final String _remoteBindAddress, final int _remotePort, final String _localHost, final int _localPort ) {
 
         // sanity checks...
         if( !forwarding )
@@ -378,7 +384,7 @@ public class SSHExecutor {
      * @param _localHost the host name or IP address of the local server to forward connections to
      * @param _localPort the TCP port on the local server to forward connections to
      */
-    public void setRemotePortForwarding( final int _remotePort, final String _localHost, final int _localPort ) {
+    public void addRemotePortForwarding( final int _remotePort, final String _localHost, final int _localPort ) {
 
         // sanity checks...
         if( !forwarding )
@@ -706,6 +712,8 @@ public class SSHExecutor {
                 sb.append( " " );
             sb.append( quoteIfNecessary( element ) );
         }
+        sb.append( " " );
+        sb.append( host );
         if( !interactive && !forwarding ) {
             sb.append( " " );
             sb.append( quoteIfNecessary( command ) );
@@ -724,10 +732,6 @@ public class SSHExecutor {
 
     /**
      * Simple test code.
-     *
-     * @param _args
-     * @throws IOException
-     * @throws InterruptedException
      */
     public static void main( String[] _args ) throws IOException, InterruptedException {
 
@@ -750,8 +754,8 @@ public class SSHExecutor {
 
         // port forwarding example...
         ssh = new SSHExecutor( "paradise", 5, 2 );
-        ssh.setRemotePortForwarding( 5432, "beast", 22 );
-        ssh.setLocalPortForwarding( 5432, "localhost", 5432 );
+        ssh.addRemotePortForwarding( 5432, "beast", 22 );
+        ssh.addLocalPortForwarding( 5432, "localhost", 5432 );
         ssh.setVerbose( 3 );
         ssh.start();
         String portForwardSSH = ssh.toString();
