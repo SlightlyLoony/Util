@@ -33,15 +33,18 @@ public class Strings {
 
 
     /**
-     * Returns the specified string after stripping off any trailing newline character.  Note that if the specified string is {@code null} or empty
-     * (zero length), then the specified string is returned unchanged.
+     * Returns the specified string after stripping off any trailing newline or return characters.  Note that if the specified string is {@code null}
+     * or empty (zero length), then the specified string is returned unchanged.
      *
-     * @param _str the string to strip a trailing newline character from
-     * @return the specified string less any trailing newline
+     * @param _str the string to strip trailing newline or return characters from
+     * @return the specified string less any trailing newline or return characters
      */
-    public static String stripTrailingNewline( final String _str ) {
-        if( isEmpty( _str ) || ('\n' != _str.charAt( _str.length() - 1 )) )
-            return _str;
-        return _str.substring( 0, _str.length() - 1 );
+    public static String stripTrailingNewlines( final String _str ) {
+        if( isEmpty( _str ) ) return _str;
+        int i = _str.length() - 1;
+        while( (_str.charAt( i ) == '\n') || (_str.charAt( i ) == '\r') ) {
+            i--;
+        }
+        return _str.substring( 0, i + 1 );
     }
 }

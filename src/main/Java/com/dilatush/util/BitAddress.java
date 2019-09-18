@@ -94,7 +94,7 @@ public class BitAddress {
     /**
      * Returns true if this address is on an even byte boundary (i.e., the bit address is 0).
      *
-     * @returntrue if this address is on an even byte boundary
+     * @return true if this address is on an even byte boundary
      */
     public boolean isEven() {
         return bitAddr == 0;

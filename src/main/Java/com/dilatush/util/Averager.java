@@ -30,7 +30,7 @@ public class Averager {
      * @param _weightingFactor
      *      the weighting factor for newer samples, typically between 1 and 2 (though other values are also valid)
      * @param _numberOfSamples
-     *      the number of samples to be averaged, which must be >= 1
+     *      the number of samples to be averaged, which must be &gt;= 1
      */
     public Averager( final double _weightingFactor, final int _numberOfSamples ) {
 
