@@ -19,6 +19,7 @@ public class LogFormatter extends Formatter {
 
     final private int messageWidth;
     final private int sourceWidth;
+    final private int threadIDWidth;
     final private DateTimeFormatter dateTimeFormatter;
 
 
@@ -29,6 +30,8 @@ public class LogFormatter extends Formatter {
         LogManager man = LogManager.getLogManager();
         String mw = man.getProperty( "com.dilatush.util.LogFormatter.messageWidth" );
         String sw = man.getProperty( "com.dilatush.util.LogFormatter.sourceWidth" );
+        String tw = man.getProperty( "com.dilatush.util.LogFormatter.threadIDWidth" );
+
         int mwa = 60;
         if( mw != null ) {
             Integer mwi = General.parseInt( mw );
@@ -36,6 +39,7 @@ public class LogFormatter extends Formatter {
                 mwa = mwi;
         }
         messageWidth = mwa;
+
         int swa = 30;
         if( sw != null ) {
             Integer swi = General.parseInt( sw );
@@ -43,6 +47,15 @@ public class LogFormatter extends Formatter {
                 swa = swi;
         }
         sourceWidth = swa;
+
+        int twa = 8;
+        if( tw != null ) {
+            Integer twi = General.parseInt( tw );
+            if( (twi != null) && (twi > 3) )
+                twa = twi;
+        }
+        threadIDWidth = twa;
+
         dateTimeFormatter = DateTimeFormatter.ofPattern( "yyyy/MM/dd HH:mm:ss.SSS" );
     }
 
@@ -70,6 +83,10 @@ public class LogFormatter extends Formatter {
 
         // now the level, left justified in 8 character field...
         sb.append( left( _record.getLevel().toString(), 7 ) );
+        sb.append( ' ' );
+
+        // now the thread ID, right justified in the selected length...
+        sb.append( right( Integer.toString( _record.getThreadID() ), threadIDWidth ) );
         sb.append( ' ' );
 
         // now the source, right justified in the selected length...
