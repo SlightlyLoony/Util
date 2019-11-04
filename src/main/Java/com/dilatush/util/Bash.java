@@ -61,6 +61,7 @@ public class Bash {
      * @param _str the command line to unquote
      * @return the list of command and arguments
      */
+    // TODO: this method has a bad bug - if an argument is double-quoted, the quotes get stripped - bad
     static public List<String> unquote( final String _str ) {
         Checks.required( _str );
         UnquoteState state = InSpace;
