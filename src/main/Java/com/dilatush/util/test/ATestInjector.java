@@ -2,7 +2,7 @@ package com.dilatush.util.test;
 
 /**
  * Abstract base class for all test injector classes.
- * 
+ *
  * @author Tom Dilatush  tom@dilatush.com
  */
 public abstract class ATestInjector<E> implements TestInjector<E> {

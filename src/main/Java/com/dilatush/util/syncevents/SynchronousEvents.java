@@ -107,6 +107,7 @@ public class SynchronousEvents {
      */
     public void publish( SynchronousEvent _event ) {
         events.add( _event );
+        LOGGER.finest( "Published: " + _event.toString() );
     }
 
 
