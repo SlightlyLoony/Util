@@ -180,6 +180,62 @@ public class SynchronousEvents {
 
 
     /**
+     * Publish the given event to all handlers that subscribe to it.
+     *
+     * @param _event the event to publish
+     */
+    public static void publishEvent( final SynchronousEvent _event ) {
+        SynchronousEvents.getInstance().publish( _event );
+    }
+
+
+    /**
+     * Subscribe the given handler to the given class of events.  Note that the subscription is for the exact class given, and not any subclasses
+     * of it.  A single handler may be used for multiple event classes by subscribing each class separately.  Note that a convenient call signature
+     * is: <pre>{@code
+     *     subscribeToEvent( event -> handleSomeEvent( (SomeEvent) event ), SomeEvent.class );
+     *
+     *     // where the handler is defined as:
+     *
+     *     private void handleSomeEvent( final SomeEvent _event ) {
+     *         // blah, blah...
+     *     }
+     * }</pre>
+     * Using the lambda conveniently allows casting to a specific {@link SynchronousEvent} subclass.
+     *
+     * @param _handler the handler for the event
+     * @param _eventClass the class of event to be subscribed.
+     */
+    @SuppressWarnings("rawtypes")
+    public static void subscribeToEvent( final SynchronousEventSubscriber _handler, final Class _eventClass ) {
+        publishEvent( new SubscribeEvent( new SubscriptionDefinition( _handler, _eventClass ) ) );
+    }
+
+
+    /**
+     * Unsubscribe the given handler from the given class of events.  Note that the subscription is for the exact class given, and not any subclasses
+     * of it.  A single handler may be used for multiple event classes by subscribing each class separately.  Note that a convenient call signature
+     * is: <pre>{@code
+     *     subscribeToEvent( event -> handleSomeEvent( (SomeEvent) event ), SomeEvent.class );
+     *
+     *     // where the handler is defined as:
+     *
+     *     private void handleSomeEvent( final SomeEvent _event ) {
+     *         // blah, blah...
+     *     }
+     * }</pre>
+     * Using the lambda conveniently allows casting to a specific {@link SynchronousEvent} subclass.
+     *
+     * @param _handler the handler for the event
+     * @param _eventClass the class of event to be subscribed.
+     */
+    @SuppressWarnings("rawtypes")
+    public static void unsubscribeFromEvent( final SynchronousEventSubscriber _handler, final Class _eventClass ) {
+        publishEvent( new UnsubscribeEvent( new SubscriptionDefinition( _handler, _eventClass ) ) );
+    }
+
+
+    /**
      * Implements a simple dispatcher that takes queued events from the events queue, looks up the subscriptions for an event's class, and invokes
      * each subscribed handler.  Of note is that all Throwables that weren't handled within the event handlers are caught, logged, and ignored.  This
      * guarantees that the dispatcher thread will not terminate.
