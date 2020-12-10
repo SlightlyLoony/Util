@@ -6,9 +6,9 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.Map;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Instances of this class control the timing of test injectors' enabling and test patterns.
@@ -17,13 +17,13 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class TestOrchestrator {
 
-    private final Timer timer;
+    private final ScheduledExecutorService scheduledExecutorService;
     @SuppressWarnings("rawtypes")
     private final Map<String, TestInjector> map;
 
 
-    public TestOrchestrator( final Timer _timer ) {
-        timer = _timer;
+    public TestOrchestrator( final ScheduledExecutorService _scheduledExecutorService ) {
+        scheduledExecutorService = _scheduledExecutorService;
         map = new ConcurrentHashMap<>();
     }
 
@@ -113,8 +113,8 @@ public class TestOrchestrator {
         if( (_msToDisable < 0 ) || (_msToEnable < 0) )
             throw new IllegalStateException( "Negative enable or disable times" );
 
-        timer.schedule( new EnableTask( testInjector ), _msToEnable );
-        timer.schedule( new DisableTask( testInjector ), _msToDisable + _msToEnable );
+        scheduledExecutorService.schedule( new EnableTask( testInjector ), _msToEnable, TimeUnit.MILLISECONDS );
+        scheduledExecutorService.schedule( new DisableTask( testInjector ), _msToDisable + _msToEnable, TimeUnit.MILLISECONDS );
     }
 
 
@@ -136,7 +136,7 @@ public class TestOrchestrator {
         if( _msToSet < 0 )
             throw new IllegalStateException( "Negative set test pattern time" );
 
-        timer.schedule( new SetTestPatternTask( testInjector, _testPattern ), _msToSet );
+        scheduledExecutorService.schedule( new SetTestPatternTask( testInjector, _testPattern ), _msToSet, TimeUnit.MILLISECONDS );
     }
 
 
@@ -144,7 +144,7 @@ public class TestOrchestrator {
      * Simple task that sets the test pattern of a test injector.
      */
     @SuppressWarnings("rawtypes")
-    private static class SetTestPatternTask extends TimerTask {
+    private static class SetTestPatternTask implements Runnable {
         private final TestInjector testInjector;
         private final Object testPattern;
         private SetTestPatternTask( final TestInjector _testInjector, final Object _testPattern )
@@ -157,7 +157,7 @@ public class TestOrchestrator {
      * Simple task that enables a test injector.
      */
     @SuppressWarnings("rawtypes")
-    private static class EnableTask extends TimerTask {
+    private static class EnableTask implements Runnable {
         private final TestInjector testInjector;
         private EnableTask( final TestInjector _testInjector ) { testInjector = _testInjector; }
         @Override public void run() { testInjector.enable(); }
@@ -168,7 +168,7 @@ public class TestOrchestrator {
      * Simple task that disables a test injector.
      */
     @SuppressWarnings("rawtypes")
-    private static class DisableTask extends TimerTask {
+    private static class DisableTask implements Runnable {
         private final TestInjector testInjector;
         private DisableTask( final TestInjector _testInjector ) { testInjector = _testInjector; }
         @Override public void run() { testInjector.disable(); }
