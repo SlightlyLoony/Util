@@ -10,72 +10,110 @@ import java.util.Random;
  */
 public class NoiseFilterTests {
 
+    private static Random random = new Random( 83696234 );
+
     public static void main( final String[] _args ) {
 
-        NoiseFilter nf1 = new NoiseFilter( 40000, NoiseFilterTests::distance );
-        float[] data1 = new float[]
-                {
-                        22f, 23f, 12f, 22f, 25f, 24f, 25f, 26f, 27f, 28f,
-                        29f, 30f, 14f, 59f, 32f, 33f, 34f, 35f, 36f, 36f,
-                        87f, 35f, 34f, 32f, 28f, 25f, 24f, 24f, 24f, 24f,
-                        24f, 24f, 24f, 24f, 24f, 24f, 24f, 24f, 11f, 25f,
-                        26f, 27f, 28f, 27f, 26f, 25f, 25f, 24f, 23f, 22f,
-                        25f, 26f, 27f, 28f, 29f, 27f, 26f, 25f, 11f, 24f,
-                        25f, 26f, 27f, 28f, 29f, 27f, 26f, 25f, 11f, 24f,
-                        23f, 21f, 19f, 17f, 14f, 12f, 15f, 17f, 20f, 15f,
-                        22f, 23f, 25f, 28f, 29f, 27f, 26f, 25f, 11f, 24f
-                };
-        test( nf1, data1, 500, 20000, 5000 );
-        out( nf1.toString() );
+        NoiseFilter nf1 = new NoiseFilter( 41, new MedianErrorCalc(), .2f, .95f, .75f  );
+        String nums =
+                        "23,23,12,12,12,12,12,12,12,12," +
+                        "23,23,23,23,23,23,23,23,23,23," +
+                        "23,23,23,23,23,23,23,23,23,23," +
+                        "23,23,23,23,23,23,23,23,23,23," +
+                        "23,23,12,12,12,12,12,12,12,12," +
+                        "23,23,23,23,23,23,23,23,23,23," +
+                        "23,23,23,23,23,23,23,23,23,23," +
+                        "23,23,23,23,23,23,23,23,23,23," +
+                        "23,23,12,12,12,12,12,12,12,12";
+        Sample[] samples = getSamples( getData( nums ), 250);
+        //runTest( nf1, samples );
 
-        NoiseFilter nf2 = new NoiseFilter( 40000, NoiseFilterTests::distance );
-        float[] data2 = new float[100];
+        NoiseFilter nf2 = new NoiseFilter( 41, new MedianErrorCalc(), .2f, .9f, .75f );
+        samples = getNoisySamples( .2f, -5f, 8, .001f, 22, .001f, 100, 250 );
+        runTest( nf2, samples );
 
-        // generate some randomish data...
-        Random random = new Random( 555 );   // change this seed value to get different datasets...
-        float val = 20;  // our nominal signal value...
-        for( int i = 0; i < data2.length; i++ ) {
+        nf1.hashCode();
+    }
 
-            // do something realistic, or an anomaly?
-            if( random.nextFloat() < 0.2 ) {
 
-                // anomaly time!
-                data2[i] = random.nextFloat() * 60 - 30;
-            }
-
-            else {
-                val = (float) Math.round( 4 * (val + 5 * (random.nextFloat() - .5) ) ) / 4f;
-                data2[i] = val;
-            }
+    private static void runTest( final NoiseFilter _nf, final Sample[] _samples ) {
+        out( "--------" );
+        for( Sample sample : _samples ) {
+            _nf.add( sample );
+            Sample n = _nf.getFilteredAt( sample.timestamp );
+            out( (n == null) ? "null" : n.toString() );
         }
-        test( nf2, data2, 500, 20000, 5000 );
-        out( nf2.toString() );
+    }
+
+
+    private static Sample[] getNoisySamples( final float _anomalyFraction, final float _anomalyDelta, final int _anomalyLength,
+                                             final float _slope, final float _start, final float _noiseFraction, final int _numSamples, final long _intervalMS ) {
+
+        // first we build our array of noisy values...
+        float[] values = new float[ _numSamples ];
+        float currentNominalValue = _start;
+        int numSamplesPerCycle = Math.round( _anomalyLength / _anomalyFraction );
+        int currentStep = random.nextInt(numSamplesPerCycle);
+        for( int i = 0; i < values.length; i++ ) {
+
+            // are we in the anomaly?
+            if( currentStep < _anomalyLength ) {
+                values[i] = currentNominalValue + addNoise( _anomalyDelta, _noiseFraction / _anomalyFraction );
+            }
+
+            // otherwise, we're in good data...
+            else {
+                values[i] = addNoise( currentNominalValue, _noiseFraction );
+            }
+
+            // update our nominal value...
+            currentNominalValue = _slope * _intervalMS + currentNominalValue;
+
+            // update our current step...
+            currentStep = (currentStep + 1) % numSamplesPerCycle;
+        }
+
+        return getSamples( values, _intervalMS );
+    }
+
+
+    private static float addNoise( final float _nominal, final float _noiseFactor ) {
+        return _nominal + _noiseFactor * _nominal * random.nextFloat() * (random.nextBoolean() ? -1 : 1 );
     }
 
 
     /**
-     * A simple distance implementation.  This implementation assumes that temperature values generally lie within an 80C range, and the square of
-     * the difference between the two sample's temperature has a 98% weight in the result.  The range of time differences is assumed to lie within
-     * a 40 second (40,000 millisecond) range, and the square of the difference of the timestamps, in milliseconds, has a 2% weight in the result.
-     * The two weighted computations are simply added to get the final distance.
+     * Returns an array of samples with timestamps at the given interval (in milliseconds), and values from the given array of floats.  The first
+     * sample returned will have a timestamp equal to the time this function was executed.
+     *
+     * @param _values the samples' values
+     * @param _intervalMS the intervals between samples, in milliseconds
+     * @return an array of Samples
      */
-    private static float distance( final Sample _newSample, final Sample _existingSample ) {
-        float measurementScore = .98f * (float) Math.pow( _newSample.value - _existingSample.value,                                       2 ) / 6400;
-        float timeScore        = .02f * (float) Math.pow( _newSample.timestamp.toEpochMilli() - _existingSample.timestamp.toEpochMilli(), 2 ) / 16000000;
-        return measurementScore + timeScore;
+    private static Sample[] getSamples( final float[] _values, final long _intervalMS ) {
+        Instant current = Instant.now();
+        Sample[] result = new Sample[_values.length];
+        for( int i = 0; i < _values.length; i++ ) {
+            result[i] = new Sample( _values[i], current );
+            current = current.plusMillis( _intervalMS );
+        }
+        return result;
     }
 
 
-    private static void test( final NoiseFilter _nf, final float[] _measurements, final long _intervalMS, final long _minDepth, final long _noise ) {
-        Instant currentTime = Instant.now().minusMillis( _intervalMS * _measurements.length );
-        for( float measurement : _measurements ) {
-            _nf.addSample( new Sample( measurement, currentTime ) );
-            currentTime = currentTime.plusMillis( _intervalMS );
-            _nf.prune( currentTime );
-            Sample reading = _nf.sampleAt( _minDepth, _noise, currentTime );
-            if( reading != null)
-                out( reading.toString() );
+    /**
+     * Convert comma-separated numeric values to a float array.
+     *
+     * @param _dataString comma-separated numeric values
+     * @return a float array
+     */
+    private static float[] getData( final String _dataString ) {
+        String[] nums = _dataString.split( "," );
+        float[] result = new float[nums.length];
+        for( int i = 0; i < nums.length; i++ ) {
+            result[i] = Float.parseFloat( nums[i] );
         }
+        return result;
     }
 
 

@@ -1,492 +1,241 @@
 package com.dilatush.util.noisefilter;
 
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 /**
- * <p>Implements a filter that removes noise from a series of measurement values, where "noise" is defined as readings that are not plausible for
- * the data being filtered.  The filter works by constructing chains of plausibly related samples, then throwing away any samples that aren't part of
- * the longest such chain.  This method works for data series where any given sample <i>should</i> have a value that's relatively close to the
- * preceding samples' values, such as a series of temperature or humidity values.</p>
- * <p>The "plausibility" of the value of a given sample is determined by measuring the "distance" of the new sample to all the existing samples
- * contained in the filter.  The existing sample with the smallest distance value is chosen as the new sample's ancestor, thus determining which chain
- * it belongs to.  Distance is computed by the distance function passed into the constructor.  This function <i>must</i> be implemented to fit the
- * specific characteristics of the data stream being filtered.  See {@link Distance} for further discussion on this.</p>
- * <p>Note that the {@link #toString()} method returns a string containing a representation of the entire sample tree.  This is very useful when
- * debugging and tuning {@link Distance} function.</p>
+ * <p>Implements a filter that removes noise from a series of measurement values, where "noise" is defined as readings that are outliers from a
+ * computed "normal" to the data.  Three methods are provided in this package for computing the "normal": mean {@link MeanErrorCalc}, median
+ * {@link MedianErrorCalc}, and linear regression {@link LinearRegressionErrorCalc}.  Additional methods may be added by creating classes that
+ * implement the {@link ErrorCalc} interface, as the supplied methods do.</p>
+ * <p>This approach works well for data series where any given sample <i>should</i> have a value that's relatively close to the
+ * preceding sample values, such as a series of temperature or humidity values.</p>
+ * <p>The filter keeps a history of the past "n" samples, where "n" is determined at the time the filter is instantiated.  The expectation is that
+ * samples will be added to the filter at intervals, which may or may not be regular.  When a filtered value is requested, following steps are
+ * performed:</p><ol>
+ *     <li>The "normal" described above is calculated, and then the error from the normal is calculated for each sample in the filter.</li>
+ *     <li>In descending order of the absolute error magnitude, samples are excluded from consideration until one of the following occurs:<ol type="a">
+ *         <li>The configured maximum fraction of samples that may be ignored is reached.</li>
+ *         <li>The configured maximum fraction of the total error (sum of all the samples' errors) is reached.</li>
+ *         <li>A sample with an error smaller than the configured maximum sample error to be ignored is reached.</li>
+ *     </ol></li>
+ *     <li>A linear least mean squares regression is computed on the samples that were not excluded.</li>
+ *     <li>The value requested is computed for the specified time using the results of the preceding regression.</li>
+ * </ol>
+ * <p>This filtering method will be most challenged if the non-noisy part of the data stream is changing rapidly.</p>
  */
 public class NoiseFilter {
 
-    private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern( "mm:ss.SSS" ).withZone( ZoneId.systemDefault() );
+    private final List<Sample> samples;                      // the samples held in this filter
+    private final ErrorCalc    errorCalc;                    // the error calculator
+    private final int          numSamples;                   // the maximum number of the most recent samples to hold in this filter
+    private final int          firstMustKeep;                // the index of the first sample we must keep
+    private final float        maxTotalErrorIgnoreFraction;  // the maximum fraction of the total error to ignore
+    private final float        minSampleErrorIgnore;         // the minimum absolute value of a single sample's error to ignore
 
-    private final long     depthMS;   // the depth of this filter's sample tree, in milliseconds...
-    private final Distance distance;  // the distance function used by this filter...
-
-    private SampleTreeNode root = null;  // the root of this filter's sample tree...
+    private Sample lastSample;
 
 
     /**
-     * <p>Creates a new instance of this class with no samples and the given parameters.</p>
-     * <p>The {@link #depthMS} is how many milliseconds of samples will be retained in the filter.  The more samples that are retained, the better
-     * the discrimination between the chain lengths - which translates into better rejection of longer noise bursts.  The fewer samples retained,
-     * the less computation is required for all filter operations.  Life is full of tradeoffs!</p>
-     * <p>The {@link #distance} function is critical to the operation of this filter.  See {@link Distance} for more details.</p>
-     *
-     * @param _depthMS the number of milliseconds of samples that will be retained in the filter
-     * @param _distance the distance function for this filter
+     * <p>Creates a new instance of this class configured with the given arguments, explained in detail in the parameter descriptions below.
+     * @param _numSamples determines the number of samples held in the filter.  These are the "n" most recently added samples, and
+     *                    their values are the basis for this filter's operations.  Note that until the filter is "full" (because the
+     *                    configured number of samples have been added), it is not possible to get an output value from it.  This value must
+     *                    be at least 2.
+     * @param _errorCalc is the error calculator instance to use with this filter (one of {@link MeanErrorCalc}, {@link MedianErrorCalc},
+     *                           {@link LinearRegressionErrorCalc}, or a custom implementation of {@link ErrorCalc}).  This class calculates the
+     *                           "normal" for the samples held in this filter, the absolute error for each sample's value (from the "normal"), and
+     *                           the sum of all the samples' absolute error from the "normal".
+     * @param _maxIgnoreFraction the maximum number of samples that may be ignored by this filter, as a fraction of the number of samples.  For
+     *                           example, if this value is 0.25, and the filter is configured to hold 40 samples, then at most 10 samples may be
+     *                           ignored ("thrown out") by this filter.  This value must be in the range [0.0 .. 1.0].
+     * @param _maxTotalErrorIgnoreFraction the maximum total error of the samples that may be ignored by this filter, as a fraction of the total error
+     *                                     of all the samples in this filter.  For example, if this value is 0.9 then samples may be ignored ("thrown
+     *                                     out") only if the sum of their errors does not exceed 0.9 times the sum of the errors of <i>all</i> the
+     *                                     samples held in this filter.
+     * @param _minSampleErrorIgnore the minimum value of the error for any sample to be ignored.  This value must be non-negative.
      */
-    public NoiseFilter( final long _depthMS, final Distance _distance ) {
-        distance = _distance;
-        depthMS     = _depthMS;
+    public NoiseFilter( final int _numSamples, final ErrorCalc _errorCalc,
+                        final float _maxIgnoreFraction, final float _maxTotalErrorIgnoreFraction, final float _minSampleErrorIgnore ) {
+
+        // TODO: validate arguments (fail early)...
+        if( _numSamples < 2 )
+            throw new IllegalArgumentException( "Illegal value for number of samples: " + _numSamples );
+        if( _errorCalc == null )
+            throw new IllegalArgumentException( "Missing error calculator" );
+        if( (_maxIgnoreFraction < 0) || (_maxIgnoreFraction > 1) )
+            throw new IllegalArgumentException( "Max ignore fraction out of range ([0..1]): " + _maxIgnoreFraction);
+        if( (_maxTotalErrorIgnoreFraction < 0) || (_maxTotalErrorIgnoreFraction > 1) )
+            throw new IllegalArgumentException( "Max total error ignore fraction out of range ([0..1]): " + _maxTotalErrorIgnoreFraction );
+        if( _minSampleErrorIgnore < 0 )
+            throw new IllegalArgumentException( "Min sample error ignore must be non-negative: " + _minSampleErrorIgnore );
+
+        numSamples                  = _numSamples;
+        errorCalc                   = _errorCalc;
+        samples                     = new ArrayList<>( numSamples );
+        firstMustKeep               = Math.round( _maxIgnoreFraction * numSamples );
+        minSampleErrorIgnore = _minSampleErrorIgnore;
+        maxTotalErrorIgnoreFraction = _maxTotalErrorIgnoreFraction;
     }
 
 
     /**
-     * Adds the given new sample to the filter.  The new sample's distance from each existing sample in the filter is computed, and the new sample
-     * is linked to the existing sample that it is "closest" to.
+     * Add the given sample to the samples currently in the filter.  If adding this sample would cause the number of samples to exceed the configured
+     * maximum number of samples (see {@link NoiseFilter}, then the oldest sample in the filter will be deleted before the given sample is added.
+     * If the sample being added is out of chronological order (i.e., has a timestamp earlier than the last sample added), this method throws an
+     * {@link IllegalArgumentException}.
      *
      * @param _sample the sample to add
      */
-    public void addSample( final Sample _sample ) {
+    public void add( final Sample _sample ) {
 
-        // create our shiny new node...
-        SampleTreeNode newNode = new SampleTreeNode( _sample );
+        // make sure we're not trying to add samples out-of-order...
+        if( (lastSample != null) && (!lastSample.timestamp.isBefore( _sample.timestamp )) )
+            throw new IllegalArgumentException( "Sample out of chronological order" );
 
-        // if this is the first sample added, it just becomes the root...
-        if( root == null ) {
-            root = newNode;
-            return;
-        }
+        lastSample = _sample;
 
-        // otherwise, traverse the existing sample tree to find closest existing sample, and then link to it...
-        NodeDistance closestNode = findClosestNode( root, newNode );
-        linkNewNode( newNode, closestNode.node );
+        // if we already have the maximum number of samples allowed, delete the oldest one before adding the new one...
+        if( samples.size() >= numSamples )
+            samples.remove( 0 );
 
-        // increment the branch size all the way down to the root...
-        SampleTreeNode currentNode = newNode;
-        while( currentNode.parent != null ) {
-            currentNode.parent.branchSize++;
-            currentNode = currentNode.parent.thisNode;
-        }
-
-        // we might have changed the order of things, so resort...
-        sortFwdLinks( root );
+        // add our new sample to the end of the list...
+        samples.add( _sample );
     }
 
 
     /**
-     * Prune any elements in the sample tree that older than the configured depth (see {@link #NoiseFilter(long, Distance)}).  Note that the root is
-     * always the oldest element, so the method employed here is to simply prune the root repeatedly until the root doesn't need pruning.
+     * Gets a {@link Sample} for the given time, as computed by this filter.  See {@link NoiseFilter} for details on how this works.
      *
-     * @param _now prune relative to this time
+     * @param _sampleTime the time for the desired sample.  This time should be reasonably close to the time of the last sample added to this filter.
+     *                    If it is far away from that time, the value of the returned sample may be surprising.
+     * @return the {@link Sample} computed by this filter for the given time.
      */
-    public void prune( final Instant _now ) {
+    public Sample getFilteredAt( final Instant _sampleTime ) {
 
-        // sort our links...
-        sortFwdLinks( root );
-
-        // while we still have a root that's at least as old as our pruning threshold...
-        Instant pruneTo = _now.minusMillis( depthMS );
-        while( (root != null) && root.sample.timestamp.isBefore( pruneTo ) ) {
-
-            // if there are no children of the root, null the root and leave...
-            if( root.fwdLinks.size() == 0 ) {
-                root = null;
-                continue;
-            }
-
-            // set our new root...
-            root = root.fwdLinks.get(0).fwdNode;
-        }
-    }
-
-
-    /**
-     * <p>Returns the filtered sample, if the sample tree is at least as deep as the given depth parameter; otherwise, returns
-     * <code>null</code>.  The given depth must be less than the tree's depth by at least one nominal sampling interval.</p>
-     * <p>The sample returned is the one on the longest (most plausible) chain of samples that is closest to, but earlier than,
-     * the given time minus the given noise margin.</p>
-     *
-     * @param _minDepth the minimum depth of the tree, in milliseconds, before a reading will be returned
-     * @param _noiseMargin the noise margin in milliseconds
-     * @param _now the time the noise margin is relative to
-     * @return the measurement reading found, or <code>null</code> if none was found
-     */
-    public Sample sampleAt( final long _minDepth, final long _noiseMargin, final Instant _now ) {
-
-        // sort our links...
-        sortFwdLinks( root );
-
-        // if we have no tree yet, return a null...
-        if( root == null )
+        // if we don't have enough samples yet, just leave with a null...
+        if( samples.size() < numSamples )
             return null;
 
-        // if our tree isn't deep enough yet, return a null...
-        if( _minDepth > (_now.toEpochMilli() - root.sample.timestamp.toEpochMilli()) )
-            return null;
+        // calculate all our errors...
+        List<SampleError> errors = new ArrayList<>( samples.size() );
+        float totalError = errorCalc.calculateErrors( samples, errors );
 
-        // we have a tree, so follow the longest branch until we find either the end of the branch, or a node with a later timestamp...
-        Instant measurementTime = _now.minusMillis( _noiseMargin );
-        SampleTreeNode current = root;
-        while( (current.fwdLinks.size() > 0) && (current.fwdLinks.get(0).fwdNode.sample.timestamp.isBefore( measurementTime )) ) {
-            current = current.fwdLinks.get(0).fwdNode;
+        // sort the errors in descending order of error magnitude...
+        errors.sort( ( o1, o2 ) -> (int) Math.signum(o2.error - o1.error) );
+
+        // find the index of the first value we want to keep...
+        float totalIgnore = (1 - maxTotalErrorIgnoreFraction) * totalError;
+        int keepIndex = 0;
+        SampleError se = errors.get( 0 );
+        while( (keepIndex < firstMustKeep) && ((totalError - se.error) > totalIgnore) && (se.error > minSampleErrorIgnore) ) {
+            keepIndex++;
+            se = errors.get(keepIndex);
+            totalError -= se.error;
         }
 
-        // when we get here, the current node's reading is the one we want, so return it...
-        return current.sample;
+        // do a regression on the subset of samples we're keeping...
+        Iterator<Sample> it = new SampleRecordIterator( errors.subList( keepIndex, errors.size() ) );
+        RegressionResult srr = linearLMSRegression( it, samples.get( 0 ).timestamp.toEpochMilli() );
+
+        // now compute the value our caller wants, based on the results of that second regression...
+        float x = _sampleTime.toEpochMilli() - samples.get( 0 ).timestamp.toEpochMilli();
+        float y = srr.m * x + srr.b;
+        return new Sample( y, _sampleTime );
     }
 
 
     /**
-     * Returns a string representation of the sample tree contained in this instance.
+     * Computes a least mean squares linear regression on the given sample source, using the given base time.  The base time is simply subtracted
+     * from the time of every sample in order to keep the X (time) values within a reasonable range when squared in the course of the regression
+     * calculations.
      *
-     * @return the string representation of this instance
+     * @param _sampleSource an {@link Iterator} over the source of the samples to compute a linear regression for.
+     * @param _baseTime the base time (in milliseconds) for this computation.  Generally this is the time of the oldest sample.
+     * @return the {@link RegressionResult} containing the result of the linear regression.
      */
-    public String toString() {
+    public static RegressionResult linearLMSRegression( final Iterator<Sample> _sampleSource, final long _baseTime ) {
 
-        // sort our links...
-        sortFwdLinks( root );
+        float sumX  = 0;
+        float sumX2 = 0;
+        float sumXY = 0;
+        float sumY  = 0;
+        float sumY2 = 0;
+        int n = 0;
 
-        // traverse the sample tree to find the root node of all the branches...
-        List<SampleTreeNode> branchRoots = new ArrayList<>();
-        branchRoots.add( root );   // add our root in, 'cause findRoots won't get it...
-        findRoots( root, branchRoots );
-        branchRoots.sort( ( _stn1, _stn2 ) -> (int) (_stn2.sample.timestamp.toEpochMilli() - _stn1.sample.timestamp.toEpochMilli()) );
+        // collect our sums for all the samples...
+        while( _sampleSource.hasNext() ) {
 
-        // get our branches into a list (ordered from oldest to youngest root) of lists of branch members (ordered from oldest to youngest)...
-        List<BranchDescriptor> branches = new ArrayList<>();
-        for( SampleTreeNode branchRoot : branchRoots ) {
-            branches.add( new BranchDescriptor( branchRoot, branches.size() ) );
+            Sample sample = _sampleSource.next();
+            float x = sample.timestamp.toEpochMilli() - _baseTime;
+            float y = sample.value;
+            sumX  += x;
+            sumY  += y;
+            sumX2 += x * x;
+            sumY2 += y * y;
+            sumXY += x * y;
+            n++;
         }
 
-        // get our line descriptors, in temporal order...
-        List<LineDescriptor> lines = new ArrayList<>();
-        int remainingBranches = branches.size();
-        while( remainingBranches > 0 ) {
-
-            // find the oldest reading...
-            BranchDescriptor oldestBranch = null;
-            for( BranchDescriptor branch : branches ) {
-                if( branch.index < branch.members.size() ) {
-                    if( (oldestBranch == null) || branch.getIndexedTimestamp().isBefore( oldestBranch.getIndexedTimestamp() ) ) {
-                        oldestBranch = branch;
-                    }
-                }
-            }
-            assert oldestBranch != null;
-
-            // add a line descriptor for this bad boy...
-            lines.add( new LineDescriptor( oldestBranch ) );
-
-            // bump the index on our oldest find...
-            oldestBranch.index++;
-
-            // if this was the last member, bump down the number of branches remaining to be exhausted...
-            if( oldestBranch.index >= oldestBranch.members.size() )
-                remainingBranches--;
-        }
-
-        // we're finally ready to start building our result string...
-        StringBuilder result = new StringBuilder();
-        for( LineDescriptor line : lines ) {
-
-            // first the timestamp -- just minutes, seconds, and milliseconds...
-            result.append( TIMESTAMP_FORMATTER.format( line.node.sample.timestamp ) );
-
-            // now we get all our columns...
-            for( BranchDescriptor branch : branches ) {
-
-                // are we in our reading's column?
-                if( line.branch == branch.branchIndex ) {
-
-                    // output the reading value as xxx.xx, 7 characters...
-                    result.append( String.format( " %1$6.2f", line.node.sample.value ) );
-                }
-
-                // are we in this column's range?
-                else if( branch.inRange( line.node.sample.timestamp ) ) {
-                    result.append( "   |   " );
-                }
-                else {
-                    result.append( "       " );
-                }
-            }
-
-            // we'll need a line separator...
-            result.append( System.lineSeparator() );
-        }
-
-        return result.toString();
+        // compute our m, b, and r values...
+        float d = n * sumX2 - sumX * sumX;
+        float m = (n * sumXY - sumX * sumY )/ d;
+        float b = (sumY * sumX2 - sumX * sumXY) / d;
+        float r = (float) Math.abs((sumXY - sumX * sumY / n) / Math.sqrt( (sumX2 - sumX * sumX / n) * (sumY2 - sumY * sumY / n ) ));
+        return new RegressionResult( m, b, r );
     }
 
 
     /**
-     * Simple tuple describing a branch, for use in {@link #toString()}.
+     * A simple immutable tuple that contains the results of a linear regression calculation.
      */
-    private static class BranchDescriptor {
-        private final List<SampleTreeNode> members;
-        private final Instant              start;
-        private final Instant              end;
-        private       int                  index;
-        private final int                  branchIndex;
-
+    public static class RegressionResult {
 
         /**
-         * Creates a new instance of this class.
-         *
-         * @param _branchRoot the root node of this branch
-         * @param _branchIndex the index (with the branches list) of this branch
+         * The slope of the regression line.
          */
-        private BranchDescriptor( final SampleTreeNode _branchRoot, final int _branchIndex ) {
-            members = new ArrayList<>();
-            findMembers( _branchRoot, members );
-            start = members.get( 0 ).sample.timestamp;
-            end   = members.get( members.size() - 1 ).sample.timestamp;
-            branchIndex = _branchIndex;
-            index = 0;
-        }
-
+        public final float m;
 
         /**
-         * Returns true if the given time is between the start and end times of this branch.
-         *
-         * @param _time the time to test
-         * @return true if the given time is between the start and end times of this branch
+         * The Y-intercept of the regression line.
          */
-        private boolean inRange( final Instant _time ) {
-            return !( _time.isBefore( start ) || _time.isAfter( end ) );
-        }
-
+        public final float b;
 
         /**
-         * Returns the timestamp of the branch member at the current index within this branch.
-         *
-         * @return the timestamp of the branch member at the current index within this branch
+         * The correlation coefficient of the regression line, in the range [0..1], where values closer to 1 indicate a higher correlation.
          */
-        private Instant getIndexedTimestamp() {
-            return members.get( index ).sample.timestamp;
+        public final float r;
+
+
+        public RegressionResult( final float _m, final float _b, final float _r ) {
+            m = _m;
+            b = _b;
+            r = _r;
         }
     }
 
 
-    /**
-     * Simple tuple that describes one line of the output of {@link #toString()}.
-     */
-    private static class LineDescriptor {
-        private final SampleTreeNode node;
-        private final int branch;
+    private static class SampleRecordIterator implements Iterator<Sample> {
+
+        private final Iterator<SampleError> sampleRecordIterator;
 
 
-        /**
-         * Creates a new instance of this class for the given branch descriptor.
-         *
-         * @param _branchDescriptor the branch descriptor for this line
-         */
-        private LineDescriptor( final BranchDescriptor _branchDescriptor ) {
-            node = _branchDescriptor.members.get( _branchDescriptor.index );
-            branch = _branchDescriptor.branchIndex;
-        }
-    }
-
-
-    /**
-     * Recursively finds the members for the branch starting at the given node, adding them to the given list of members.
-     *
-     * @param _current the current node we're finding members for
-     * @param _members the list of members found
-     */
-    private static void findMembers( final SampleTreeNode _current, final List<SampleTreeNode> _members ) {
-        _members.add( _current );
-        if( _current.fwdLinks.size() > 0 )
-            findMembers( _current.fwdLinks.get(0).fwdNode, _members );
-    }
-
-
-    /**
-     * Recursively finds the roots for all the branches of the existing sample tree, starting at the given node.
-     *
-     * @param _node the node to search for branches in
-     * @param _roots the list of root nodes
-     */
-    private static void findRoots( final SampleTreeNode _node, final List<SampleTreeNode> _roots ) {
-
-        // iterate over all our children...
-        int childCount = 0;
-        for( FwdLink fwdLink : _node.fwdLinks ) {
-
-            // add our child's branch roots...
-            findRoots( fwdLink.fwdNode, _roots );
-
-            // if this is our first child (which is branch zero), then add it as a new branch root...
-            childCount++;
-            if( childCount > 1 ) {
-                _roots.add( fwdLink.fwdNode );
-            }
-        }
-    }
-
-
-    /**
-     * Recursively sorts all the forward links in the given node and its children, into order from the largest branch size to the smallest.
-     *
-     * @param _node the node to sort
-     */
-    private void sortFwdLinks( final SampleTreeNode _node ) {
-        if( _node.fwdLinks.size() > 1 ) {
-            Collections.sort( _node.fwdLinks );
-        }
-        for( FwdLink link : _node.fwdLinks ) {
-            sortFwdLinks( link.fwdNode );
-        }
-    }
-
-
-    /**
-     * Links the given new node (for a sample being added to the sample tree) to the given closest node (the node representing the existing sample
-     * that is most plausibly related to the new sample).
-     *
-     * @param _newNode     the node for the sample being added
-     * @param _closestNode the node for the closest existing sample
-     */
-    private void linkNewNode( final SampleTreeNode _newNode, final SampleTreeNode _closestNode ) {
-
-        // make a forward link in our parent...
-        FwdLink newFwdLink = new FwdLink( _closestNode, _newNode );
-        _closestNode.fwdLinks.add( newFwdLink );
-
-        // set the parent link in our new child...
-        _newNode.parent = newFwdLink;
-    }
-
-
-    /**
-     * Recursively traverses the entire sample tree to find the existing sample that is closest to the given new node.
-     *
-     * @param _current the node currently being examined
-     * @param _newNode the new node being compared with existing nodes
-     * @return the tuple of the closest node and the closeness value
-     */
-    private NodeDistance findClosestNode( final SampleTreeNode _current, final SampleTreeNode _newNode ) {
-
-        // compute the closeness of the new node to the current node...
-        float dist = distance.calculate( _newNode.sample, _current.sample );
-        NodeDistance closestNode = new NodeDistance( _current, dist );
-
-        // now see if any of the current node's children are any closer...
-        for( FwdLink childLink : _current.fwdLinks ) {
-
-            closestNode = closest( closestNode, findClosestNode( childLink.fwdNode, _newNode ) );
-        }
-
-        // return the closest thing we found...
-        return closestNode;
-    }
-
-
-    /**
-     * Returns the closer of the two given close nodes.
-     *
-     * @param _a a node with its distance
-     * @param _b another node with its distance
-     * @return the closer of the two given nodes
-     */
-    private NodeDistance closest( final NodeDistance _a, final NodeDistance _b ) {
-        return (_a.distance < _b.distance) ? _a : _b;
-    }
-
-
-    /**
-     * A simple tuple to hold a node and its distance.
-     */
-    private static class NodeDistance {
-        private final SampleTreeNode node;
-        private final float distance;
-
-
-        /**
-         * Creates a new instance of this class for the given node and distance.
-         *
-         * @param _node the node to use
-         * @param _distance the distance to use
-         */
-        public NodeDistance( final SampleTreeNode _node, final float _distance ) {
-            node = _node;
-            distance = _distance;
-        }
-    }
-
-
-    /**
-     * A simple tuple representing a single node in the sample tree.
-     */
-    private static class SampleTreeNode implements Comparable<SampleTreeNode> {
-        private final Sample sample;
-        private final List<FwdLink> fwdLinks;
-        private FwdLink parent;
-
-
-        /**
-         * Creates a new instance of this class with the given sample.
-         *
-         * @param _sample the sample belonging to this node
-         */
-        public SampleTreeNode( final Sample _sample ) {
-            sample = _sample;
-            fwdLinks = new ArrayList<>();
+        public SampleRecordIterator( final List<SampleError> _sampleErrors ) {
+            sampleRecordIterator = _sampleErrors.iterator();
         }
 
 
-        /**
-         * Returns a string representation of this node.
-         *
-         * @return a string representation of this node
-         */
-        public String toString() {
-            return sample.toString();
-        }
-
-
-        /**
-         * See {@link Comparable} for details.
-         *
-         * @param _o the object being compared
-         * @return a negative, zero, or positive integer as the given object is less than, equal to, or greater than the given object
-         */
         @Override
-        public int compareTo( final SampleTreeNode _o ) {
-            return (int) ((sample.timestamp.toEpochMilli() - _o.sample.timestamp.toEpochMilli()) >> 32);
-        }
-    }
-
-
-    /**
-     * A tuple representing a forward link from one sample tree node to a child node.
-     */
-    private static class FwdLink implements Comparable<FwdLink> {
-        private final SampleTreeNode thisNode;
-        private final SampleTreeNode fwdNode;
-        private int branchSize;
-
-
-        public FwdLink( final SampleTreeNode _thisNode, final SampleTreeNode _fwdNode ) {
-            thisNode = _thisNode;
-            fwdNode = _fwdNode;
-            branchSize = 0;
+        public boolean hasNext() {
+            return sampleRecordIterator.hasNext();
         }
 
 
-        /**
-         * Compare sample nodes in descending order of branch size.
-         *
-         * @param _fwdLink the sample forward link to compare this instance to
-         * @return per the interface's contract, in inverse order of forward link branch size
-         */
         @Override
-        public int compareTo( final FwdLink _fwdLink ) {
-            return _fwdLink.branchSize - branchSize;
+        public Sample next() {
+            return sampleRecordIterator.next().sample;
         }
     }
-
 }
