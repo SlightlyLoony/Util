@@ -10,11 +10,19 @@ import java.util.Random;
  */
 public class NoiseFilterTests {
 
-    private static Random random = new Random( 83696234 );
+    private static final Random random = new Random( 83696234 );
 
+    @SuppressWarnings("ResultOfMethodCallIgnored")
     public static void main( final String[] _args ) {
 
-        NoiseFilter nf1 = new NoiseFilter( 41, new MedianErrorCalc(), .2f, .95f, .75f  );
+        Config config = new Config();
+        config.numSamples = 41;
+        config.errorCalc = new MedianErrorCalc();
+        config.maxIgnoreFraction = .25f;
+        config.maxTotalErrorIgnoreFraction = 1;
+        config.minSampleErrorIgnore = .75f;
+
+        NoiseFilter nf1 = new NoiseFilter( config  );
         String nums =
                         "23,23,12,12,12,12,12,12,12,12," +
                         "23,23,23,23,23,23,23,23,23,23," +
@@ -26,11 +34,15 @@ public class NoiseFilterTests {
                         "23,23,23,23,23,23,23,23,23,23," +
                         "23,23,12,12,12,12,12,12,12,12";
         Sample[] samples = getSamples( getData( nums ), 250);
-        //runTest( nf1, samples );
+        runTest( nf1, samples );
 
-        NoiseFilter nf2 = new NoiseFilter( 41, new MedianErrorCalc(), .2f, .9f, .75f );
+        NoiseFilter nf2 = new NoiseFilter( config );
         samples = getNoisySamples( .2f, -5f, 8, .001f, 22, .001f, 100, 250 );
         runTest( nf2, samples );
+
+        NoiseFilter nf3 = new NoiseFilter( config );
+        samples = getNoisySamples( .25f, -6f, 7, .0015f, 25, .0015f, 200, 200 );
+        runTest( nf3, samples );
 
         nf1.hashCode();
     }

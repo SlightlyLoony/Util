@@ -39,45 +39,19 @@ public class NoiseFilter {
 
 
     /**
-     * <p>Creates a new instance of this class configured with the given arguments, explained in detail in the parameter descriptions below.
-     * @param _numSamples determines the number of samples held in the filter.  These are the "n" most recently added samples, and
-     *                    their values are the basis for this filter's operations.  Note that until the filter is "full" (because the
-     *                    configured number of samples have been added), it is not possible to get an output value from it.  This value must
-     *                    be at least 2.  If the series of samples has any known periodicity, ideally the number of samples would include at least
-     *                    one cycle of that.
-     * @param _errorCalc is the error calculator instance to use with this filter (one of {@link MeanErrorCalc}, {@link MedianErrorCalc},
-     *                           {@link LinearRegressionErrorCalc}, or a custom implementation of {@link ErrorCalc}).  This class calculates the
-     *                           "normal" for the samples held in this filter, the absolute error for each sample's value (from the "normal"), and
-     *                           the sum of all the samples' absolute error from the "normal".
-     * @param _maxIgnoreFraction the maximum number of samples that may be ignored by this filter, as a fraction of the number of samples.  For
-     *                           example, if this value is 0.25, and the filter is configured to hold 40 samples, then at most 10 samples may be
-     *                           ignored ("thrown out") by this filter.  This value must be in the range [0.0 .. 1.0].
-     * @param _maxTotalErrorIgnoreFraction the maximum total error of the samples that may be ignored by this filter, as a fraction of the total error
-     *                                     of all the samples in this filter.  For example, if this value is 0.9 then samples may be ignored ("thrown
-     *                                     out") only if the sum of their errors does not exceed 0.9 times the sum of the errors of <i>all</i> the
-     *                                     samples held in this filter.
-     * @param _minSampleErrorIgnore the minimum value of the error for any sample to be ignored.  This value must be non-negative.
+     * <p>Creates a new instance of this class configured with the given {@link Config} (see that class for details).
      */
-    public NoiseFilter( final int _numSamples, final ErrorCalc _errorCalc,
-                        final float _maxIgnoreFraction, final float _maxTotalErrorIgnoreFraction, final float _minSampleErrorIgnore ) {
+    public NoiseFilter( final Config _config ) {
 
-        if( _numSamples < 2 )
-            throw new IllegalArgumentException( "Illegal value for number of samples: " + _numSamples );
-        if( _errorCalc == null )
-            throw new IllegalArgumentException( "Missing error calculator" );
-        if( (_maxIgnoreFraction < 0) || (_maxIgnoreFraction > 1) )
-            throw new IllegalArgumentException( "Max ignore fraction out of range ([0..1]): " + _maxIgnoreFraction);
-        if( (_maxTotalErrorIgnoreFraction < 0) || (_maxTotalErrorIgnoreFraction > 1) )
-            throw new IllegalArgumentException( "Max total error ignore fraction out of range ([0..1]): " + _maxTotalErrorIgnoreFraction );
-        if( _minSampleErrorIgnore < 0 )
-            throw new IllegalArgumentException( "Min sample error ignore must be non-negative: " + _minSampleErrorIgnore );
+        if( !_config.isValid() )
+            throw new IllegalArgumentException( "Invalid configuration for NoiseFilter" );
 
-        numSamples                  = _numSamples;
-        errorCalc                   = _errorCalc;
+        numSamples                  = _config.numSamples;
+        errorCalc                   = _config.errorCalc;
         samples                     = new ArrayList<>( numSamples );
-        firstMustKeep               = Math.round( _maxIgnoreFraction * numSamples );
-        minSampleErrorIgnore = _minSampleErrorIgnore;
-        maxTotalErrorIgnoreFraction = _maxTotalErrorIgnoreFraction;
+        firstMustKeep               = Math.round( _config.maxIgnoreFraction * numSamples );
+        minSampleErrorIgnore        = _config.minSampleErrorIgnore;
+        maxTotalErrorIgnoreFraction = _config.maxTotalErrorIgnoreFraction;
     }
 
 
