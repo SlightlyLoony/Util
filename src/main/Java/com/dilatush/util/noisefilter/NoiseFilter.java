@@ -43,7 +43,8 @@ public class NoiseFilter {
      * @param _numSamples determines the number of samples held in the filter.  These are the "n" most recently added samples, and
      *                    their values are the basis for this filter's operations.  Note that until the filter is "full" (because the
      *                    configured number of samples have been added), it is not possible to get an output value from it.  This value must
-     *                    be at least 2.
+     *                    be at least 2.  If the series of samples has any known periodicity, ideally the number of samples would include at least
+     *                    one cycle of that.
      * @param _errorCalc is the error calculator instance to use with this filter (one of {@link MeanErrorCalc}, {@link MedianErrorCalc},
      *                           {@link LinearRegressionErrorCalc}, or a custom implementation of {@link ErrorCalc}).  This class calculates the
      *                           "normal" for the samples held in this filter, the absolute error for each sample's value (from the "normal"), and
@@ -60,7 +61,6 @@ public class NoiseFilter {
     public NoiseFilter( final int _numSamples, final ErrorCalc _errorCalc,
                         final float _maxIgnoreFraction, final float _maxTotalErrorIgnoreFraction, final float _minSampleErrorIgnore ) {
 
-        // TODO: validate arguments (fail early)...
         if( _numSamples < 2 )
             throw new IllegalArgumentException( "Illegal value for number of samples: " + _numSamples );
         if( _errorCalc == null )

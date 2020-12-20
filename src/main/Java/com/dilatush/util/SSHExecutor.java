@@ -728,42 +728,4 @@ public class SSHExecutor {
             result = Bash.doubleQuote( result );
         return result;
     }
-
-
-    /**
-     * Simple test code.
-     */
-    public static void main( String[] _args ) throws IOException, InterruptedException {
-
-        // direct mode example...
-        SSHExecutor ssh = new SSHExecutor( "beast", 5, 2 );
-        ssh.setOnlyIPv4();
-        ssh.start();
-        ssh.waitFor( 100, TimeUnit.MILLISECONDS );
-        String directOutput = ssh.getRemoteOutput();
-
-        // interactive mode example...
-        ssh = new SSHExecutor( "beast" );
-        ssh.start();
-        Thread.sleep( 100 );  // allow time to connect...
-        ssh.sendRemoteInput( "ls -l /apps\n" );
-        Thread.sleep( 100 );  // allow time to execute...
-        String interactiveOutput = ssh.getRemoteOutput();
-        ssh.sendRemoteInput( "exit\n" );
-        ssh.waitFor( 100, TimeUnit.MILLISECONDS );
-
-        // port forwarding example...
-        ssh = new SSHExecutor( "paradise", 5, 2 );
-        ssh.addRemotePortForwarding( 5432, "beast", 22 );
-        ssh.addLocalPortForwarding( 5432, "localhost", 5432 );
-        ssh.setVerbose( 3 );
-        ssh.start();
-        String portForwardSSH = ssh.toString();
-        Thread.sleep( 100 );
-        String portForwardOutput = ssh.getRemoteOutput();
-        String portForwardError = ssh.getSSHErrorOutput();
-        ssh.waitFor();
-
-        ssh.hashCode();
-    }
 }
