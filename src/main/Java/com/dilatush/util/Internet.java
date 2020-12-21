@@ -24,7 +24,7 @@ public class Internet {
      * @return <code>true</code> if the given host or IP address is valid
      */
     @SuppressWarnings( "unused" )
-    public static boolean validHost( final String _host ) {
+    public static boolean isValidHost( final String _host ) {
 
         // if some dummy gave us nothing to operate on, return invalid...
         if( isEmpty( _host ) )
