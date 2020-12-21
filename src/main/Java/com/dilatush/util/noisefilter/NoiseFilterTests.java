@@ -15,7 +15,7 @@ public class NoiseFilterTests {
     @SuppressWarnings("ResultOfMethodCallIgnored")
     public static void main( final String[] _args ) {
 
-        Config config = new Config();
+        NoiseFilter.NoiseFilterConfig config = new NoiseFilter.NoiseFilterConfig();
         config.numSamples = 41;
         config.errorCalc = new MedianErrorCalc();
         config.maxIgnoreFraction = .25f;
