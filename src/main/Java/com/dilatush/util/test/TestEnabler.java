@@ -14,6 +14,24 @@ public interface TestEnabler {
      */
     boolean isEnabled();
 
+    /**
+     * Initializes this test enabler.  This happens at two different times:
+     * <ul>
+     *     <li>Upon instantiation.</li>
+     *     <li>When this instance is one component of a {@link CompositeTestEnabler} instance, and the preceding component's enabled state changes
+     *     from enabled to disabled.</li>
+     * </ul>
+     */
+
+    void init();
+
+    /**
+     * Returns the last value returned by an invocation of {@link #isEnabled()}.
+     *
+     * @return the last value returned by an invocation of {@link #isEnabled()}
+     */
+    boolean getLastEnabled();
+
 
     /**
      * Returns <code>true</code> if this instance has a property with the given name.
@@ -68,6 +86,19 @@ public interface TestEnabler {
      * @return the integer value of the property with the given name
      */
     int getAsInt( final String _name );
+
+
+    /**
+     * Returns the long value of the property with the given name.  If the property's value is an <code>Long</code>, <code>Integer</code>,
+     * <code>Short</code>, or <code>Byte</code>, the value is returned directly.  If it is a <code>Boolean</code>, then a 1 or 0 is returned as the
+     * value is <code>true</code> or <code>false</code>.  If the property's value is a <code>String</code>, then the successful result of
+     * <code>Long.parseLong(String)</code> is returned.  If the <code>parseLong(String)</code> failed, or if the property's value is any other type,
+     * or does not exist, then 0 is returned and a warning is logged.
+     *
+     * @param _name The name of the property to retrieve.
+     * @return the integer value of the property with the given name
+     */
+    long getAsLong( final String _name );
 
 
     /**

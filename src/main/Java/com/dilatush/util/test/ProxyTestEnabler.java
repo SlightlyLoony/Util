@@ -1,14 +1,16 @@
 package com.dilatush.util.test;
 
+import java.util.HashMap;
+
 /**
- * Implements a simple proxy for {@link TestEnabler} instances to provide a mechanism for the {@link TestOrchestrator} to set the enabler.
+ * Implements a simple proxy for {@link TestEnabler} instances to provide a mechanism for the {@link TestManager} to set the enabler.
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
 public class ProxyTestEnabler implements TestEnabler {
 
 
-    private volatile TestEnabler testEnabler = new FalseTestEnabler();
+    private volatile TestEnabler testEnabler = new FalseTestEnabler( new HashMap<>() );
 
 
     /* package-private */ TestEnabler getTestEnabler() {
@@ -29,6 +31,18 @@ public class ProxyTestEnabler implements TestEnabler {
     @Override
     public boolean isEnabled() {
         return testEnabler.isEnabled();
+    }
+
+
+    @Override
+    public void init() {
+        testEnabler.init();
+    }
+
+
+    @Override
+    public boolean getLastEnabled() {
+        return testEnabler.getLastEnabled();
     }
 
 
@@ -103,8 +117,24 @@ public class ProxyTestEnabler implements TestEnabler {
 
 
     /**
+     * Returns the long value of the property with the given name.  If the property's value is an <code>Long</code>, <code>Integer</code>,
+     * <code>Short</code>, or <code>Byte</code>, the value is returned directly.  If it is a <code>Boolean</code>, then a 1 or 0 is returned as the
+     * value is <code>true</code> or <code>false</code>.  If the property's value is a <code>String</code>, then the successful result of
+     * <code>Long.parseLong(String)</code> is returned.  If the <code>parseLong(String)</code> failed, or if the property's value is any other type,
+     * or does not exist, then 0 is returned and a warning is logged.
+     *
+     * @param _name The name of the property to retrieve.
+     * @return the integer value of the property with the given name
+     */
+    @Override
+    public long getAsLong( final String _name ) {
+        return testEnabler.getAsLong( _name );
+    }
+
+
+    /**
      * Returns the double value of the property with the given name.  If the property's value is an instance of <code>Number</code>, the value is
-     * returned directly.  Note that for a code>Long</code> it is possible that some precision will be lost.  If it is a <code>Boolean</code>, then a
+     * returned directly.  Note that for a <code>Long</code> it is possible that some precision will be lost.  If it is a <code>Boolean</code>, then a
      * 1 or 0 is returned as the value is <code>true</code> or <code>false</code>.  If the property's value is a <code>String</code>, then the
      * successful result of <code>Double.parseDouble(String)</code> is returned.  If the <code>parseDouble(String)</code> failed, or if property's
      * value is any other type, or does not exist, then 0 is returned and a warning is logged.

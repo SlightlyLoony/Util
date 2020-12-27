@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
+import static com.dilatush.util.Checks.required;
 import static com.dilatush.util.General.isNull;
 
 /**
@@ -15,23 +16,66 @@ import static com.dilatush.util.General.isNull;
 
     final static private Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
 
+
+    /**
+     * Remembers the state of this test enabler the last time {@link #isEnabled()} was called on it.  It's used for detecting the true-to-false
+     * edge, which causes {@link #init()} to be called on all downstream test enablers in a {@link CompositeTestEnabler} instance.
+     */
+    private boolean lastState;
+
+
     // the map of this instance's properties...
-    private final Map<String, Object> properties;
+    protected final Map<String, Object> properties;
 
 
     /* package-private */ ATestEnabler( final Map<String, Object> _properties ) {
 
         // make a copy of the given map, for safety...
+        required( _properties );
         properties = new ConcurrentHashMap<>( _properties );
     }
 
 
+    /**
+     * Returns <code>true</code> if this test is currently enabled.
+     *
+     * @return <code>true</code> if this test is currently enabled
+     */
+
     public boolean isEnabled() {
-        return enabled();
+        lastState = enabled();
+        return lastState;
     }
 
 
-    /* package-private */ abstract boolean enabled();
+    /**
+     * Initializes this test enabler.  This happens at two different times:
+     * <ul>
+     *     <li>Upon instantiation.</li>
+     *     <li>When this instance is one component of a {@link CompositeTestEnabler} instance, and the preceding component's enabled state changes
+     *     from enabled to disabled.</li>
+     * </ul>
+     */
+    public void init() {
+    }
+
+
+    /**
+     * Returns the last value returned by an invocation of {@link #isEnabled()}.
+     *
+     * @return the last value returned by an invocation of {@link #isEnabled()}
+     */
+    public boolean getLastEnabled() {
+        return lastState;
+    }
+
+
+    /**
+     * Implemented by subclasses to indicate whether they're enabled.
+     *
+     * @return <code>true</code> if this test enabler is enabled
+     */
+    protected abstract boolean enabled();
 
 
     /**
@@ -63,7 +107,7 @@ import static com.dilatush.util.General.isNull;
         }
         Object result = properties.get( _name );
         if( isNull( result ) )
-            LOGGER.warning( "Property \"" + _name + " has a null value" );
+            LOGGER.warning( "Property \"" + _name + "\" has a null value" );
         return result;
     }
 
@@ -84,7 +128,7 @@ import static com.dilatush.util.General.isNull;
         }
         Object result = properties.get( _name );
         if( isNull( result ) ) {
-            LOGGER.warning( "String property \"" + _name + " has a null value" );
+            LOGGER.warning( "String property \"" + _name + "\" has a null value" );
             return "";
         }
         if( result instanceof String )
@@ -110,7 +154,7 @@ import static com.dilatush.util.General.isNull;
         }
         Object result = properties.get( _name );
         if( isNull( result ) ) {
-            LOGGER.warning( "Boolean property \"" + _name + " has a null value" );
+            LOGGER.warning( "Boolean property \"" + _name + "\" has a null value" );
             return false;
         }
         if( result instanceof Boolean )
@@ -119,7 +163,7 @@ import static com.dilatush.util.General.isNull;
             return Boolean.parseBoolean( (String) result );
         if( result instanceof Number )
             return ((Number) result).doubleValue() != 0;
-        LOGGER.warning( "Property " + _name + " cannot be converted to Boolean" );
+        LOGGER.warning( "Property \"" + _name + "\" cannot be converted to Boolean" );
         return false;
     }
 
@@ -142,7 +186,7 @@ import static com.dilatush.util.General.isNull;
         }
         Object result = properties.get( _name );
         if( isNull( result ) ) {
-            LOGGER.warning( "Integer property \"" + _name + " has a null value" );
+            LOGGER.warning( "Integer property \"" + _name + "\" has a null value" );
             return 0;
         }
         if( (result instanceof Integer) || (result instanceof Short) || (result instanceof Byte)  )
@@ -154,18 +198,57 @@ import static com.dilatush.util.General.isNull;
                 return Integer.parseInt( (String) result );
             }
             catch( NumberFormatException _e ) {
-                LOGGER.warning( "Property " + _name + " with value '" + ((String) result) + "' could not be parsed as an integer" );
+                LOGGER.warning( "Property \"" + _name + "\" with value '" + result + "' could not be parsed as an integer" );
                 return 0;
             }
         }
-        LOGGER.warning( "Property " + _name + " cannot be converted to integer" );
+        LOGGER.warning( "Property \"" + _name + "\" cannot be converted to integer" );
+        return 0;
+    }
+
+
+    /**
+     * Returns the long value of the property with the given name.  If the property's value is an <code>Long</code>, <code>Integer</code>,
+     * <code>Short</code>, or <code>Byte</code>, the value is returned directly.  If it is a <code>Boolean</code>, then a 1 or 0 is returned as the
+     * value is <code>true</code> or <code>false</code>.  If the property's value is a <code>String</code>, then the successful result of
+     * <code>Long.parseLong(String)</code> is returned.  If the <code>parseLong(String)</code> failed, or if the property's value is any other type,
+     * or does not exist, then 0 is returned and a warning is logged.
+     *
+     * @param _name The name of the property to retrieve.
+     * @return the integer value of the property with the given name
+     */
+    @Override
+    public long getAsLong( final String _name ) {
+        if( isNull( _name ) ) {
+            LOGGER.warning( "Attempted to get long value of property with a null name" );
+            return 0;
+        }
+        Object result = properties.get( _name );
+        if( isNull( result ) ) {
+            LOGGER.warning( "Long property \"" + _name + "\" has a null value" );
+            return 0;
+        }
+        if( (result instanceof Long) || (result instanceof Integer) || (result instanceof Short) || (result instanceof Byte)  )
+            return ((Number) result).longValue();
+        if( result instanceof Boolean )
+            return ((Boolean) result) ? 1 : 0;
+        if( result instanceof String ) {
+            try {
+                return Long.parseLong( (String) result );
+            }
+            catch( NumberFormatException _e ) {
+                LOGGER.warning( "Property \"" + _name + "\" with value '" + result + "' could not be parsed as a long" );
+                return 0;
+            }
+        }
+        LOGGER.warning( "Property \"" + _name + "\" cannot be converted to long" );
         return 0;
     }
 
 
     /**
      * Returns the double value of the property with the given name.  If the property's value is an instance of <code>Number</code>, the value is
-     * returned directly.  Note that for a code>Long</code> it is possible that some precision will be lost.  If it is a <code>Boolean</code>, then a
+     * returned directly.  Note that for a <code>Long</code> it is possible that some precision will be lost.  If it is a <code>Boolean</code>, then a
      * 1 or 0 is returned as the value is <code>true</code> or <code>false</code>.  If the property's value is a <code>String</code>, then the
      * successful result of <code>Double.parseDouble(String)</code> is returned.  If the <code>parseDouble(String)</code> failed, or if property's
      * value is any other type, or does not exist, then 0 is returned and a warning is logged.
@@ -181,7 +264,7 @@ import static com.dilatush.util.General.isNull;
         }
         Object result = properties.get( _name );
         if( isNull( result ) ) {
-            LOGGER.warning( "Double property \"" + _name + " has a null value" );
+            LOGGER.warning( "Double property \"" + _name + "\" has a null value" );
             return 0;
         }
         if( result instanceof Number )
@@ -193,11 +276,11 @@ import static com.dilatush.util.General.isNull;
                 return Double.parseDouble( (String) result );
             }
             catch( NumberFormatException _e ) {
-                LOGGER.warning( "Property " + _name + " with value '" + ((String) result) + "' could not be parsed as a double" );
+                LOGGER.warning( "Property \"" + _name + "\" with value '" + result + "' could not be parsed as a double" );
                 return 0;
             }
         }
-        LOGGER.warning( "Property " + _name + " cannot be converted to double" );
+        LOGGER.warning( "Property \"" + _name + "\" cannot be converted to double" );
         return 0;
     }
 }
