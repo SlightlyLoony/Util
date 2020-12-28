@@ -17,9 +17,9 @@ public class FalseTestEnabler extends ATestEnabler {
 
 
     /**
-     * Returns <code>true</code> if this instance is currently enabled.
+     * Always returns <code>false</code> (<i>not</i> enabled).
      *
-     * @return <code>true</code> if this instance is currently enabled
+     * @return <code>false</code>
      */
     @Override
     protected boolean enabled() {

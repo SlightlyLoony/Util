@@ -10,7 +10,7 @@ import java.util.logging.Logger;
 
 /**
  * Implements a {@link TestEnabler} that is implemented in JavaScript, with the script determined and compiled at instantiation time.  The provided
- * script <i>must</i> three functions:
+ * script <i>must</i> provide three functions:
  * <ul>
  *     <li><code>enabled()</code>, which returns <code>true</code> if this instance is currently enabled.</li>
  *     <li><code>init()</code>, which initializes the instance and has no return value.</li>
@@ -28,16 +28,14 @@ public class JavaScriptTestEnabler extends ATestEnabler {
 
 
     /**
-     * Creates a new instance of this class with the given properties.  There are two properties that are used by this instance, if present:
+     * Creates a new instance of this class with the given properties and script.  None of the given properties are used by this class, but all are
+     * available to the software being tested.  The provided script <i>must</i> provide three functions:
      * <ul>
-     *     <li><code>_delay_</code> is the time, in milliseconds, that this instance will delay before changing its enabled state.  If this property
-     *     is not supplied, it defaults to 1000 milliseconds (one second).</li>
-     *     <li><code>_startAs_</code> is the starting state of this instance.  If this value is <code>false</code> (which is the default value if this
-     *     property is not supplied), then this instance is disabled for the delay time, then enabled afterwards.  If this value is <code>true</code>,
-     *     then this instance is enabled for the delay time, then disabled afterwards.</li>
+     *     <li><code>enabled()</code>, which returns <code>true</code> if this instance is currently enabled.</li>
+     *     <li><code>init()</code>, which initializes the instance and has no return value.</li>
+     *     <li><code>set( properties )</code>, the argument of which is the properties of this instance, and there is no return value.  This function
+     *     is invoked <i>only</i> at instantiation time.</li>
      * </ul>
-     * If other properties are present, they are ignored by this instance but are available publicly (and in particular, to the software being
-     * tested).
      *
      * @param _properties the properties for this instance.
      * @param _script the JavaScript program for this instance.

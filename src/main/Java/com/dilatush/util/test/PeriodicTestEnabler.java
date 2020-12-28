@@ -3,7 +3,9 @@ package com.dilatush.util.test;
 import java.util.Map;
 
 /**
- * Implements a {@link TestEnabler} with a configurable starting value for {@link #isEnabled()}, and keeps that value for the configured time.
+ * Implements a {@link TestEnabler} that provides a two-phase periodic (repeating) enabler.  In the first phase, the {@link #isEnabled()} result is
+ * equal to a configurable starting value for a configurable time (in milliseconds).  In the second phase, also of a configurable length, the
+ * {@link #isEnabled()} result is the opposite.
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
@@ -18,13 +20,14 @@ public class PeriodicTestEnabler extends ATestEnabler {
 
 
     /**
-     * Creates a new instance of this class with the given properties.  There are two properties that are used by this instance, if present:
+     * Creates a new instance of this class with the given properties.  There are three properties that are used by this instance, if present:
      * <ul>
-     *     <li><code>_delay_</code> is the time, in milliseconds, that this instance will delay before changing its enabled state.  If this property
-     *     is not supplied, it defaults to 1000 milliseconds (one second).</li>
-     *     <li><code>_startAs_</code> is the starting state of this instance.  If this value is <code>false</code> (which is the default value if this
-     *     property is not supplied), then this instance is disabled for the delay time, then enabled afterwards.  If this value is <code>true</code>,
-     *     then this instance is enabled for the delay time, then disabled afterwards.</li>
+     *     <li><code>_phase1_</code> is the length, in milliseconds, phase 1.  During phase 1, the result of {@link #isEnabled()} is equal to the
+     *     value of <code>_startAs_</code>.  If this property is not supplied, it defaults to 1000 milliseconds (one second).</li>
+     *     <li><code>_phase2_</code> is the length, in milliseconds, phase 2.  During phase 2, the result of {@link #isEnabled()} is equal to the
+     *     inverted value of <code>_startAs_</code>.  If this property is not supplied, it defaults to 1000 milliseconds (one second).</li>
+     *     <li><code>_startAs_</code>, a boolean, determines the output of {@link #isEnabled()} during phase 1; the inverse of this property
+     *     determines the output of {@link #isEnabled()} during phase 2.  If this property is not supplied, it defaults to <code>false</code>.</li>
      * </ul>
      * If other properties are present, they are ignored by this instance but are available publicly (and in particular, to the software being
      * tested).

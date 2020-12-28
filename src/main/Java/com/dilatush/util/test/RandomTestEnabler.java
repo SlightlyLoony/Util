@@ -5,7 +5,7 @@ import java.util.Random;
 
 /**
  * Implements a {@link TestEnabler} that returns a random value from invocations of {@link #isEnabled()}, with a configured fraction of those values
- * (over a long enough period) being equal to the configured <code>_enabledFraction_</code>.
+ * (over a long enough period) being <code>true</code> (enabled).
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
@@ -41,6 +41,11 @@ public class RandomTestEnabler extends ATestEnabler {
     }
 
 
+    /**
+     * Returns <code>true</code> if this instance is currently enabled.
+     *
+     * @return <code>true</code> if this instance is currently enabled
+     */
     @Override
     protected boolean enabled() {
         return random.nextDouble() < enabledFraction;

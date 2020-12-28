@@ -17,6 +17,14 @@ public class CompositeTestEnabler extends ATestEnabler {
     private final List<TestEnabler> enablers;
 
 
+    /**
+     * Creates a new instance of this class with the given properties (none of which this class uses) and ordered list of test enablers.
+     *
+     * @param _properties The properties for this instance, none of which are used by this class.  All properties are available to the software
+     *                    being tested.
+     * @param _testEnablers The ordered list of test enablers, <i>all</i> of which must be enabled for the {@link #isEnabled()} function on this
+     *                      instance to return <code>true</code>.
+     */
     public CompositeTestEnabler( final Map<String, Object> _properties, final List<TestEnabler> _testEnablers ) {
         super( _properties );
         enablers = _testEnablers;
@@ -40,7 +48,7 @@ public class CompositeTestEnabler extends ATestEnabler {
 
 
     /**
-     * Returns <code>true</code> if this instance is currently enabled.
+     * Returns <code>true</code> if <i>all</i> of the test enablers in this instance's list of test enablers are themselves enabled.
      *
      * @return <code>true</code> if this instance is currently enabled
      */
