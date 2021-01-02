@@ -150,4 +150,67 @@ public class ParsedCLI {
     public String getErrorMsg() {
         return errorMsg;
     }
+
+
+    /**
+     * Returns the number of arguments (both optional and positional) that were present.
+     *
+     * @return the number of arguments (both optional and positional) that were present
+     */
+    public int presentCount() {
+
+        // if we don't have a valid parse, just return zero.
+        if( !valid || (parsedArguments == null) )
+            return 0;
+
+        // count the arguments that were present...
+        int count = 0;
+        for( ParsedArg arg : parsedArguments.values() ) {
+            if( arg.present )
+                count++;
+        }
+        return count;
+    }
+
+
+    /**
+     * Returns the number of optional arguments that were present.
+     *
+     * @return the number of optional arguments that were present
+     */
+    public int optionalPresentCount() {
+
+        // if we don't have a valid parse, just return zero.
+        if( !valid || (parsedArguments == null) )
+            return 0;
+
+        // count the arguments that were present...
+        int count = 0;
+        for( ParsedArg arg : parsedArguments.values() ) {
+            if( arg.present && (arg.type == ArgumentType.OPTIONAL) )
+                count++;
+        }
+        return count;
+    }
+
+
+    /**
+     * Returns the number of positional arguments that were present.
+     *
+     * @return the number of positional arguments that were present
+     */
+    public int positionalPresentCount() {
+
+        // if we don't have a valid parse, just return zero.
+        if( !valid || (parsedArguments == null) )
+            return 0;
+
+        // count the arguments that were present...
+        int count = 0;
+        for( ParsedArg arg : parsedArguments.values() ) {
+            if( arg.present && (arg.type == ArgumentType.POSITIONAL) )
+                count++;
+        }
+        return count;
+    }
 }

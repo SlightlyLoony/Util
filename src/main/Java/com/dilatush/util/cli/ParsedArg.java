@@ -3,7 +3,7 @@ package com.dilatush.util.cli;
 import java.util.List;
 
 /**
- * Simple POJO that contains the result of parsing a single argument on the command line.
+ * Simple immutable POJO that contains the result of parsing a single argument on the command line.
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
@@ -14,7 +14,7 @@ public class ParsedArg {
      * This field is <code>true</code> if this argument was present on the parsed command line at least once, and <code>false</code> if this
      * argument didn't appear on the command line at all.
      */
-    public boolean present;
+    public final boolean present;
 
     /**
      * The value of this argument.  There are several possibilities for its value:
@@ -30,7 +30,7 @@ public class ParsedArg {
      *         that if this argument did not appear on the command line parsed, then the value will be an empty list, not a <code>nul.</code>.</li>
      * </ul>
      */
-    public Object value;
+    public final Object value;
 
 
     /**
@@ -38,5 +38,40 @@ public class ParsedArg {
      * for optional arguments that can appear multiple times (such as <code>-vvv</code> for more verbosity), and for positional arguments that could
      * be globbed filenames.
      */
-    public int appearances;
+    public final int appearances;
+
+
+    /**
+     * The type of argument (optional or positional).
+     */
+    public final ArgumentType type;
+
+
+    /**
+     * Creates a new instance of this class with the given values.
+     *
+     * @param _present Whether this argument was present (<code>true</code>) on the command line.
+     * @param _value The value of this argument.
+     * @param _appearances The number of times this argument appeared on the command line.
+     * @param _type The argument's type (positional or optional).
+     */
+    public ParsedArg( final boolean _present, final Object _value, final int _appearances, final ArgumentType _type ) {
+        present = _present;
+        value = _value;
+        appearances = _appearances;
+        type = _type;
+    }
+
+
+    /**
+     * Creates a new instance of this class as the default for the given {@link ArgDef}.
+     *
+     * @param _argDef the {@link ArgDef} to make default results for.
+     */
+    public ParsedArg( final ArgDef _argDef ) {
+        present = false;
+        value = _argDef.defaultValue;
+        appearances = 0;
+        type = _argDef.argType;
+    }
 }

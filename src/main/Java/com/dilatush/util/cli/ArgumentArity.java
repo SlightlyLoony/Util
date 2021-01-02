@@ -60,12 +60,31 @@ public class ArgumentArity {
         if( _maximum < 0 )
             throw new IllegalArgumentException( "Illegal value for maximum argument arity: " + _maximum );
 
+        if( (_maximum != 0) && (_maximum < _minimum) )
+            throw new IllegalArgumentException( "Maximum arity may not be non-zero and less than minimum" );
+
         minimum = _minimum;
         maximum = _maximum;
     }
 
 
+    /**
+     * Returns <code>true</code> if the maximum arity is unlimited.
+     *
+     * @return <code>true</code> if the maximum arity is unlimited
+     */
     public boolean isUnlimited() {
         return maximum == 0;
+    }
+
+
+    /**
+     * Returns <code>true</code> if this arity allows a variable number of arguments.  More formally, returns <code>true</code> if {@link #maximum}
+     * is non-zero, and {@link #minimum} does not equal {@link #maximum}.
+     *
+     * @return <code>true</code> if this arity allows a variable number of arguments
+     */
+    public boolean isVariable() {
+        return (maximum > 0) && (minimum != maximum);
     }
 }
