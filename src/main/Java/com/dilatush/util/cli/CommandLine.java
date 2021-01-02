@@ -19,7 +19,9 @@ public class CommandLine {
     private final String                 summary;           // a summary detail of this command
     private final String                 detail;            // a detailed detail of this command
 
-    private int variableAppearanceCount;     // the count of positional parameters with variable number of appearances...
+    private int     variableAppearanceCount;  // the count of positional parameters with variable number of appearances...
+    private boolean nextArgPositional;        // true if the next argument processed is positional even if it starts with a "-"
+    private boolean allArgsPositional;        // true if all all arguments process are positional even if they start with a "-"
 
 
     public CommandLine( final String _summary, final String _detail ) {
@@ -32,8 +34,6 @@ public class CommandLine {
 
         summary         = _summary;
         detail          = _detail;
-
-        variableAppearanceCount = 0;
     }
 
 
@@ -44,6 +44,12 @@ public class CommandLine {
      * @return the parsed command line
      */
     public ParsedCLI parse( final String[] _args ) {
+
+        // a little setup...
+        variableAppearanceCount = 0;
+        nextArgPositional = false;
+        allArgsPositional = false;
+
 
         try {
 
@@ -93,33 +99,40 @@ public class CommandLine {
         RefInt i = new RefInt();    // our command line argument index...
 
         // walk through our arguments and handle them...
-        for( i.index = 0; i.index < _args.length; i.index++ ) {
+        for( i.value = 0; i.value < _args.length; i.value++ ) {
 
-            String arg = _args[i.index];
+            String arg = _args[i.value];
 
-            if     ( "-".equals( arg ) )      handleSingleHyphen ();
-            else if( "--".equals( arg ) )     handleDoubleHyphen ();
-            else if( arg.startsWith( "--" ) ) handleLongOptional ( _args, i, arg      );
-            else if( arg.startsWith( "-" ) )  handleShortOptional( arg                 );
-            else                              handlePositional   ( _args[i.index], ppi );
+            if     ( nextArgPositional || allArgsPositional ) handleSpecials( arg, ppi );
+            else if( "-".equals( arg ) )                      handleSingleHyphen ();
+            else if( "--".equals( arg ) )                     handleDoubleHyphen ();
+            else if( arg.startsWith( "--" ) )                 handleLongOptional ( _args, i, arg );
+            else if( arg.startsWith( "-" ) )                  handleShortOptional( arg           );
+            else                                              handlePositional   ( arg, ppi      );
         }
     }
 
 
+    private void handleSpecials( final String _arg, final RefInt _ppi ) throws CLDefException {
+        nextArgPositional = false;
+        handlePositional( _arg, _ppi );
+    }
+
+
     private void handleSingleHyphen() {
-        // TODO: what the heck do we do with this?
+        nextArgPositional = true;
     }
 
 
     private void handleDoubleHyphen() {
-        // TODO: what the heck do we do with this?
+        allArgsPositional = true;
     }
 
 
     private void handlePositional( final String _arg, RefInt _ppi ) throws CLDefException {
 
         // get our definition, and bump the index...
-        ArgDef def = positionalDefs.get( _ppi.index++ );
+        ArgDef def = positionalDefs.get( _ppi.value++ );
 
         updateArgument( def.referenceName, def, _arg );
     }
@@ -167,10 +180,10 @@ public class CommandLine {
         // if a parameter is not disallowed, see if we have one...
         String parameter = null;
         if( def.parameterMode != ParameterMode.DISALLOWED ) {
-            if( i.index + 1 < _args.length ) {
-                String trial = _args[i.index + 1];
+            if( i.value + 1 < _args.length ) {
+                String trial = _args[i.value + 1];
                 if( !trial.startsWith( "-" ) ) {
-                    i.index++;
+                    i.value++;
                     parameter = trial;
                 }
             }
@@ -234,11 +247,14 @@ public class CommandLine {
      *
      * @param _argDef The {@link ArgDef} to add to this command line definition.
      */
-    // TODO: make sure argument is either AOptionalArgDef or APositionalArgDef...
     public void add( @NotNull final ArgDef _argDef ) {
 
         // fail fast if some dummy called us with a null...
         Objects.requireNonNull( _argDef, "Cannot add a null argument definition");
+
+        // make sure we've got either a positional or an optional argument definition - nothing else will do...
+        if( !((_argDef instanceof AOptionalArgDef) || (_argDef instanceof APositionalArgDef)) )
+            throw new IllegalArgumentException( "_argDef must be instance of either AOptionalArgDef or APositionalArgDef" );
 
         // some things apply to any argument type...
         // stuff it away by reference name, checking for duplication...
@@ -256,17 +272,20 @@ public class CommandLine {
             if( _argDef.maxAllowed != 1 ) {
                 variableAppearanceCount++;
                 if( variableAppearanceCount >= 2 )
-                    throw new IllegalArgumentException( "Tried to add a second positional arguments with variable number of appearances: " + _argDef.referenceName );
+                    throw new IllegalArgumentException( "Tried to add a second positional arguments with variable number of appearances: "
+                            + _argDef.referenceName );
             }
             positionalDefs.add( _argDef );
         }
 
         // if we've got an optional argument...
-        else if( _argDef instanceof AOptionalArgDef ) {
+        if( _argDef instanceof AOptionalArgDef ) {
+
+            AOptionalArgDef optionalArgDef = (AOptionalArgDef) _argDef;
 
             // stuff it away by short name(s), checking for duplicates...
-            if( _argDef.shortNames != null ) {
-                for( char shortName : _argDef.shortNames ) {
+            if( optionalArgDef.shortNames != null ) {
+                for( char shortName : optionalArgDef.shortNames ) {
                     if( shortDefs.containsKey( shortName ) )
                         throw new IllegalArgumentException( "Duplicate short optional argument name: '" + shortName + "' in " + _argDef.referenceName );
                     shortDefs.put( shortName, _argDef );
@@ -274,8 +293,8 @@ public class CommandLine {
             }
 
             // stuff it away by long names, checking for duplicates...
-            if( _argDef.longNames != null ) {
-                for( String longName : _argDef.longNames ) {
+            if( optionalArgDef.longNames != null ) {
+                for( String longName : optionalArgDef.longNames ) {
                     if( longDefs.containsKey( longName ) )
                         throw new IllegalArgumentException( "Duplicate long optional argument name: '" + longName + "' in " + _argDef.referenceName );
                     longDefs.put( longName, _argDef );
@@ -304,6 +323,6 @@ public class CommandLine {
 
 
     private static class RefInt {
-        private int index;
+        private int value;
     }
 }

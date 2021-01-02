@@ -35,7 +35,7 @@ public class InetAddressByNameParser implements ParameterParser {
             return null;
         }
 
-        InetAddress addr = null;
+        InetAddress addr;
         try {
             addr = InetAddress.getByName( _parameter );
         }

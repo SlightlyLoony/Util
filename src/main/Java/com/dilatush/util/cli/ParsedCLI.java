@@ -79,6 +79,7 @@ public class ParsedCLI {
      * @param _argumentName The reference name of the argument whose presence is being queried.
      * @return  <code>true</code> if the argument with the given reference name was present on the parsed command line at least once
      */
+    @SuppressWarnings( "unused" )
     public boolean isPresent( final String _argumentName ) {
 
         // try to get the parsed argument results...
@@ -104,6 +105,7 @@ public class ParsedCLI {
      * @return  the value of the argument (as an object of the class defined in the argument definition) if the argument with the given reference
      *          name was present on the parsed command line, or if it is a binary argument and it was not present on the parsed command line
      */
+    @SuppressWarnings( "unused" )
     public Object getValue( final String _argumentName ) {
 
         // try to get the parsed argument results...
@@ -126,6 +128,7 @@ public class ParsedCLI {
      * @param _argumentName The reference name of the argument whose appearances are being queried.
      * @return  the number of times that the argument with the given reference name was present on the parsed command line
      */
+    @SuppressWarnings( "unused" )
     public int getAppearances( final String _argumentName ) {
 
         // try to get the parsed argument results...
@@ -156,6 +159,7 @@ public class ParsedCLI {
      *
      * @return an explanatory error message if {@link #isValid()} returns <code>false</code>; <code>null</code> otherwise
      */
+    @SuppressWarnings( "unused" )
     public String getErrorMsg() {
         return errorMsg;
     }
@@ -166,6 +170,7 @@ public class ParsedCLI {
      *
      * @return the number of arguments (both optional and positional) that were present
      */
+    @SuppressWarnings( "unused" )
     public int presentCount() {
         return totalPresentCount;
     }
@@ -176,6 +181,7 @@ public class ParsedCLI {
      *
      * @return the number of optional arguments that were present
      */
+    @SuppressWarnings( "unused" )
     public int optionalPresentCount() {
         return optionalPresentCount;
     }
@@ -186,6 +192,7 @@ public class ParsedCLI {
      *
      * @return the number of positional arguments that were present
      */
+    @SuppressWarnings( "unused" )
     public int positionalPresentCount() {
         return positionalPresentCount;
     }

@@ -42,7 +42,7 @@ public class CLITest {
         commandLine.add( hostDef      );
         commandLine.add( fileDef      );
 
-        ParsedCLI cli = commandLine.parse( new String[] { "-vvv", "--host" , "foxnews.com", "TestTest.js" });
+        ParsedCLI cli = commandLine.parse( new String[] { "-vvv", "-h=foxnews.com", "TestTest.js" });
 
         //noinspection ResultOfMethodCallIgnored
         cli.hashCode();

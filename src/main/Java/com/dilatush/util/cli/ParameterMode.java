@@ -5,5 +5,5 @@ package com.dilatush.util.cli;
  */
 public enum ParameterMode {
 
-    DISALLOWED, OPTIONAL, MANDATORY;
+    DISALLOWED, OPTIONAL, MANDATORY
 }
