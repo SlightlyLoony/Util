@@ -1,17 +1,17 @@
 package com.dilatush.util.cli;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
+import java.io.File;
 
 import static com.dilatush.util.Strings.isEmpty;
 
 /**
+ * Provides a parser that translates a string into a {@link File} instance.
+ *
  * @author Tom Dilatush  tom@dilatush.com
  */
-public class InetAddressByNameParser implements ParameterParser {
+public class PathParser implements ParameterParser {
 
-    private String errorMsg = "";
-
+    private String errorMsg;
 
     /**
      * Translates the given string parameter into an object of the given target class.  Returns <code>null</code> if the translation could not be
@@ -26,24 +26,16 @@ public class InetAddressByNameParser implements ParameterParser {
     public Object parse( final String _parameter, @SuppressWarnings("rawtypes") final Class _target ) {
 
         if( isEmpty( _parameter ) ) {
-            errorMsg = "Expected host name (or dotted-form IP address) was not supplied.";
+            errorMsg = "Expected file path was not supplied.";
             return null;
         }
 
-        if( !_target.equals( InetAddress.class ) ) {
-            errorMsg = "Expected InetAddress.class, but got " + _target.getCanonicalName();
+        if( !_target.equals( File.class ) ) {
+            errorMsg = "Expected File.class, but got " + _target.getCanonicalName();
             return null;
         }
 
-        InetAddress addr = null;
-        try {
-            addr = InetAddress.getByName( _parameter );
-        }
-        catch( UnknownHostException _e ) {
-            errorMsg = "Unknown host or invalid IP address: " + _parameter;
-            return null;
-        }
-        return addr;
+        return new File( _parameter );
     }
 
 

@@ -5,24 +5,24 @@ import com.sun.istack.internal.NotNull;
 import java.util.*;
 
 /**
- * Instances of this class define a valid command line.
+ * Instances of this class define a valid command line, and parse an actual command line.
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
-public class CLDef {
+public class CommandLine {
 
     private final Map<String, ParsedArg> argumentResults;   // maps argument reference names to argument results
     private final Map<Character, ArgDef> shortDefs;         // maps short argument names to optional argument definitions
     private final Map<String, ArgDef>    longDefs;          // maps long argument names to optional argument definitions
     private final Map<String, ArgDef>    refDefs;           // maps reference names to argument definitions
     private final List<ArgDef>           positionalDefs;    // ordered list of positional arguments (left-to-right)
-    private final String                 summary;           // a summary description of this command
-    private final String                 detail;            // a detailed description of this command
+    private final String                 summary;           // a summary detail of this command
+    private final String                 detail;            // a detailed detail of this command
 
-    private int varArityCount;     // the count of positional parameters with variable arity...
+    private int variableAppearanceCount;     // the count of positional parameters with variable number of appearances...
 
 
-    public CLDef( final String _summary, final String _detail ) {
+    public CommandLine( final String _summary, final String _detail ) {
 
         argumentResults = new HashMap<>();
         shortDefs       = new HashMap<>();
@@ -33,7 +33,7 @@ public class CLDef {
         summary         = _summary;
         detail          = _detail;
 
-        varArityCount = 0;
+        variableAppearanceCount = 0;
     }
 
 
@@ -57,7 +57,19 @@ public class CLDef {
             return new ParsedCLI( _e.getMessage() );
         }
 
-        return new ParsedCLI( argumentResults );
+        // count our appearances...
+        int optionals = 0;
+        int positionals = 0;
+        for( Map.Entry<String,ArgDef> entry : refDefs.entrySet() ) {
+            if( entry.getValue() instanceof APositionalArgDef ) {
+                positionals += argumentResults.get( entry.getKey() ).appearances;
+            }
+            if( entry.getValue() instanceof AOptionalArgDef ) {
+                optionals += argumentResults.get( entry.getKey() ).appearances;
+            }
+        }
+
+        return new ParsedCLI( argumentResults, optionals, positionals );
     }
 
 
@@ -68,7 +80,7 @@ public class CLDef {
             ArgDef    argDef    = refDefs.get( refName );
             ParsedArg argParsed = argumentResults.get( refName );
 
-            if( (argDef.parameterAllowed == ParameterAllowed.MANDATORY) && (argParsed.value == null) ) {
+            if( (argDef.parameterMode == ParameterMode.MANDATORY) && (argParsed.value == null) ) {
                 throw new CLDefException( "Required parameter is missing: " + argDef.referenceName );
             }
         }
@@ -154,7 +166,7 @@ public class CLDef {
 
         // if a parameter is not disallowed, see if we have one...
         String parameter = null;
-        if( def.parameterAllowed != ParameterAllowed.DISALLOWED ) {
+        if( def.parameterMode != ParameterMode.DISALLOWED ) {
             if( i.index + 1 < _args.length ) {
                 String trial = _args[i.index + 1];
                 if( !trial.startsWith( "-" ) ) {
@@ -171,11 +183,11 @@ public class CLDef {
     private void updateArgument( final String _nameUsed, final ArgDef _def, final String _parameter ) throws CLDefException {
 
         // if we have a parameter and parameters are not allowed, barf...
-        if( (_parameter != null) && (_def.parameterAllowed == ParameterAllowed.DISALLOWED ) )
+        if( (_parameter != null) && (_def.parameterMode == ParameterMode.DISALLOWED ) )
             throw new CLDefException( "Unexpected parameter '" + _parameter + "' for argument '" + _nameUsed + "'." );
 
         // if we don't have a parameter, and parameters are mandatory, barf...
-        if( (_parameter == null) && (_def.parameterAllowed == ParameterAllowed.MANDATORY) )
+        if( (_parameter == null) && (_def.parameterMode == ParameterMode.MANDATORY) )
             throw new CLDefException( "Missing mandatory parameter for argument '" + _nameUsed + "'." );
 
         // get our argument's current results and update them...
@@ -201,16 +213,16 @@ public class CLDef {
         ParsedArg results =  argumentResults.get( _def.referenceName );
 
         // in the special case of arguments with parameters disallowed, put the number of appearances as the value...
-        if( _def.parameterAllowed == ParameterAllowed.DISALLOWED ) {
+        if( _def.parameterMode == ParameterMode.DISALLOWED ) {
             argumentResults.put( _def.referenceName, new ParsedArg(
-                    true, results.appearances + 1, results.appearances + 1, results.type
+                    true, results.appearances + 1, results.appearances + 1
             ) );
         }
 
         // otherwise, use the value from the parameter...
         else {
             argumentResults.put( _def.referenceName, new ParsedArg(
-                    true, parameterValue, results.appearances + 1, results.type
+                    true, parameterValue, results.appearances + 1
             ) );
         }
     }
@@ -222,6 +234,7 @@ public class CLDef {
      *
      * @param _argDef The {@link ArgDef} to add to this command line definition.
      */
+    // TODO: make sure argument is either AOptionalArgDef or APositionalArgDef...
     public void add( @NotNull final ArgDef _argDef ) {
 
         // fail fast if some dummy called us with a null...
@@ -237,23 +250,23 @@ public class CLDef {
         argumentResults.put( _argDef.referenceName, new ParsedArg( _argDef ) );
 
         // if we've got a positional argument...
-        if( _argDef.argType == ArgumentType.POSITIONAL ) {
+        if( _argDef instanceof APositionalArgDef ) {
 
-            // if this argument has variable arity, make sure we're not trying to do more than one of these...
-            if( _argDef.arity.isVariable() ) {
-                varArityCount++;
-                if( varArityCount >= 2 )
-                    throw new IllegalArgumentException( "Tried to add a second positional arguments with variable arity: " + _argDef.referenceName );
+            // if this argument can appear a variable number of times, make sure we're not trying to do more than one of these...
+            if( _argDef.maxAllowed != 1 ) {
+                variableAppearanceCount++;
+                if( variableAppearanceCount >= 2 )
+                    throw new IllegalArgumentException( "Tried to add a second positional arguments with variable number of appearances: " + _argDef.referenceName );
             }
             positionalDefs.add( _argDef );
         }
 
         // if we've got an optional argument...
-        else if( _argDef.argType == ArgumentType.OPTIONAL ) {
+        else if( _argDef instanceof AOptionalArgDef ) {
 
             // stuff it away by short name(s), checking for duplicates...
-            if( _argDef.shortOptionNames != null ) {
-                for( char shortName : _argDef.shortOptionNames ) {
+            if( _argDef.shortNames != null ) {
+                for( char shortName : _argDef.shortNames ) {
                     if( shortDefs.containsKey( shortName ) )
                         throw new IllegalArgumentException( "Duplicate short optional argument name: '" + shortName + "' in " + _argDef.referenceName );
                     shortDefs.put( shortName, _argDef );
@@ -261,14 +274,24 @@ public class CLDef {
             }
 
             // stuff it away by long names, checking for duplicates...
-            if( _argDef.longOptionNames != null ) {
-                for( String longName : _argDef.longOptionNames ) {
+            if( _argDef.longNames != null ) {
+                for( String longName : _argDef.longNames ) {
                     if( longDefs.containsKey( longName ) )
                         throw new IllegalArgumentException( "Duplicate long optional argument name: '" + longName + "' in " + _argDef.referenceName );
                     longDefs.put( longName, _argDef );
                 }
             }
         }
+    }
+
+
+    public String getSummary() {
+        return summary;
+    }
+
+
+    public String getDetail() {
+        return detail;
     }
 
 

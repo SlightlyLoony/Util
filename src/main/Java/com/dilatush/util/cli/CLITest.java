@@ -1,5 +1,6 @@
 package com.dilatush.util.cli;
 
+import java.io.File;
 import java.net.InetAddress;
 
 /**
@@ -9,45 +10,39 @@ public class CLITest {
 
     public static void main( final String[] _args ) {
 
-        CLDef clDef = new CLDef( CL_SUMMARY, CL_DETAIL );
-        clDef.add( new ArgDef(
+        ArgDef verbosityDef = new BinaryOptionalArgDef(
                 "verbosity",
                 "Increase verbosity of output (1..5 times)",
                 "Increase verbosity of output.  May be repeated up to five times to get more and more detailed output.",
-                5,
-                new char[] {'v'},
-                null
-        ) );
-        clDef.add( new ArgDef(
+                "v", "verbosity" );
+        verbosityDef.maxAllowed = 5;
+
+        ArgDef hostDef = new SingleOptionalArgDef(
                 "host",
                 "The host to connect to.",
                 "The fully-qualified domain name, or dotted-form IP address, of the host to connect to.",
-                ArgumentArity.MANDATORY_SINGLE,
-                ParameterAllowed.MANDATORY,
-                InteractiveMode.PLAIN,
-                "Enter the host: ",
+                "h", "host",
                 InetAddress.class,
-                null,
                 new InetAddressByNameParser(),
-                null,
-                new char[] { 'h' },
-                new String[] { "host" }
-        ) );
-        clDef.add( new ArgDef(
-                "otherhost",
-                "The second host to connect to.",
-                "The fully-qualified domain name, or dotted-form IP address, of the second host to connect to.",
-                ArgumentArity.MANDATORY_SINGLE,
-                ParameterAllowed.MANDATORY,
-                InteractiveMode.PLAIN,
-                "Enter the second host: ",
-                InetAddress.class,
-                null,
-                new InetAddressByNameParser(),
-                null
-        ) );
+                new ObjectPresentValidator( InetAddress.class )
+        );
 
-        ParsedCLI cli = clDef.parse( new String[] { "-vvv", "--host" , "paradiseweather.info" });
+        ArgDef fileDef = new SinglePositionalArgDef(
+                "config_file",
+                "The path to the configuration file.",
+                "The path (with file name) for the configuration file.",
+                File.class,
+                new PathParser(),
+                new ReadableFileValidator()
+        );
+        fileDef.setInteractiveMode( "Enter the configuration file path" );
+
+        CommandLine commandLine = new CommandLine( CL_SUMMARY, CL_DETAIL );
+        commandLine.add( verbosityDef );
+        commandLine.add( hostDef      );
+        commandLine.add( fileDef      );
+
+        ParsedCLI cli = commandLine.parse( new String[] { "-vvv", "--host" , "foxnews.com", "TestTest.js" });
 
         //noinspection ResultOfMethodCallIgnored
         cli.hashCode();

@@ -42,24 +42,16 @@ public class ParsedArg {
 
 
     /**
-     * The type of argument (optional or positional).
-     */
-    public final ArgumentType type;
-
-
-    /**
      * Creates a new instance of this class with the given values.
      *
      * @param _present Whether this argument was present (<code>true</code>) on the command line.
      * @param _value The value of this argument.
      * @param _appearances The number of times this argument appeared on the command line.
-     * @param _type The argument's type (positional or optional).
      */
-    public ParsedArg( final boolean _present, final Object _value, final int _appearances, final ArgumentType _type ) {
+    public ParsedArg( final boolean _present, final Object _value, final int _appearances ) {
         present = _present;
         value = _value;
         appearances = _appearances;
-        type = _type;
     }
 
 
@@ -72,6 +64,5 @@ public class ParsedArg {
         present = false;
         value = _argDef.defaultValue;
         appearances = 0;
-        type = _argDef.argType;
     }
 }

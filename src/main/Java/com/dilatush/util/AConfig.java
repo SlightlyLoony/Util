@@ -16,7 +16,7 @@ public abstract class AConfig implements Validatable {
 
 
     /**
-     * Returns <code>true</code> if the state of this object is valid, and <code>false</code> otherwise, after logging a description of the invalid
+     * Returns <code>true</code> if the state of this object is valid, and <code>false</code> otherwise, after logging a detail of the invalid
      * state.
      *
      * @return <code>true</code> if the state of this object is valid.

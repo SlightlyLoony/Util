@@ -14,6 +14,9 @@ public class ParsedCLI {
     private final boolean               valid;
     private final Map<String,ParsedArg> parsedArguments;
     private final String                errorMsg;
+    private final int                   totalPresentCount;
+    private final int                   optionalPresentCount;
+    private final int                   positionalPresentCount;
 
 
     /**
@@ -21,10 +24,13 @@ public class ParsedCLI {
      *
      * @param _parsedArguments The map of the results of parsing the command line arguments.
      */
-    public ParsedCLI( final Map<String, ParsedArg> _parsedArguments ) {
+    public ParsedCLI( final Map<String, ParsedArg> _parsedArguments, final int _optionalPresentCount, final int _positionalPresentCount ) {
         parsedArguments = _parsedArguments;
         valid = true;
         errorMsg = null;
+        optionalPresentCount = _optionalPresentCount;
+        positionalPresentCount = _positionalPresentCount;
+        totalPresentCount = optionalPresentCount + positionalPresentCount;
     }
 
 
@@ -37,6 +43,9 @@ public class ParsedCLI {
         errorMsg = _errorMsg;
         parsedArguments = null;
         valid = false;
+        totalPresentCount = 0;
+        optionalPresentCount = 0;
+        positionalPresentCount = 0;
     }
 
 
@@ -158,18 +167,7 @@ public class ParsedCLI {
      * @return the number of arguments (both optional and positional) that were present
      */
     public int presentCount() {
-
-        // if we don't have a valid parse, just return zero.
-        if( !valid || (parsedArguments == null) )
-            return 0;
-
-        // count the arguments that were present...
-        int count = 0;
-        for( ParsedArg arg : parsedArguments.values() ) {
-            if( arg.present )
-                count++;
-        }
-        return count;
+        return totalPresentCount;
     }
 
 
@@ -179,18 +177,7 @@ public class ParsedCLI {
      * @return the number of optional arguments that were present
      */
     public int optionalPresentCount() {
-
-        // if we don't have a valid parse, just return zero.
-        if( !valid || (parsedArguments == null) )
-            return 0;
-
-        // count the arguments that were present...
-        int count = 0;
-        for( ParsedArg arg : parsedArguments.values() ) {
-            if( arg.present && (arg.type == ArgumentType.OPTIONAL) )
-                count++;
-        }
-        return count;
+        return optionalPresentCount;
     }
 
 
@@ -200,17 +187,6 @@ public class ParsedCLI {
      * @return the number of positional arguments that were present
      */
     public int positionalPresentCount() {
-
-        // if we don't have a valid parse, just return zero.
-        if( !valid || (parsedArguments == null) )
-            return 0;
-
-        // count the arguments that were present...
-        int count = 0;
-        for( ParsedArg arg : parsedArguments.values() ) {
-            if( arg.present && (arg.type == ArgumentType.POSITIONAL) )
-                count++;
-        }
-        return count;
+        return positionalPresentCount;
     }
 }

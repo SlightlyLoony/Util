@@ -84,7 +84,7 @@ public class EnumIndexer<E> {
 
 
     /**
-     * Returns information (id, index, and description) associated with the given enum, or <code>null</code> if there is no information available for
+     * Returns information (id, index, and detail) associated with the given enum, or <code>null</code> if there is no information available for
      * the given enum.
      *
      * @param _enum the enum to get information for
