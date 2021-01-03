@@ -1,0 +1,50 @@
+= Utilities Package
+
+Tom Dilatush (tom-@dilatush.com) +
+V1.0, 2021-01-03
+:toc: right
+
+== Java Utilities
+A collection of Java utilities.
+
+
+== What are these utilities, anyway?
+It's very hard to give a general description of these, as there are a wide variety of them.  The easiest thing to do is to browse the classes.  There are a few worth mentioning here, however:
+.Table Notable Elements
+|===
+|Name|Description
+|Non-Interactive Test Framework
+|A test framework that allows test code to be included in production builds, while enabling and parameterization is handled via a configuration file.  This framework is intended primarily for use in embedded software and in server daemons, which share the characteristic of being non-interactive.  Look in the _test_ package for details.
+|JavaScript Configuration
+|Provides a simple, flexible mechanism to write configuration files in JavaScript, via the _Nashorn_ JavaScript engine (and yes, I know it's deprecated).  See the classes _JSConfig_ and _AConfig_ for details.  The _ShedSolar_ project in my repository has a realistic example of its use.
+|Command Line Argument Interpreter
+|Provides everything needed for a Java command line application (or server daemon) to have Unix-style arguments.  Optional arguments can have any number of long and short names.  Passwords (and other arguments) can be entered interactively.  Parses and validates argument parameters.  Provides summary and detailed help.
+|===
+
+== Why does the world need these utilities?
+Well, probably the world doesn't actually _need_ ShedSolar &ndash; it's mainly here for the author's personal use and enjoyment, but with some faint hope that someone else with the same challenges the author faced will also find it useful.
+
+== Dependencies
+This package has one dependency: The excellent, bog-standard Java JSON module, freely available from https://github.com/stleary/JSON-java.
+
+== Why is this package's code so awful?
+The author is a retired software and hardware engineer who did this just for fun, and who (so far, anyway) has no code reviewers to upbraid him.  Please feel free to fill in this gap!  You may contact the author at tom@dilatush.com.
+
+== Some implementation notes...
+If you dig into this package in detail, you may notice that the source code in some areas has a different style from that in other areas.  This is simply because it was written over a period of over ten years, and the author's coding style has evolved over that time.
+
+== How is this package licensed?
+Util is licensed with the quite permissive MIT license: +
+`
+Created: November 16, 2020 +
+Author: Tom Dilatush <tom@dilatush.com> +
+Github:  https://github.com/SlightlyLoony/ShedSolar +
+License: MIT +
+
+Copyright 2020 Tom Dilatush (aka "SlightlyLoony") +
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so. +
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.  +
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE A AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.`
