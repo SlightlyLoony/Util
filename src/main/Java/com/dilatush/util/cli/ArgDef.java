@@ -7,7 +7,6 @@ import static com.dilatush.util.Strings.isEmpty;
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
-@SuppressWarnings("rawtypes")
 public abstract class ArgDef {
 
     // these fields apply to argument definitions of any type...
@@ -17,7 +16,7 @@ public abstract class ArgDef {
     public int                maxAllowed;        // maximum number of appearances allowed; zero means infinity
 
     // these fields pertain to the argument's value...
-    public Class              type;              // the type of the option's value
+    public Class<?>           type;              // the type of the option's value
     public Object             defaultValue;      // the default value for the parameter
     public ParameterMode      parameterMode;     // whether a parameter value is disallowed, optional, or mandatory
     public ParameterValidator validator;         // the validator for this argument's parameter
@@ -54,6 +53,7 @@ public abstract class ArgDef {
     }
 
 
+    @SuppressWarnings( "unused" )
     public void setHiddenInteractiveMode( final String _prompt ) {
 
         interactiveMode = InteractiveMode.HIDDEN;

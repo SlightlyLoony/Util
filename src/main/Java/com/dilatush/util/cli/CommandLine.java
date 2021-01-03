@@ -86,6 +86,10 @@ public class CommandLine {
             ArgDef    argDef    = refDefs.get( refName );
             ParsedArg argParsed = argumentResults.get( refName );
 
+            // if we have an optional parameter, by definition it cannot be required...
+            if( argDef instanceof AOptionalArgDef )
+                continue;
+
             if( (argDef.parameterMode == ParameterMode.MANDATORY) && (argParsed.value == null) ) {
                 throw new CLDefException( "Required parameter is missing: " + argDef.referenceName );
             }
@@ -207,9 +211,19 @@ public class CommandLine {
         Object parameterValue = null;
         if( _parameter != null ) {
             if( _def.parser != null ) {
-                parameterValue = _def.parser.parse( _parameter, _def.type );
+
+                // invoke the parser and get the result...
+                parameterValue = _def.parser.parse( _parameter );
+
+                // if the result was null, the parser had problem...
                 if( parameterValue == null ) {
                     throw new CLDefException( _def.parser.getErrorMessage() );
+                }
+
+                // if the result was of the wrong type, we have a worser problem...
+                if( !_def.type.isAssignableFrom( parameterValue.getClass() ) ) {
+                    throw new CLDefException( "Expected parser result of type " + _def.type.getSimpleName()
+                            + ", got: " + parameterValue.getClass().getSimpleName() );
                 }
             }
             else {

@@ -24,9 +24,5 @@ public class SinglePositionalArgDef extends APositionalArgDef {
 
         if( type == null )
             throw new IllegalArgumentException( "No parameter type supplied for argument: " + referenceName );
-        if( parser == null )
-            throw new IllegalArgumentException( "No parameter parser supplied for argument: " + referenceName );
-        if( validator == null )
-            throw new IllegalArgumentException( "No parameter validator supplied for argument: " + referenceName );
     }
 }

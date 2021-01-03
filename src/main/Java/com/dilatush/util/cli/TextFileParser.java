@@ -1,16 +1,20 @@
 package com.dilatush.util.cli;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
+import com.dilatush.util.Files;
+
+import java.io.File;
 
 import static com.dilatush.util.Strings.isEmpty;
 
 /**
+ * Implements a parser that takes the path name of a readable file and returns the contents of that file as a string.
+ *
  * @author Tom Dilatush  tom@dilatush.com
  */
-public class InetAddressByNameParser implements ParameterParser {
+@SuppressWarnings( "unused" )
+public class TextFileParser implements ParameterParser {
 
-    private String errorMsg = "";
+    private String errorMsg;
 
 
     /**
@@ -25,19 +29,30 @@ public class InetAddressByNameParser implements ParameterParser {
     public Object parse( final String _parameter ) {
 
         if( isEmpty( _parameter ) ) {
-            errorMsg = "Expected host name (or dotted-form IP address) was not supplied.";
+            errorMsg = "Expected file path was not supplied.";
             return null;
         }
 
-        InetAddress addr;
-        try {
-            addr = InetAddress.getByName( _parameter );
-        }
-        catch( UnknownHostException _e ) {
-            errorMsg = "Unknown host or invalid IP address: " + _parameter;
+        File file = new File( _parameter );
+
+        if( !file.isFile() ) {
+            errorMsg = "File path does not resolve to a file: " + file.getAbsolutePath();
             return null;
         }
-        return addr;
+
+        if( !file.canRead() ) {
+            errorMsg = "Can not read the specified file: " + file.getAbsolutePath();
+            return null;
+        }
+
+        String contents = Files.readToString( file );
+
+        if( contents == null ) {
+            errorMsg = "Problem while reading the specified file: " + file.getAbsolutePath();
+            return null;
+        }
+
+        return contents;
     }
 
 

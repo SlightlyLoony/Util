@@ -19,19 +19,13 @@ public class PathParser implements ParameterParser {
      * about <i>why</i> parsing failed.
      *
      * @param _parameter The string parameter to parse and translate.
-     * @param _target    The type (class) of the result of parsing.
      * @return an object of the target class, translated from the given string parameter, or <code>null</code> if the translation failed.
      */
     @Override
-    public Object parse( final String _parameter, @SuppressWarnings("rawtypes") final Class _target ) {
+    public Object parse( final String _parameter ) {
 
         if( isEmpty( _parameter ) ) {
             errorMsg = "Expected file path was not supplied.";
-            return null;
-        }
-
-        if( !_target.equals( File.class ) ) {
-            errorMsg = "Expected File.class, but got " + _target.getCanonicalName();
             return null;
         }
 
@@ -40,7 +34,7 @@ public class PathParser implements ParameterParser {
 
 
     /**
-     * Return a descriptive error message if the parsing and translation failed for any reason (i.e., {@link #parse(String, Class)} returned
+     * Return a descriptive error message if the parsing and translation failed for any reason (i.e., {@link #parse(String)} returned
      * <code>null</code>.
      *
      * @return a descriptive error message after parsing and translation failed
