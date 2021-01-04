@@ -12,9 +12,9 @@ public abstract class AOptionalArgDef extends ArgDef {
 
 
     public AOptionalArgDef( final String _referenceName, final String _summary, final String _detail,
-                            final int _maxAllowed, final String _shortNames, final String _longNames ) {
+                            final int _maxAllowed, final ParameterMode _parameterMode, final String _shortNames, final String _longNames ) {
 
-        super( _referenceName, _summary, _detail, _maxAllowed );
+        super( _referenceName, _summary, _detail, _maxAllowed, _parameterMode );
 
         shortNames      = toCharArray( _shortNames );
         longNames       = toStringArray( _longNames );

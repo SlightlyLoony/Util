@@ -9,18 +9,16 @@ package com.dilatush.util.cli;
 public class SinglePositionalArgDef extends APositionalArgDef {
 
 
-    @SuppressWarnings("rawtypes")
     public SinglePositionalArgDef( final String _referenceName, final String _summary, final String _detail,
-                                   final Class _type,
+                                   final Class<?> _type, final Object _defaultValue,
                                    final ParameterParser _parser, final ParameterValidator _validator ) {
 
-        super( _referenceName, _summary, _detail, 1 );
+        super( _referenceName, _summary, _detail, 1, ParameterMode.MANDATORY );
 
         type            = _type;
+        defaultValue    = _defaultValue;
         parser          = _parser;
         validator       = _validator;
-        parameterMode   = ParameterMode.MANDATORY;
-        interactiveMode = InteractiveMode.DISALLOWED;
 
         if( type == null )
             throw new IllegalArgumentException( "No parameter type supplied for argument: " + referenceName );

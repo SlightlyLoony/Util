@@ -4,8 +4,10 @@ import com.sun.istack.internal.NotNull;
 
 import java.util.*;
 
+import static com.dilatush.util.Strings.isEmpty;
+
 /**
- * Instances of this class define a valid command line, and parse an actual command line.
+ * Instances of this class define the arguments expected on the command line, and parse an actual command line.
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
@@ -18,12 +20,19 @@ public class CommandLine {
     private final List<ArgDef>           positionalDefs;    // ordered list of positional arguments (left-to-right)
     private final String                 summary;           // a summary detail of this command
     private final String                 detail;            // a detailed detail of this command
+    private final List<ArgDef>           optionalDefs;      // ordered list of optional arguments (in order of their addition)
 
     private int     variableAppearanceCount;  // the count of positional parameters with variable number of appearances...
     private boolean nextArgPositional;        // true if the next argument processed is positional even if it starts with a "-"
     private boolean allArgsPositional;        // true if all all arguments process are positional even if they start with a "-"
 
 
+    /**
+     * Creates a new instance of this class, with the given summary and detail help.
+     *
+     * @param _summary The (shorter) summary help for this command.
+     * @param _detail The (longer) detailed help for this command.
+     */
     public CommandLine( final String _summary, final String _detail ) {
 
         argumentResults = new HashMap<>();
@@ -31,6 +40,7 @@ public class CommandLine {
         longDefs        = new HashMap<>();
         refDefs         = new HashMap<>();
         positionalDefs  = new ArrayList<>();
+        optionalDefs    = new ArrayList<>();
 
         summary         = _summary;
         detail          = _detail;
@@ -38,12 +48,12 @@ public class CommandLine {
 
 
     /**
-     * Parse the command line represented by the given arguments.
+     * Parse the command line represented by the given arguments, returning a {@link ParsedCommandLine} with the results of that parsing.
      *
-     * @param _args The command line arguments.
-     * @return the parsed command line
+     * @param _args The application's command line arguments, as the parameter to it's <code>main( String[] args )</code> method.
+     * @return the results of parsing the command line
      */
-    public ParsedCLI parse( final String[] _args ) {
+    public ParsedCommandLine parse( final String[] _args ) {
 
         // a little setup...
         variableAppearanceCount = 0;
@@ -59,44 +69,89 @@ public class CommandLine {
             // then we see if any mandatory arguments are missing...
             checkForMissing();
         }
+
+        // this exception is thrown when some error occurs during parsing
         catch( CLDefException _e ) {
-            return new ParsedCLI( _e.getMessage() );
+
+            // return an invalid result, with an explanatory message (bummer!)...
+            return new ParsedCommandLine( _e.getMessage() );
         }
 
         // count our appearances...
-        int optionals = 0;
-        int positionals = 0;
-        for( Map.Entry<String,ArgDef> entry : refDefs.entrySet() ) {
-            if( entry.getValue() instanceof APositionalArgDef ) {
-                positionals += argumentResults.get( entry.getKey() ).appearances;
-            }
-            if( entry.getValue() instanceof AOptionalArgDef ) {
-                optionals += argumentResults.get( entry.getKey() ).appearances;
-            }
-        }
+        Counts counts = countAppearances();
 
-        return new ParsedCLI( argumentResults, optionals, positionals );
+        // return a valid result - hooray!
+        return new ParsedCommandLine( argumentResults, counts.optionals, counts.positionals );
     }
 
 
+    /**
+     * Count the total appearances of all optional arguments and (separately) all positional arguments.
+     *
+     * @return a tuple with the optional and positional appearance counts
+     */
+    private Counts countAppearances() {
+
+        Counts counts = new Counts();
+
+        // iterate over all the defined arguments...
+        for( Map.Entry<String,ArgDef> entry : refDefs.entrySet() ) {
+
+            // if it's a positional argument, sum its appearances into the positionals count...
+            if( entry.getValue() instanceof APositionalArgDef ) {
+                counts.positionals += argumentResults.get( entry.getKey() ).appearances;
+            }
+
+            // if it's an optional argument, sum its appearances into the optionals count...
+            if( entry.getValue() instanceof AOptionalArgDef ) {
+                counts.optionals += argumentResults.get( entry.getKey() ).appearances;
+            }
+        }
+
+        return counts;
+    }
+
+
+    /**
+     * Simple tuple for optional and positional appearances counts.
+     */
+    private static class Counts {
+        private int optionals;
+        private int positionals;
+    }
+
+
+    /**
+     * Checks for missing arguments.
+     *
+     * @throws CLDefException if a required parameter is missing.
+     */
     private void checkForMissing() throws CLDefException {
 
+        // iterate over all our defined arguments...
         for( String refName : refDefs.keySet() ) {
 
+            // get the definition and parse results for this argument...
             ArgDef    argDef    = refDefs.get( refName );
             ParsedArg argParsed = argumentResults.get( refName );
 
-            // if we have an optional parameter, by definition it cannot be required...
+            // if we have an optional argument, by definition its parameter cannot be required...
             if( argDef instanceof AOptionalArgDef )
                 continue;
 
-            if( (argDef.parameterMode == ParameterMode.MANDATORY) && (argParsed.value == null) ) {
+            // if we have a positional argument with a mandatory parameter, then we'd better have a presence...
+            if( (argDef.parameterMode == ParameterMode.MANDATORY) && !argParsed.present )  {
                 throw new CLDefException( "Required parameter is missing: " + argDef.referenceName );
             }
         }
     }
 
 
+    /**
+     *
+     * @param _args
+     * @throws CLDefException
+     */
     private void processPresentArguments( final String[] _args ) throws CLDefException {
         // a little setup...
         RefInt ppi = new RefInt();  // our positional parameter index...
@@ -199,21 +254,27 @@ public class CommandLine {
 
     private void updateArgument( final String _nameUsed, final ArgDef _def, final String _parameter ) throws CLDefException {
 
+        // if no parameter value was supplied, but we do have an environment variable name, then try reading the variable...
+        String parameter = _parameter;
+        if( isEmpty( parameter ) && !isEmpty( _def.environVariable ) ) {
+            parameter = System.getenv( _def.environVariable );
+        }
+
         // if we have a parameter and parameters are not allowed, barf...
-        if( (_parameter != null) && (_def.parameterMode == ParameterMode.DISALLOWED ) )
-            throw new CLDefException( "Unexpected parameter '" + _parameter + "' for argument '" + _nameUsed + "'." );
+        if( (parameter != null) && (_def.parameterMode == ParameterMode.DISALLOWED ) )
+            throw new CLDefException( "Unexpected parameter '" + parameter + "' for argument '" + _nameUsed + "'." );
 
         // if we don't have a parameter, and parameters are mandatory, barf...
-        if( (_parameter == null) && (_def.parameterMode == ParameterMode.MANDATORY) )
+        if( (parameter == null) && (_def.parameterMode == ParameterMode.MANDATORY) )
             throw new CLDefException( "Missing mandatory parameter for argument '" + _nameUsed + "'." );
 
         // get our argument's current results and update them...
         Object parameterValue = null;
-        if( _parameter != null ) {
+        if( parameter != null ) {
             if( _def.parser != null ) {
 
                 // invoke the parser and get the result...
-                parameterValue = _def.parser.parse( _parameter );
+                parameterValue = _def.parser.parse( parameter );
 
                 // if the result was null, the parser had problem...
                 if( parameterValue == null ) {
@@ -227,7 +288,7 @@ public class CommandLine {
                 }
             }
             else {
-                parameterValue = _parameter;
+                parameterValue = parameter;
             }
             if( _def.validator != null ) {
                 if( !_def.validator.validate( parameterValue ) ) {

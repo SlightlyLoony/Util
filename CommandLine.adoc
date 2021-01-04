@@ -40,9 +40,54 @@ without any change in its meaning.  We could _not_ have written it as +
 `myapp -c=12 -q --site ~/myfile.txt https://comic.com` +
 because then the `--site` argument would have interpreted the `~/myfile.txt` as a URL, which is not likely to work well - and the `https://comic.com` would have looked like the positional argument for a file name, and that also would work quite poorly.
 
+== How Does the Command Line Interpreter package work?
+It's all well and good to have a command line interpreter, but if you're going to make use of it then you'll have to understand just a bit about how it works!
+[start=1]
+. *Defining*: Your application must _define_ the expected arguments (both optional and positional) on the command line.  This is quite straightforward in concept, though there are lots of details.  Basically you create an argument definition (an instance of ArgDef or one of its many subclasses) for each argument your application needs to understand, and then you add those argument definitions to a command line definition (an instance of CommandLine).
+. *Parsing*: This is very simple: you pass the command line arguments your application got in its main() method to the parse() method of your CommandLine instance.  If the result is valid, it contains the values of all the defined arguments (including a default value if the argument wasn't present on the command line).  If the result is invalid, it contains an explanatory error message.
+. *Using*: If the result of parsing was valid, then your application can retrieve (by name) each argument's value.  That's the end goal of this package - a simple and straightforward way to use the command line arguments.
 
+== Argument Definitions
+Getting these right are the key to using this package effectively.  This package includes a selection of argument definition classes (subclasses of ArgDef) that are useful for particular kinds of arguments.  There are two main "families" of these classes, one for positional arguments and the other for optional arguments.  The class hierarchy looks like this:
+....
+    ArgDef   // the abstract base class for all argument definitions...
+        APositionalArgDef   // the abstract base class for all positional argument definitions...
+            (all subclasses for positional argument definitions)
+        AOptionalArgDef   // the abstract base class for all optional argument definitions...
+            (all subclasses for optional argument definitions)
+....
+If you look at the source for the concrete subclasses, you'll note that all they do is to set the values of fields and do some error checking.  In other words, they're very simple - and if you need one of your own, you shouldn't hesitate to write it!
 
+Something worth noting is that the fields of the argument definition abstract base classes are all public and non-final - in other words, they're mutable by your application's code.  That means you can create an argument definition using one of the concrete argument definition subclasses, and then modify one of those fields in your application's code.  This feature makes it straightforward to handle a one-off extension of an existing subclass.
 
+The fields of ArgDef:
 
+- *referenceName*: This is the name your application's code uses to refer to a particular argument.  It can be any string, so long as that string is unique amongst all the arguments defined for a given application.  For the most part this name is invisible to your application's user, but there is one important exception to this: when this package creates an error message for a positional field, it uses the reference name in the message.  Therefore, at least for positional arguments, you should choose a meaningful name.
 
+- *summary*: A short help message for this field, which will be included in the summary help.  There are no rules for the length of this string, though ideally it will fit on a single line.
 
+- *detail*: A longer, more detailed help message for this field, which will be included in the detailed help.
+
+- *maxAllowed*: The maximum number of times this argument may appear on the command line.  Zero is a special value that indicates there is no limit.  Most of the time this value will be a 1 (one), but there are some important exceptions.  For instance, a positional argument for a file name might be globbed, and therefore could have any number of appearances.  Another example might be an optional argument that increases the verbosity of an application's output more and more the more times it appears, up to some limit.  This is often seen as the short argument "-v", allowed to appear four or five times.
+
+- *type*: The Java class object for the type of the argument's value.  This _could_ be String.class for every argument, which is how the argument parameters appear on the command line.  This would be a shame, however, because it would miss a lot of the power of this package.  Every argument definition includes an optional ParameterParser instance.  These are discussed in detail in their own section, but basically they translate the paramater string on the command line into a value of whatever type you want.  These could be numbers, InetAddress instances, File instances ... or whatever.  This built in translation capability makes your application code simpler - always a good goal!
+
+- *defaultValue*: The default value for this argument if it does not appear.  This is mainly useful for optional arguments; it is the value of the argument in the results if the command does _not_ appear on the command line.  However, it is possible for a positional argument to be optional, and in that case the default value will also become the value of that argument if it does _not_ appear on the command line.
+
+....
+public ParameterMode      parameterMode;     // whether a parameter value is disallowed, optional, or mandatory
+public ParameterValidator validator;         // the validator for this argument's parameter
+public ParameterParser    parser;            // the parser for this argument's parameter
+public InteractiveMode    interactiveMode;   // whether a prompt for this parameter value is disallowed, plain text, or obscured text
+public String             prompt;            // if interactive is allowed, the prompt for the value
+....
+
+There are two arguments that are implicitly defined:
+
+- *Single hyphen ("-")*: When a single hyphen appears as an argument (white space before and after) on the command line, it has a special meaning: that the next argument after it will be interpreted as a positional argument, and not as an optional argument.  This is useful only in a very limited case: when a positional argument happens to start with a hyphen.  Consider a contrived simple case where an application echoes the positional command line arguments: `myecho abc def`.  This would work as expected, but `myecho ab --cd ef` would not, as the `--cd` would appear to be an optional argument.  In this case, `myecho ab - --cd ef` would fix the problem.
+
+- *Double hyphen ("--")*: This is similar to the single hyphen, except that _all_ following arguments will be interpreted as positional arguments, and not as optional arguments.  So, for example, `+myecho -- -ab --cd+` would work as expected.
+
+== Parameter Parsers
+
+== Parameter Validators

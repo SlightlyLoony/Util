@@ -11,11 +11,9 @@ public class BinaryOptionalArgDef extends AOptionalArgDef {
     public BinaryOptionalArgDef( final String _referenceName, final String _summary, final String _detail,
                                  final String _shortNames, final String _longNames ) {
 
-        super( _referenceName, _summary, _detail, 1, _shortNames, _longNames );
+        super( _referenceName, _summary, _detail, 1, ParameterMode.DISALLOWED, _shortNames, _longNames );
 
         type            = Boolean.class;
         defaultValue    = false;
-        parameterMode   = ParameterMode.DISALLOWED;
-        interactiveMode = InteractiveMode.DISALLOWED;
     }
 }

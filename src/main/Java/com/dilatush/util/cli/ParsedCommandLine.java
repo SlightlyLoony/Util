@@ -9,7 +9,7 @@ import static com.dilatush.util.Strings.isEmpty;
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
-public class ParsedCLI {
+public class ParsedCommandLine {
 
     private final boolean               valid;
     private final Map<String,ParsedArg> parsedArguments;
@@ -23,8 +23,10 @@ public class ParsedCLI {
      * Creates a new instance of this class that contains the given parsed arguments, is valid, and has no error message.
      *
      * @param _parsedArguments The map of the results of parsing the command line arguments.
+     * @param _optionalPresentCount
+     * @param _positionalPresentCount
      */
-    public ParsedCLI( final Map<String, ParsedArg> _parsedArguments, final int _optionalPresentCount, final int _positionalPresentCount ) {
+    public ParsedCommandLine( final Map<String, ParsedArg> _parsedArguments, final int _optionalPresentCount, final int _positionalPresentCount ) {
         parsedArguments = _parsedArguments;
         valid = true;
         errorMsg = null;
@@ -39,7 +41,7 @@ public class ParsedCLI {
      *
      * @param _errorMsg The error message describing why the command line could not be parsed.
      */
-    public ParsedCLI( final String _errorMsg ) {
+    public ParsedCommandLine( final String _errorMsg ) {
         errorMsg = _errorMsg;
         parsedArguments = null;
         valid = false;
@@ -55,6 +57,7 @@ public class ParsedCLI {
      * reference name is not present in the argument definitions, then returns a <code>null</code>.
      *
      * @param _argumentName The reference name of the argument whose results are being retrieved.
+     * @return
      */
     public ParsedArg get( final String _argumentName ) {
 

@@ -7,15 +7,14 @@ import java.io.File;
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
-@SuppressWarnings("rawtypes")
 public class ObjectPresentValidator implements ParameterValidator {
 
-    private final Class  type;
+    private final Class<?>  type;
 
     private String errorMsg;
 
 
-    public ObjectPresentValidator( final Class _type ) {
+    public ObjectPresentValidator( final Class<?> _type ) {
 
         if( _type == null )
             throw new IllegalArgumentException( "Cannot have a null type argument" );

@@ -2,20 +2,42 @@ package com.dilatush.util.cli;
 
 import com.dilatush.util.AConfig;
 
+import java.net.Inet4Address;
 import java.net.InetAddress;
 
 /**
  * @author Tom Dilatush  tom@dilatush.com
  */
-public class CLITest {
+public class Test {
 
     public static void main( final String[] _args ) {
 
         ArgDef countDef = new BinaryOptionalArgDef(
                 "count",
-                "Output the count of occurrences rather than the text of the occurrences.",
+                "Output the count of occurrences.",
                 "Instead of outputting the text of the occurrences, output the count of the number of occurrences.",
                 "c", "count" );
+
+        ArgDef intDef = new SingleOptionalArgDef(
+                "burgers",
+                "How many hamburgers are needed.",
+                "The quantity of hamburgers desired by the whoever is going to eat them.",
+                "b", "burgers",
+                Integer.class,
+                0,
+                new IntegerParser(),
+                new IntegerValidator( 1, 15 ) );
+
+        ArgDef envDef = new SingleOptionalArgDef(
+                "environment",
+                "Testing environmental variables as source.",
+                "Still testing environmental variables as sources.",
+                "e", "environ",
+                String.class,
+                "uh oh",
+                null,
+                null );
+        envDef.environVariable = "TDTD";
 
         ArgDef verbosityDef = new BinaryOptionalArgDef(
                 "verbosity",
@@ -30,6 +52,7 @@ public class CLITest {
                 "The fully-qualified domain name, or dotted-form IP address, of the host to connect to.",
                 "h", "host",
                 InetAddress.class,
+                Inet4Address.getLoopbackAddress(),
                 new InetAddressByNameParser(),
                 null
         );
@@ -39,6 +62,7 @@ public class CLITest {
                 "The path to the configuration file.",
                 "The path (with file name) for the configuration file.",
                 String.class,
+                "",
                 new TextFileParser(),
                 null
         );
@@ -49,18 +73,21 @@ public class CLITest {
                 "JavaScript configuration file name",
                 "JavaScript configuration file path",
                 TestConfig.class,
+                new TestConfig(),
                 new JSConfigParser( new TestConfig() ),
                 null
         );
 
         CommandLine commandLine = new CommandLine( CL_SUMMARY, CL_DETAIL );
         commandLine.add( countDef     );
+        commandLine.add( intDef       );
+        commandLine.add( envDef       );
         commandLine.add( verbosityDef );
         commandLine.add( hostDef      );
         commandLine.add( fileDef      );
         commandLine.add( configDef    );
 
-        ParsedCLI cli = commandLine.parse( new String[] { "-vvv", "-h=foxnews.com", "TestTest.js", "TestJavaScriptParser.js" });
+        ParsedCommandLine cli = commandLine.parse( new String[] { "-vvv", "-h=foxnews.com", "TestTest.js", "TestJavaScriptParser.js", "--burgers", "14", "-e" });
 
         //noinspection ResultOfMethodCallIgnored
         cli.hashCode();
