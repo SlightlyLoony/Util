@@ -2,7 +2,6 @@ package com.dilatush.util.cli;
 
 import com.dilatush.util.AConfig;
 
-import java.net.Inet4Address;
 import java.net.InetAddress;
 
 /**
@@ -24,7 +23,7 @@ public class Test {
                 "The quantity of hamburgers desired by the whoever is going to eat them.",
                 "b", "burgers",
                 Integer.class,
-                0,
+                "0", "0",
                 new IntegerParser(),
                 new IntegerValidator( 1, 15 ) );
 
@@ -34,10 +33,9 @@ public class Test {
                 "Still testing environmental variables as sources.",
                 "e", "environ",
                 String.class,
-                "uh oh",
+                "", "",
                 null,
                 null );
-        envDef.environVariable = "TDTD";
 
         ArgDef verbosityDef = new BinaryOptionalArgDef(
                 "verbosity",
@@ -52,17 +50,52 @@ public class Test {
                 "The fully-qualified domain name, or dotted-form IP address, of the host to connect to.",
                 "h", "host",
                 InetAddress.class,
-                Inet4Address.getLoopbackAddress(),
+                "127.0.0.1", "127.0.0.1",
                 new InetAddressByNameParser(),
                 null
         );
+
+        ArgDef voltageDef = new SingleOptionalArgDef(
+                "voltage",
+                "The nominal battery voltage.",
+                "The nominal battery voltage.  This defaults to 13.2 volts.",
+                "g", "voltage",
+                Double.class,
+                "13.2", "13.2",
+                new DoubleParser(),
+                new DoubleValidator( 10.8, 16.67 )
+        );
+
+        ArgDef passwordDef = new SingleOptionalArgDef(
+                "password",
+                "The password.",
+                "The password for all the things.",
+                "p", "password",
+                String.class,
+                "", "",
+                null,
+                null
+        );
+        passwordDef.setHiddenInteractiveMode( "Enter password: " );
+        passwordDef.parameterMode = ParameterMode.MANDATORY;
+
+        ArgDef jsDef = new SingleOptionalArgDef(
+                "script",
+                "The script.",
+                "The script that does all the things.",
+                "s", "script",
+                String.class,
+                "", "#TestTest.js#",
+                null,
+                null
+        );
+        jsDef.parameterMode = ParameterMode.MANDATORY;
 
         ArgDef fileDef = new SinglePositionalArgDef(
                 "config_file",
                 "The path to the configuration file.",
                 "The path (with file name) for the configuration file.",
                 String.class,
-                "",
                 new TextFileParser(),
                 null
         );
@@ -73,7 +106,6 @@ public class Test {
                 "JavaScript configuration file name",
                 "JavaScript configuration file path",
                 TestConfig.class,
-                new TestConfig(),
                 new JSConfigParser( new TestConfig() ),
                 null
         );
@@ -86,11 +118,22 @@ public class Test {
         commandLine.add( hostDef      );
         commandLine.add( fileDef      );
         commandLine.add( configDef    );
+        commandLine.add( passwordDef  );
+        commandLine.add( jsDef        );
+        commandLine.add( voltageDef   );
 
-        ParsedCommandLine cli = commandLine.parse( new String[] { "-vvv", "-h=foxnews.com", "TestTest.js", "TestJavaScriptParser.js", "--burgers", "14", "-e" });
+        ParsedCommandLine cli = commandLine.parse( new String[] { "-vvvcg", "-h=foxnews.com", "TestTest.js", "TestJavaScriptParser.js", "--burgers", "14", "-e" });
 
         //noinspection ResultOfMethodCallIgnored
         cli.hashCode();
+
+        if( cli.isValid() ) {
+            ParsedArg ans = cli.get( "password" );
+            System.out.println( (String) cli.get( "password" ).value );
+        }
+        else {
+            System.out.println( cli.getErrorMsg() );
+        }
     }
 
 

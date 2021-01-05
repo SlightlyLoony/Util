@@ -3,23 +3,14 @@ package com.dilatush.util.cli;
 import java.io.File;
 
 /**
- * Provides a parameter validator that tests whether the given object is present and of the correct type.
+ * Provides a parameter validator that tests whether the given {@link File} object represents a writable file.
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
-public class ObjectPresentValidator implements ParameterValidator {
-
-    private final Class<?>  type;
+@SuppressWarnings( "unused" )
+public class WritableFileValidator implements ParameterValidator {
 
     private String errorMsg;
-
-
-    public ObjectPresentValidator( final Class<?> _type ) {
-
-        if( _type == null )
-            throw new IllegalArgumentException( "Cannot have a null type argument" );
-        type = _type;
-    }
 
 
     /**
@@ -32,12 +23,20 @@ public class ObjectPresentValidator implements ParameterValidator {
     public boolean validate( final Object _parameterValue ) {
 
         if( _parameterValue == null ) {
-            errorMsg = "Expected to validate a " + type.getCanonicalName() + " object, instead got a null.";
+            errorMsg = "Expected to validate a File object, instead got a null.";
             return false;
         }
-
-        if( !type.isInstance( _parameterValue ) ) {
-            errorMsg = "Expected to validate a " + type.getCanonicalName() + " object, instead got " + _parameterValue.getClass().getCanonicalName() + " object.";
+        if( !(_parameterValue instanceof File) ) {
+            errorMsg = "Expected to validate a File object, instead got " + _parameterValue.getClass().getCanonicalName() + " object.";
+            return false;
+        }
+        File file = (File) _parameterValue;
+        if( !file.isFile() ) {
+            errorMsg = "File path does not resolve to a file: " + file.getAbsolutePath();
+            return false;
+        }
+        if( !file.canWrite() ) {
+            errorMsg = "Can not write the specified file: " + file.getAbsolutePath();
             return false;
         }
 

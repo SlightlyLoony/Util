@@ -91,3 +91,15 @@ There are two arguments that are implicitly defined:
 == Parameter Parsers
 
 == Parameter Validators
+
+== Getting parameter values from environment variables
+Sometimes getting a value from the command line (or a shell script) is not really what you want.  One classic example is a password - you really don't want someone to see it, and you certainly don't want it in your shell script.  Another example might be the path to some file needed in a shell script, where the path might be different on different machines, but it would be nice to have a single shell script.  You _could_ enter the path as an argument every time you ran the script, but that's a pain no matter how you slice it.  Environment variables are a nice solution to both issues, if only we could use their contents as parameter values.  And you can!
+
+This package looks at any parameter value (whether on the command line, a default value, or an absent value) to see if it is in the form "%NAME%", and if so, it interprets "NAME" as the name of an environment variable, and substitutes the contents of that environment variable as the value of that parameter.  Note that the first and last characters of the parameter value must be a "%", and _everything_ between them is used as the environment variable name.
+
+For the two examples given above, this gives you a nice solution.  For the password, you could define an optional argument with an optional parameter - and a default value like "%PASSWORD%".  This way if you leave the parameter off the command line, the default value will be extracted from the environment variable PASSWORD.  Similarly, for the file path example you could define a mandatory argument with an optional parameter - and an absent value like "%IMPORTANT_FILE_PATH%".  In this case if the argument isn't specified on the command line at all, it will get its value from IMPORTANT_FILE_PATH.  If the argument _is_ specified on the command line, then its value will be equal to the parameter entered by the user.
+
+If a parameter value specifies an environment variable, but that variable does not exist, then the parameter value is the empty string ("").
+
+== Getting parameter values from files
+In a manner very similar to the way this package can get parameter values from environment variables (as described above), it can also get parameter values from text files.  To do this, any parameter value (whether on the command line, a default value, or an absent value) can be in the form "+#FILE_PATH#+".  In this case the FILE_PATH is treated as a (wait for it!) file path, and if there's a readable file at that path its contents are used as the parameter value.  Simple!  If the file path doesn't resolve to a readable file, then the paramter value is the empty string ("").

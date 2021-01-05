@@ -53,16 +53,4 @@ public class ParsedArg {
         value = _value;
         appearances = _appearances;
     }
-
-
-    /**
-     * Creates a new instance of this class as the default for the given {@link ArgDef}.
-     *
-     * @param _argDef the {@link ArgDef} to make default results for.
-     */
-    public ParsedArg( final ArgDef _argDef ) {
-        present = false;
-        value = _argDef.defaultValue;
-        appearances = 0;
-    }
 }

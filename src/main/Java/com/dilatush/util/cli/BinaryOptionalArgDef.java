@@ -13,7 +13,10 @@ public class BinaryOptionalArgDef extends AOptionalArgDef {
 
         super( _referenceName, _summary, _detail, 1, ParameterMode.DISALLOWED, _shortNames, _longNames );
 
-        type            = Boolean.class;
-        defaultValue    = false;
+        type            = Integer.class;
+        defaultValue    = "0";
+        absentValue     = "0";
+        parser          = new IntegerParser();
+        validator       = null;
     }
 }

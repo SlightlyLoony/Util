@@ -1,9 +1,13 @@
 package com.dilatush.util.cli;
 
+import com.dilatush.util.Files;
 import com.sun.istack.internal.NotNull;
 
+import java.io.Console;
+import java.io.File;
 import java.util.*;
 
+import static com.dilatush.util.General.isNull;
 import static com.dilatush.util.Strings.isEmpty;
 
 /**
@@ -66,8 +70,8 @@ public class CommandLine {
             // first we process all the arguments we find on the command line...
             processPresentArguments( _args );
 
-            // then we see if any mandatory arguments are missing...
-            checkForMissing();
+            // then we process all those arguments that we didn't find on the command line...
+            processAbsentArguments();
         }
 
         // this exception is thrown when some error occurs during parsing
@@ -126,7 +130,7 @@ public class CommandLine {
      *
      * @throws CLDefException if a required parameter is missing.
      */
-    private void checkForMissing() throws CLDefException {
+    private void processAbsentArguments() throws CLDefException {
 
         // iterate over all our defined arguments...
         for( String refName : refDefs.keySet() ) {
@@ -135,23 +139,16 @@ public class CommandLine {
             ArgDef    argDef    = refDefs.get( refName );
             ParsedArg argParsed = argumentResults.get( refName );
 
-            // if we have an optional argument, by definition its parameter cannot be required...
-            if( argDef instanceof AOptionalArgDef )
-                continue;
+            // if we have no parsed argument, then we don't have this argument on the command line...
+            if( isNull( argParsed ) ) {
 
-            // if we have a positional argument with a mandatory parameter, then we'd better have a presence...
-            if( (argDef.parameterMode == ParameterMode.MANDATORY) && !argParsed.present )  {
-                throw new CLDefException( "Required parameter is missing: " + argDef.referenceName );
+                // update the missing argument, mainly to get the absent value...
+                updateArgument( argDef.referenceName, argDef, null, false );
             }
         }
     }
 
 
-    /**
-     *
-     * @param _args
-     * @throws CLDefException
-     */
     private void processPresentArguments( final String[] _args ) throws CLDefException {
         // a little setup...
         RefInt ppi = new RefInt();  // our positional parameter index...
@@ -193,7 +190,7 @@ public class CommandLine {
         // get our definition, and bump the index...
         ArgDef def = positionalDefs.get( _ppi.value++ );
 
-        updateArgument( def.referenceName, def, _arg );
+        updateArgument( def.referenceName, def, _arg, true );
     }
 
 
@@ -219,7 +216,7 @@ public class CommandLine {
             // get our argument's definition...
             ArgDef def = shortDefs.get( shortName );
 
-            updateArgument( "-" + shortName, def, parameter );
+            updateArgument( "-" + shortName, def, parameter, true );
         }
     }
 
@@ -248,71 +245,148 @@ public class CommandLine {
             }
         }
 
-        updateArgument( "--" + longName, def, parameter );
+        updateArgument( "--" + longName, def, parameter, true );
     }
 
 
-    private void updateArgument( final String _nameUsed, final ArgDef _def, final String _parameter ) throws CLDefException {
+    private void updateArgument( final String _nameUsed, final ArgDef _def, final String _parameter, final boolean _present ) throws CLDefException {
 
-        // if no parameter value was supplied, but we do have an environment variable name, then try reading the variable...
+        // update the number of appearances...
+        ParsedArg results =  argumentResults.get( _def.referenceName );
+        int     appearances = (isNull( results ) ? 0 : results.appearances) + (_present ? 1 : 0);
+
+        // if we have too many appearances, barf...
+        if( appearances > _def.maxAllowed )
+            throw new CLDefException( "Parameter '" + _nameUsed + "' appeared at least " + appearances
+                    + " times, but the maximum allowed is " + _def.maxAllowed + "." );
+
+        // figure out what value to use for the parameter...
         String parameter = _parameter;
-        if( isEmpty( parameter ) && !isEmpty( _def.environVariable ) ) {
-            parameter = System.getenv( _def.environVariable );
+
+        // if the argument is present, the parameter is mandatory, the parameter is missing, and we have interactive enabled...
+        if( _present && (_def.parameterMode == ParameterMode.MANDATORY) && isEmpty( _parameter )
+                && (_def.interactiveMode != InteractiveMode.DISALLOWED)) {
+
+            // then we'll get the parameter from the user interactively...
+            Console console = System.console();
+
+            // if we can't get a Console (for instance, while running inside of an IDE), we skip this...
+            if( !isNull( console ) ) {
+
+                // prompt and read the answer...
+                String prompt = isEmpty( _def.prompt ) ? "Enter value for " + _nameUsed + ": " : _def.prompt;
+                if( _def.interactiveMode == InteractiveMode.PLAIN ) {
+                    parameter = console.readLine( prompt );
+                } else {
+                    parameter = new String( console.readPassword( prompt ) );
+                }
+            }
         }
 
-        // if we have a parameter and parameters are not allowed, barf...
-        if( (parameter != null) && (_def.parameterMode == ParameterMode.DISALLOWED ) )
-            throw new CLDefException( "Unexpected parameter '" + parameter + "' for argument '" + _nameUsed + "'." );
+        // handle optional arguments...
+        if( _def instanceof AOptionalArgDef ) {
 
-        // if we don't have a parameter, and parameters are mandatory, barf...
-        if( (parameter == null) && (_def.parameterMode == ParameterMode.MANDATORY) )
-            throw new CLDefException( "Missing mandatory parameter for argument '" + _nameUsed + "'." );
+            // handle the case of the argument being present...
+            if( _present ) {
+
+                // handle the parameter modes...
+                switch( _def.parameterMode ) {
+                    case DISALLOWED:
+                        if( !isEmpty( parameter) )
+                            throw new CLDefException( "Unexpected parameter '" + parameter + "' for argument '" + _nameUsed + "'." );
+                        parameter = "" + appearances;
+                        break;
+                    case OPTIONAL:
+                        parameter = isEmpty( parameter ) ? _def.defaultValue : parameter;
+                        break;
+                    case MANDATORY:
+                        if( isEmpty( parameter ) )
+                            throw new CLDefException( "Missing mandatory parameter for argument '" + _nameUsed + "'." );
+                        break;
+                }
+            }
+
+            // or not present...
+            else {
+                parameter = _def.absentValue;
+            }
+        }
+
+        // handle positional arguments...
+        if( _def instanceof APositionalArgDef ) {
+
+            // handle case of argument not present...
+            if( !_present ) {
+                if( _def.parameterMode == ParameterMode.MANDATORY )
+                    throw new CLDefException( "Missing mandatory positional argument: " + _nameUsed );
+                parameter = environmentVariableCheck( _def.defaultValue );
+            }
+        }
+
+        // expand the environmental variable, if one was specified...
+        parameter = environmentVariableCheck( parameter );
+
+        // expand the file contents, if one was specified...
+        parameter = filePathCheck( parameter );
 
         // get our argument's current results and update them...
-        Object parameterValue = null;
+        Object  value = null;
         if( parameter != null ) {
             if( _def.parser != null ) {
 
                 // invoke the parser and get the result...
-                parameterValue = _def.parser.parse( parameter );
+                value = _def.parser.parse( parameter );
 
                 // if the result was null, the parser had problem...
-                if( parameterValue == null ) {
+                if( value == null ) {
                     throw new CLDefException( _def.parser.getErrorMessage() );
                 }
 
                 // if the result was of the wrong type, we have a worser problem...
-                if( !_def.type.isAssignableFrom( parameterValue.getClass() ) ) {
+                if( !_def.type.isAssignableFrom( value.getClass() ) ) {
                     throw new CLDefException( "Expected parser result of type " + _def.type.getSimpleName()
-                            + ", got: " + parameterValue.getClass().getSimpleName() );
+                            + ", got: " + value.getClass().getSimpleName() );
                 }
             }
             else {
-                parameterValue = parameter;
+                value = parameter;
             }
             if( _def.validator != null ) {
-                if( !_def.validator.validate( parameterValue ) ) {
+                if( !_def.validator.validate( value ) ) {
                     throw new CLDefException( _def.validator.getErrorMessage() );
                 }
             }
         }
 
-        // update our argument's value...
-        ParsedArg results =  argumentResults.get( _def.referenceName );
+        // now update the argument's results...
+        argumentResults.put( _def.referenceName, new ParsedArg( _present, value, appearances ) );
+    }
 
-        // in the special case of arguments with parameters disallowed, put the number of appearances as the value...
-        if( _def.parameterMode == ParameterMode.DISALLOWED ) {
-            argumentResults.put( _def.referenceName, new ParsedArg(
-                    true, results.appearances + 1, results.appearances + 1
-            ) );
+
+    private String environmentVariableCheck( final String _parameter ) {
+
+        // if we have an environment variable name surrounded by percent signs, extract it...
+        if( (_parameter.length() > 2) && (_parameter.charAt( 0 ) == '%') && (_parameter.charAt( _parameter.length() - 1 ) == '%') ) {
+            String env = System.getenv( _parameter.substring( 1, _parameter.length() - 1 ) );
+            return isNull( env ) ? "" : env;
         }
 
-        // otherwise, use the value from the parameter...
-        else {
-            argumentResults.put( _def.referenceName, new ParsedArg(
-                    true, parameterValue, results.appearances + 1
-            ) );
+        // otherwise, just return what we got...
+        return _parameter;
+    }
+
+
+    private String filePathCheck( final String _parameter ) {
+
+        // if we have a file path surrounded by pound signs, extract it...
+        if( (_parameter.length() > 2) && (_parameter.charAt( 0 ) == '#') && (_parameter.charAt( _parameter.length() - 1 ) == '#') ) {
+            String path = _parameter.substring( 1, _parameter.length() - 1 );
+            String contents = Files.readToString( new File( path ) );
+            return isNull( contents ) ? "" : contents;
         }
+
+        // otherwise, just return what we got...
+        return _parameter;
     }
 
 
@@ -337,11 +411,12 @@ public class CommandLine {
             throw new IllegalArgumentException( "Duplicate argument reference name: " + _argDef.referenceName );
         refDefs.put( _argDef.referenceName, _argDef );
 
-        // stuff away the default results (this is how we handle the values of non-appearing arguments)...
-        argumentResults.put( _argDef.referenceName, new ParsedArg( _argDef ) );
-
         // if we've got a positional argument...
         if( _argDef instanceof APositionalArgDef ) {
+
+            // if we have a parameter mode of DISALLOWED, that's not allowed...
+            if( _argDef.parameterMode == ParameterMode.DISALLOWED )
+                throw new IllegalArgumentException( "Tried to add a positional argument with a DISALLOWED parameter mode" );
 
             // if this argument can appear a variable number of times, make sure we're not trying to do more than one of these...
             if( _argDef.maxAllowed != 1 ) {
@@ -375,6 +450,9 @@ public class CommandLine {
                     longDefs.put( longName, _argDef );
                 }
             }
+
+            // stuff it away in order, for help production...
+            optionalDefs.add( optionalArgDef );
         }
     }
 

@@ -17,8 +17,8 @@ public abstract class ArgDef {
 
     // these fields pertain to the argument's value...
     public Class<?>           type;              // the type of the option's value
-    public Object             defaultValue;      // the default value for the parameter
-    public String             environVariable;   // name of environment variable as alternate parameter value source, or null if none
+    public String             defaultValue;      // the value for the parameter if optional argument present and optional parameter not present
+    public String             absentValue;       // the value for the parameter if optional argument not present and parameter not disallowed
     public ParameterMode      parameterMode;     // whether a parameter value is disallowed, optional, or mandatory
     public ParameterValidator validator;         // the validator for this argument's parameter
     public ParameterParser    parser;            // the parser for this argument's parameter
@@ -31,12 +31,12 @@ public abstract class ArgDef {
      * <ul>
      *     <li>{@link #type} is set to {@link String}.class, consistent with no parser.</li>
      *     <li>{@link #defaultValue} is set to the empty string ("").</li>
+     *     <li>{@link #absentValue} is set to the empty string ("").</li>
      *     <li>{@link #parser} is set to <code>null</code>, indicating no parser will be used.</li>
      *     <li>{@link #validator} is set to <code>null</code>, indicating no validator will be used.</li>
      *     <li>{@link #interactiveMode} is set to {@link InteractiveMode#DISALLOWED}, indicating that the parameter value will not be captured
      *     interactively.</li>
      *     <li>{@link #prompt} is set to {@code true}, consistent with interactive mode being disallowed.</li>
-     *     <li>{@link #environVariable} is set to {@code null}, indicating that no environment variable will be used for a parameter value source</li>
      * </ul>
      * @param _referenceName The reference name for this argument.
      * @param _summary The summary help for this argument.
@@ -55,11 +55,11 @@ public abstract class ArgDef {
 
         type            = String.class;
         defaultValue    = "";
+        absentValue     = "";
         validator       = null;
         parser          = null;
         interactiveMode = InteractiveMode.DISALLOWED;
         prompt          = null;
-        environVariable = null;
 
         if( isEmpty( _referenceName ) )
             throw new IllegalArgumentException( "No reference name supplied for argument definition" );
