@@ -47,8 +47,9 @@ public class NoiseFilter {
      */
     public NoiseFilter( final NoiseFilterConfig _config ) {
 
-        if( !_config.isValid() )
-            throw new IllegalArgumentException( "Invalid configuration for NoiseFilter" );
+        AConfig.ValidationResult vr = _config.isValid();
+        if( !vr.valid )
+            throw new IllegalArgumentException( "Invalid configuration for NoiseFilter: " + vr.message );
 
         numSamples                  = _config.numSamples;
         errorCalc                   = _config.errorCalc;
@@ -133,16 +134,16 @@ public class NoiseFilter {
          * Verify that the fields of this object are valid.
          */
         @Override
-        protected void verify() {
-            validate( () -> numSamples >= 2,
+        public void verify( final List<String> _messages ) {
+            validate( () -> numSamples >= 2, _messages,
                     "NoiseFilter illegal value for number of samples: " + numSamples );
-            validate( () -> errorCalc != null,
+            validate( () -> errorCalc != null, _messages,
                     "NoiseFilter missing error calculator" );
-            validate( () -> ((maxIgnoreFraction >= 0) && (maxIgnoreFraction <= 1)),
+            validate( () -> ((maxIgnoreFraction >= 0) && (maxIgnoreFraction <= 1)), _messages,
                     "NoiseFilter max ignore fraction out of range ([0..1]): " + maxIgnoreFraction );
-            validate( () -> ((maxTotalErrorIgnoreFraction >= 0) || (maxTotalErrorIgnoreFraction <= 1)),
+            validate( () -> ((maxTotalErrorIgnoreFraction >= 0) || (maxTotalErrorIgnoreFraction <= 1)), _messages,
                     "NoiseFilter max total error ignore fraction out of range ([0..1]): " + maxTotalErrorIgnoreFraction );
-            validate( () -> minSampleErrorIgnore >= 0,
+            validate( () -> minSampleErrorIgnore >= 0, _messages,
                     "NoiseFilter min sample error ignore must be non-negative: " + minSampleErrorIgnore );
         }
     }

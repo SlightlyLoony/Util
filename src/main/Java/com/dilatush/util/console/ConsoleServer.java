@@ -4,6 +4,7 @@ import com.dilatush.util.AConfig;
 
 import java.io.IOException;
 import java.net.*;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
@@ -142,11 +143,12 @@ public class ConsoleServer {
 
 
         /**
-         * Implemented by subclasses to verify that their fields are valid.  When possible, this should be accomplished by a series of invocations of
-         * {@link #validate(Validator, String)}, one or more times for each field in the configuration.
+         * Verify the validity of this object.  Each error found adds an explanatory message to the given list of messages.
+         *
+         * @param _messages The list of messages explaining the errors found.
          */
         @Override
-        protected void verify() {
+        public void verify( final List<String> _messages ) {
 
         }
     }

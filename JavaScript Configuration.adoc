@@ -1,0 +1,22 @@
+= JavaScript Configuration Support
+Tom Dilatush (tom@dilatush.com) +
+V1.0, 2021-01-07
+:toc:
+:toc-placement!:
+toc::[]
+
+== What is this JavaScript configuration stuff, anyway?
+I have been using JSON configuration files for some time now.  They are convenient in the sense that relatively simple code can read them into a Java program.  At that point Java code can validate the configuration values, and use them directly.  However, these JSON configurations have some drawbacks (see list below).  The most obvious alternative is plain text files, as are used by very many Unix/Linux programs.  They have drawbacks as well (also below)!  Here are the main drawbacks of those two approaches for configuration files, starting with the worst in my assessment.
+[start=1]
+. *No comments.*  JSON (standard JSON, at least) cannot have comments at all.  Having a configuration file with no comments means that every time I forget what a parameter does, or what its valid values are (i.e., almost every time I use it!), I have to go back to the Java code to figure it out.  It's like a reverse-engineering exercise to make even the simplest change.  The Unix-style text files _do_ allow comments, which is great.
+. *Standardization.*  JavaScript is a standard; that's one thing I really like about it.  The Unix/Linux configuration files are similar, but definitely not a standard format.  If you have spent any time at all administering a Unix or Linux, you'll know exactly what I mean.  The lack of standardization makes the modifying the files error prone.
+. *Only literals of limited type.*  If all configuration entries were constants, and were strings, numbers, or booleans, this would not be much of an issue.  There are times, however, when it would be very convenient to have an arbitrary type in the configuration file -- such as an `Enum` value, or perhaps a `URL` instance.  The best that JSON or plain text files can provide is a string that your program can convert into one of those objects - but then your code has to do that work, including validation of it.  There are also times when it would be convenient to be able to determine a configuration value programmatically.  A simple example: suppose you have a configuration value that represents time in milliseconds - and you want to configure 14 days.  You _could_ drag out your calculator, figure out the answer (it's 1,209,600,000), and put that in your configuration file.  But then when you look at the configuration file later you'll have no idea what that giant number means.  How much nicer it would be to write
+....
+14 * 24 * 60 * 60 * 1000 // number of milliseconds in 14 days...
+....
+
+== How does it work?
+
+
+== Learning more details...
+You can learn about the various kinds of enablers that are included with the framework at https://github.com/SlightlyLoony/Util/tree/master/src/main/Java/com/dilatush/util/test[the GitHub repository].  You can also make your own test enablers, including JavaScript-scripted test enablers see https://github.com/SlightlyLoony/Util/blob/master/src/main/Java/com/dilatush/util/test/JavaScriptTestEnabler.java[JavaScriptTestEnabler].

@@ -11,15 +11,16 @@ A collection of Java utilities.
 
 == What are these utilities, anyway?
 It's very hard to give a general description of these, as there are a wide variety of them.  The easiest thing to do is to browse the classes.  There are a few worth mentioning here, however:
-.Table Notable Elements
+
+.Notable Elements
 |===
 |Name|Description
 |Non-Interactive Test Framework
-|A test framework that allows test code to be included in production builds, while enabling and parameterization is handled via a configuration file.  This framework is intended primarily for use in embedded software and in server daemons, which share the characteristic of being non-interactive.  Look in the _test_ package for details.
+|A test framework that allows test code to be included in production builds, while enabling and parameterization is handled via a configuration file.  This framework is intended primarily for use in embedded software and in server daemons, which share the characteristic of being non-interactive.  Look in the _test_ package for details. Much more in the https://github.com/SlightlyLoony/Util/blob/master/Test.adoc[Non-Interactive Test document]
 |JavaScript Configuration
 |Provides a simple, flexible mechanism to write configuration files in JavaScript, via the _Nashorn_ JavaScript engine (and yes, I know it's deprecated).  See the classes _JSConfig_ and _AConfig_ for details.  The _ShedSolar_ project in my repository has a realistic example of its use.
 |Command Line Argument Interpreter
-|Provides everything needed for a Java command line application (or server daemon) to have Unix-style arguments.  Optional arguments can have any number of long and short names.  Passwords (and other arguments) can be entered interactively.  Parses and validates argument parameters.  Provides summary and detailed help.
+|Provides everything needed for a Java command line application (or server daemon) to have Unix-style arguments.  Optional arguments can have any number of long and short names.  Passwords (and other arguments) can be entered interactively.  Parses and validates argument parameters.  Provides summary and detailed help. Much more in the https://github.com/SlightlyLoony/Util/blob/master/CommandLine.adoc[Command Line document].
 |===
 
 == Why does the world need these utilities?

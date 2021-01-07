@@ -1,6 +1,6 @@
 package com.dilatush.util.test;
 
-import com.dilatush.util.JSConfig;
+import com.dilatush.util.AConfig;
 
 import static java.lang.Thread.sleep;
 
@@ -13,7 +13,11 @@ public class TestTest {
     public static void main( final String[] _args ) throws InterruptedException {
 
         // get test configuration...
-        TestManager.Config config = new JSConfig<TestManager.Config>().get( "TestTest.js", TestManager.Config.class );
+        AConfig.InitResult ir = AConfig.init( TestManager.Config.class, "TestTest.js" );
+        if( !ir.valid )
+            throw new IllegalStateException( "Configuration problem: " + ir.message );
+
+        TestManager.Config config = (TestManager.Config) ir.config;
         TestManager mgr = TestManager.getInstance();
         mgr.setConfig( config );
 

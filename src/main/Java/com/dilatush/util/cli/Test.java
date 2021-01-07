@@ -3,6 +3,7 @@ package com.dilatush.util.cli;
 import com.dilatush.util.AConfig;
 
 import java.net.InetAddress;
+import java.util.List;
 
 /**
  * @author Tom Dilatush  tom@dilatush.com
@@ -51,7 +52,7 @@ public class Test {
                 "h", "host",
                 InetAddress.class,
                 "127.0.0.1", "127.0.0.1",
-                new InetAddressByNameParser(),
+                new InetAddressParser(),
                 null
         );
 
@@ -106,7 +107,7 @@ public class Test {
                 "JavaScript configuration file name",
                 "JavaScript configuration file path",
                 TestConfig.class,
-                new JSConfigParser( new TestConfig() ),
+                new JSConfigParser( TestConfig.class ),
                 null
         );
 
@@ -155,11 +156,12 @@ public class Test {
 
 
         /**
-         * Implemented by subclasses to verify that their fields are valid.  When possible, this should be accomplished by a series of invocations of
-         * {@link #validate(Validator, String)}, one or more times for each field in the configuration.
+         * Verify the validity of this object.  Each error found adds an explanatory message to the given list of messages.
+         *
+         * @param _messages The list of messages explaining the errors found.
          */
         @Override
-        protected void verify() {
+        public void verify( final List<String> _messages ) {
         }
     }
 }

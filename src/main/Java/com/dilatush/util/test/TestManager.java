@@ -3,6 +3,7 @@ package com.dilatush.util.test;
 import com.dilatush.util.AConfig;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 
@@ -130,7 +131,16 @@ public class TestManager {
                 enablers.get( enablerName ).setTestEnabler( newEnabler );
             }
         }
+        init();
         LOGGER.info( "Enabled test scenario: " + _scenario );
+    }
+
+
+    /**
+     * Initialize all the test enablers in the current scenario.
+     */
+    public void init() {
+        enablers.forEach( (k,v) -> v.init() );
     }
 
 
@@ -149,6 +159,7 @@ public class TestManager {
      *
      * @return the name of the current test scenario
      */
+    @SuppressWarnings( "unused" )
     public String getScenario() {
         return scenario;
     }
@@ -166,6 +177,7 @@ public class TestManager {
         scenarios = _config.scenarios;
         if( isNull( scenario ) )
             scenario = "";
+        init();
     }
 
 
@@ -193,11 +205,14 @@ public class TestManager {
 
         /**
          * Implemented by subclasses to verify that their fields are valid.  When possible, this should be accomplished by a series of invocations of
-         * {@link #validate(Validator, String)}, one or more times for each field in the configuration.
+         * {@link #validate(Validator, List, String)}, one or more times for each field in the configuration.
+         *
+         * @param _messages The list of configuration error messages.  Each error found in {@code verify()} should add an explanatory message to
+         *                  this list.
          */
         @Override
-        protected void verify() {
-            validate( () -> (scenarios != null), "The scenarios map may not be null" );
+        public void verify( final List<String> _messages ) {
+            validate( () -> (scenarios != null), _messages, "The scenarios map may not be null" );
         }
     }
 }

@@ -1,30 +1,32 @@
 package com.dilatush.util.cli;
 
 import com.dilatush.util.AConfig;
-import com.dilatush.util.Files;
 
-import javax.script.Invocable;
-import javax.script.ScriptEngine;
-import javax.script.ScriptEngineManager;
-import javax.script.ScriptException;
-
-import java.io.File;
-
+import static com.dilatush.util.General.isNull;
 import static com.dilatush.util.Strings.isEmpty;
 
 /**
+ * Provides a parameter parser that treats the parameter as a file path.  The file's contents are assumed to be a script (in JavaScript) that can
+ * create, initialize, and validate a configuration object of the specified class.
+ *
  * @author Tom Dilatush  tom@dilatush.com
  */
-public class JSConfigParser implements ParameterParser {
+public class JSConfigParser extends AParameterParser implements ParameterParser {
 
-    private final AConfig config;
-
-    private String errorMsg;
-    private boolean hasRun;
+    private final Class<? extends AConfig> type;
 
 
-    public JSConfigParser( final AConfig _config ) {
-        config = _config;
+    /**
+     * Creates a new instance of this class that will create and initialize an {@link AConfig} of the given type.
+     *
+     * @param _type The type of the configuration object to create, initialize, and validate.
+     */
+    public JSConfigParser( final Class<? extends AConfig> _type ) {
+
+        if( isNull( _type ) )
+            throw new IllegalArgumentException( "Need a configuration object type" );
+
+        type = _type;
     }
 
 
@@ -32,81 +34,23 @@ public class JSConfigParser implements ParameterParser {
      * Translates the JavaScript configuration file with the given file name into an initialized configuration object.
      *
      * @param _parameter The JavaScript configuration file name.
-     * @return the initialized configuration object, or <code>null</code> if the initialization failed.
+     * @return a {@link Result} object containing the results of the parsing operation
      */
     @Override
-    public Object parse( final String _parameter ) {
+    public Result parse( final String _parameter ) {
 
         // if we got no parameter...
-        if( isEmpty( _parameter ) ) {
-            errorMsg = "Expected JavaScript configuration file name, got nothing.";
-            return null;
-        }
+        if( isEmpty( _parameter ) )
+            return error( "Expected JavaScript configuration file name, got nothing." );
 
-        // if we've already run with this configuration object, we've got a problem...
-        if( hasRun ) {
-            errorMsg = "Attempted to reuse parser";
-            return null;
-        }
-        hasRun = true;
+        // try to get our initialized AConfig instance...
+        AConfig.InitResult ir = AConfig.init( type, _parameter );
 
-        // now we read the JavaScript file...
-        File file = new File( _parameter );
+        // if we got invalid results, report them...
+        if( !ir.valid)
+            return error( ir.message );
 
-        if( !file.isFile() ) {
-            errorMsg = "JavaScript file path does not resolve to a file: " + file.getAbsolutePath();
-            return null;
-        }
-
-        if( !file.canRead() ) {
-            errorMsg = "Can not read the specified JavaScript file: " + file.getAbsolutePath();
-            return null;
-        }
-
-        String jsf = Files.readToString( file );
-
-        if( jsf == null ) {
-            errorMsg = "Problem while reading the specified JavaScript file: " + file.getAbsolutePath();
-            return null;
-        }
-
-        /*
-         * Construct the JavaScript program we're going to run, as follows:
-         *
-         *      function init( config ) {
-         *          load( "<config file name>" );
-         *          return config;
-         *      }
-         */
-        String js = "function init( config ) {         \n" +
-                    jsf +
-                    "    return config;                \n" +
-                    "}                                 \n";
-
-        try {
-            ScriptEngine engine = new ScriptEngineManager().getEngineByName( "nashorn" );
-            engine.eval( js );
-            Invocable invocable = (Invocable) engine;
-
-            invocable.invokeFunction( "init", config );
-
-            return config;
-        }
-        catch( ScriptException | NoSuchMethodException _e ) {
-            errorMsg = _e.getMessage();
-            return null;
-        }
-    }
-
-
-    /**
-     * Return a descriptive error message if the parsing and translation failed for any reason (i.e., {@link #parse(String)} returned
-     * <code>null</code>.
-     *
-     * @return a descriptive error message after parsing and translation failed
-     */
-    @Override
-    public String getErrorMessage() {
-        return errorMsg;
+        // otherwise, return the good stuff...
+        return result( ir.config );
     }
 }

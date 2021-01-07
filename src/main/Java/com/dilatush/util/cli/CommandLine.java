@@ -1,6 +1,7 @@
 package com.dilatush.util.cli;
 
 import com.dilatush.util.Files;
+import com.dilatush.util.cli.ParameterParser.Result;
 import com.sun.istack.internal.NotNull;
 
 import java.io.Console;
@@ -335,12 +336,14 @@ public class CommandLine {
             if( _def.parser != null ) {
 
                 // invoke the parser and get the result...
-                value = _def.parser.parse( parameter );
+                Result rp = _def.parser.parse( parameter );
 
-                // if the result was null, the parser had problem...
-                if( value == null ) {
-                    throw new CLDefException( _def.parser.getErrorMessage() );
+                // if the parser had problem...
+                if( !rp.valid ) {
+                    throw new CLDefException( rp.message );
                 }
+
+                value = rp.value;
 
                 // if the result was of the wrong type, we have a worser problem...
                 if( !_def.type.isAssignableFrom( value.getClass() ) ) {

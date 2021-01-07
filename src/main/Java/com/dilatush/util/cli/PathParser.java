@@ -9,38 +9,17 @@ import static com.dilatush.util.Strings.isEmpty;
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
-public class PathParser implements ParameterParser {
+public class PathParser extends AParameterParser implements ParameterParser {
 
-    private String errorMsg;
 
     /**
-     * Translates the given string parameter into an object of the given target class.  Returns <code>null</code> if the translation could not be
-     * performed for any reason.  Implementations should avoid throwing exceptions, instead relying on {@link #getErrorMessage()} to inform the caller
-     * about <i>why</i> parsing failed.
+     * Translates the given string parameter into a {@link File} instance.
      *
      * @param _parameter The string parameter to parse and translate.
-     * @return an object of the target class, translated from the given string parameter, or <code>null</code> if the translation failed.
+     * @return a {@link Result} object containing the results of the parsing operation
      */
     @Override
-    public Object parse( final String _parameter ) {
-
-        if( isEmpty( _parameter ) ) {
-            errorMsg = "Expected file path was not supplied.";
-            return null;
-        }
-
-        return new File( _parameter );
-    }
-
-
-    /**
-     * Return a descriptive error message if the parsing and translation failed for any reason (i.e., {@link #parse(String)} returned
-     * <code>null</code>.
-     *
-     * @return a descriptive error message after parsing and translation failed
-     */
-    @Override
-    public String getErrorMessage() {
-        return errorMsg;
+    public Result parse( final String _parameter ) {
+        return isEmpty( _parameter ) ? error( "Expected file path was not supplied." ) : result( new File( _parameter ) );
     }
 }

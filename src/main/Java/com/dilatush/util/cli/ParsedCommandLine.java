@@ -23,8 +23,8 @@ public class ParsedCommandLine {
      * Creates a new instance of this class that contains the given parsed arguments, is valid, and has no error message.
      *
      * @param _parsedArguments The map of the results of parsing the command line arguments.
-     * @param _optionalPresentCount
-     * @param _positionalPresentCount
+     * @param _optionalPresentCount The count of optional arguments present on the command line.
+     * @param _positionalPresentCount The count of positional arguments present on the command line.
      */
     public ParsedCommandLine( final Map<String, ParsedArg> _parsedArguments, final int _optionalPresentCount, final int _positionalPresentCount ) {
         parsedArguments = _parsedArguments;
@@ -57,7 +57,7 @@ public class ParsedCommandLine {
      * reference name is not present in the argument definitions, then returns a <code>null</code>.
      *
      * @param _argumentName The reference name of the argument whose results are being retrieved.
-     * @return
+     * @return the {@link ParsedArg} instance for the argument with the given reference name
      */
     public ParsedArg get( final String _argumentName ) {
 

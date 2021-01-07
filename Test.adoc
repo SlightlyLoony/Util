@@ -1,0 +1,134 @@
+= Non-Interactive Test Package
+Tom Dilatush (tom@dilatush.com) +
+V1.0, 2021-01-03
+:toc:
+:toc-placement!:
+toc::[]
+
+== What is this non-interactive test stuff, anyway?
+It is a test framework that allows test code to be included in production builds, while enabling and parameterization is handled via a configuration file.  This framework is intended primarily for use in embedded software and in server daemons, which share the characteristic of being non-interactive.
+
+On interactive programs, testing is generally done by having users (or simulated users) try various things in an attempt to break the program or to identify functionality that doesn't actually work.  With embedded software, or daemon software, this is somewhere between difficult and impossible.  This test framework is aimed at fixing that problem.
+
+
+== How does it work?
+Here's an example to illustrate the general idea.  Suppose you started out with a piece of code like this:
+....
+// get the temperature of the cabinet interior...
+double interiorTemp = getInteriorTemperature();
+....
+You'd like to test your code's reaction to various temperature readings.  You _could_ build a special cabinet with heating and refrigeration so that you can set the temperature to whatever you need to test.  Or ... you could do something like this, using this package:
+....
+// register the test enabler for interior cabinet temperature testing...
+private TestEnabler tempTest = testManager.register( "interiorTempTest" );
+
+((deep inside the code somewhere))
+
+// get the temperature of the cabinet interior...
+double interiorTemp = getInteriorTemperature();
+if( tempTest.isEnabled() )
+    interiorTemp = tempTest.getAsDouble( "value" );
+....
+We've ignored a bit of setup that's required (for the `TestManager`, and the configuration) to show a simple case of the package's actual use.  That test (the `if( tempTest.isEnabled()`) stays in the code permanently.  In production, all these `TestEnable` instances would be configured to always return `false` to this call, thus disabling the test.  When you're testing, you configure them to be enabled, with properties to further control what they do (as with the "value" property above).
+
+The configuration these `TestEnabler` instances is in a JavaScript configuration file.  The configuration for the `TestEnabler` above might look like this (as a snippet within the JavaScript file):
+....
+    config.scenarios = makeMap( {
+        interiorOverheatingScenario: {
+            tempTest: makeEnabler( "Delay", { "_delay_": 5000, "value": 95.4 })
+        }
+    });
+....
+That little configuration snippet defines the test enabler named "tempTest" (which is the name the Java code above registered with the `TestManager`).  The enabler is a "Delay" enabler, which is an instance of `DelayTestEnabler`.  That enabler takes a property "_delay_" (in milliseconds), which means it will be disabled for the first five seconds that the program runs, then enabled afterwards.  There's also a property "value" that is 95.4 - that's the temperature the Java test code above will return when the test is enabled.
+
+Now you've seen the basic idea of this package.  In the end, it's all about the test enablers and their properties.  Now a couple of details.  First, here's a (very small but) complete test framework configuration file:
+....
+load( 'TestHelpers.js' );
+
+function init( config ) {
+
+    config.enabled = true;
+    config.scenario = "interiorOverheatingScenario";
+    config.scenarios = makeMap( {
+        interiorOverheatingScenario: {
+            tempTest: makeEnabler( "Delay", { "_delay_": 5000, "value": 95.4 }),
+            humidityTest: makeEnabler( "False", {} )
+        },
+        humidityHighScenario: {
+            tempTest: makeEnabler( "False", {} ),
+            humidityTest: makeEnabler( "Delay", { "_delay_": 10000, "value": 75 })
+        }
+    });
+}
+....
+Let's take this piece by piece:
+
+`load( 'TestHelpers.js' )` loads some helper functions and classes.  The functions `makeMap()` and `makeEnabler()` used later in this configuration file are examples of those.  See the source file to see the complete list.
+
+`function init( config )` is the function in every JavaScript configuration file (not just this test framework) to initialize the configuration object (the argument to the function).
+
+`config.enabled = true` means, essentially, turn on the test framework.  If this were set to `false`, then all test enablers in your code would _always_ return false.  In other words, all test code would be disabled - as for production deployment.
+
+`config.scenario = "interiorOverheatingScenario"` tells the test framework to use the "interiorOverheatingScenario".  The scenarios are defined in the next part:
+....
+    config.scenarios = makeMap( {
+        interiorOverheatingScenario: {...},
+        humidityHighScenario: {...}
+    });
+}
+....
+Eliding the details, you can see we're defining two scenarios: "interiorOverheatingScenario" and "humidityHighScenario".  If we look inside the first of those definitions, we have this:
+....
+        interiorOverheatingScenario: {
+            tempTest: makeEnabler( "Delay", { "_delay_": 5000, "value": 95.4 }),
+            humidityTest: makeEnabler( "False", {} )
+        }
+....
+Ignoring all the rest of it, we see that a scenario consists of named definitions of test enablers.  That's not so hard! One more detail on that process - what's below is _exactly the same_ as what's above, because leaving a test enabler out of the scenario definition is exactly the same as defining it to always return false:
+....
+        interiorOverheatingScenario: {
+            tempTest: makeEnabler( "Delay", { "_delay_": 5000, "value": 95.4 })
+        }
+....
+That saves a lot of typing, especially if you have a complex set of tests to do.  You'll find that most scenarios you'll define have very few (usually just one!) test enablers that are active.
+
+That leaves us with just one detail left to discuss: the `TestManager`, which is a Java singleton that (wait for it!) manages the testing.  Here's how you might initialize this when your embedded code or daemon starts up:
+....
+    // get test configuration...
+    AConfig.InitResult ir = AConfig.init( TestManager.Config.class, "configuration.js" );
+    if( !ir.valid )
+        throw new IllegalStateException( "Configuration problem: " + ir.message );
+
+    // now use it to set up the TestManager instance...
+    TestManager.Config config = (TestManager.Config) ir.config;
+    TestManager.getInstance().setConfig( config );
+....
+That's pretty self-explanatory, no?
+
+== A bit about test enablers...
+In that pesky real world, tests need to be a bit more flexible than just "on" or "off".  The entire idea of test enablers is to provide that flexibility.  Here are the built-in test enablers, but you can also make your own:
+
+.Table Built-in Test Enablers
+|===
+|Name|Description
+|CountedTestEnabler
+|Is enabled for a configurable number of `isEnabled()` invocations, then disabled -- or vice versa.
+|DelayTestEnabler
+|Is enabled for a configurable time after `init()` is invoked (generally on program startup or enabling of a scenario), then disabled -- or vice versa.
+|FalseTestEnabler
+|Is always disabled.
+|JavaScriptTestEnabler
+|Is enabled or disabled according to a JavaScript script that you supply.  That script may use any properties you configure.  You could, for example, make a test enabler that was enabled only during a full moon.
+|PeriodicTestEnabler
+|Is enabled for a configurable interval after `init()` is invoked (generally on program startup or enabling of a scenario), disabled for a different configurable interval, and then repeats the cycle -- or vice versa.
+|RandomTestEnabler
+|Is enabled for a configurable fraction of the invocations of `isEnabled()`.  For instance, if configured with 0.1, then (on long-term average) 10% of the invocations of `isEnabled()` will return true, while 90% will return false.
+|CompositeTestEnabler
+|We saved the best, but most complicated, test enabler for last.  This test enabler is configured with an ordered list of _other_ test enablers.  When `isEnabled()` on the composite test enabler is called, then `isEnabled()` on each of the configured test enablers is called in sequence, and `isEnabled()` on the composite test enabler will only return true if _all_ the configured test enablers' `isEnabled()` also returned true.
+
+An example will illustrate this.  Suppose you defined a composite test enabler with a delay test enabler, configured to be enabled after 5 seconds, and a counted test enabler (configured to be enabled just once).  The composite test enabler will always report disabled except for the first invocation of `isEnabled()` after 5 seconds of program operation.  The test code would therefore only run once, sometime after 5 seconds post `init()` invocation (generally on program startup or enabling of a scenario).
+|===
+
+
+== Learning more details...
+You can learn about the various kinds of enablers that are included with the framework at https://github.com/SlightlyLoony/Util/tree/master/src/main/Java/com/dilatush/util/test[the GitHub repository].  You can also make your own test enablers, including JavaScript-scripted test enablers see https://github.com/SlightlyLoony/Util/blob/master/src/main/Java/com/dilatush/util/test/JavaScriptTestEnabler.java[JavaScriptTestEnabler].
