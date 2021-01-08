@@ -5,13 +5,15 @@ import com.dilatush.util.AConfig;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 import static com.dilatush.util.Checks.notEmpty;
+import static com.dilatush.util.General.isNotNull;
 import static com.dilatush.util.General.isNull;
 
 /**
- * Implements a singleton class that manages the test framework.
+ * Implements a singleton class that manages the test framework.  The singleton instance <i>must</i> be configured prior to retrieving its instance.
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
@@ -19,11 +21,12 @@ public class TestManager {
 
     final static private Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
 
-    private static TestManager instance;
+    private static TestManager instance;   // the one and only instance of this class
+    private static Config config;          // the one and only configuration for this class
 
-    private final Map<String, ProxyTestEnabler> enablers;
+    private final Map<String, ProxyTestEnabler>         enablers;  // registered test enabler name -> proxy test enabler
+    private final Map<String, Map<String, TestEnabler>> scenarios; // scenario name -> (test enabler name -> test enabler)
 
-    private Map<String, Map<String, TestEnabler>> scenarios;
     private boolean enabled;
     private String scenario;
 
@@ -31,9 +34,63 @@ public class TestManager {
     /**
      * Creates a new instance of this class.
      */
-    private TestManager(){
+    private TestManager( final Config _config ){
 
-        enablers = new HashMap<>();
+        // make a place to keep track of our enablers...
+        enablers = new ConcurrentHashMap<>();
+
+        // stuff away our map of test scenarios...
+        scenarios = _config.scenarios;
+
+        // set up our default state and scenario...
+        enabled   = _config.enabled;
+        scenario  = _config.scenario;
+
+        // if we had no default scenario, make sure it's not null...
+        if( isNull( scenario ) )
+            scenario = "";
+
+        // initialize our registered enablers...
+        init();
+    }
+
+
+    /**
+     * Configure the {@code TestManager}.  This method <i>must</i> be called just once, and it <i>must</i> be called before any invocation of
+     * {@link #getInstance}.  Failure to do either will result in a {@link IllegalStateException} being thrown.
+     *
+     * @param _config The configuration for {@code TestManager}.
+     */
+    public static synchronized void configure( final Config _config ) {
+
+        // if we've already been configured, squawk...
+        if( isNotNull( config ) )
+            throw new IllegalStateException( "TestManager has already been configured" );
+
+        // otherwise we configure it...
+        config = _config;
+    }
+
+
+    /**
+     * Returns the singleton instance of {@code TestManager}.  If {@code TestManager} has not been configured, an {@link IllegalStateException} will
+     * be thrown.  If {@code TestManager} has not already been instantiated, invoking this method will do so.
+     *
+     * @return the singleton instance of {@code TestManager}.
+     */
+    public static synchronized TestManager getInstance() {
+
+        // if we have our instance, just leave with it...
+        if( isNotNull( instance ) )
+            return instance;
+
+        // if we don't have a configuration, make loud noises...
+        if( isNull( config ) )
+            throw new IllegalStateException( "TestManager has not been configured" );
+
+        // make our singleton instance...
+        instance = new TestManager( config );
+        return instance;
     }
 
 
@@ -137,7 +194,7 @@ public class TestManager {
 
 
     /**
-     * Initialize all the test enablers in the current scenario.
+     * Initialize all the registered test enablers.
      */
     public void init() {
         enablers.forEach( (k,v) -> v.init() );
@@ -162,34 +219,6 @@ public class TestManager {
     @SuppressWarnings( "unused" )
     public String getScenario() {
         return scenario;
-    }
-
-
-    /**
-     * Sets the configuration for the singleton instance of the test manager.  This method should be called just once, before any tested code
-     * executes.
-     *
-     * @param _config The configuration for this instance.
-     */
-    public void setConfig( final Config _config ) {
-        enabled   = _config.enabled;
-        scenario  = _config.scenario;
-        scenarios = _config.scenarios;
-        if( isNull( scenario ) )
-            scenario = "";
-        init();
-    }
-
-
-    /**
-     * Returns the singleton instance of this class, instantiating it first if necessary.
-     *
-     * @return the singleton instance of this class.
-     */
-    public static synchronized TestManager getInstance() {
-        if( instance == null )
-            instance = new TestManager();
-        return instance;
     }
 
 

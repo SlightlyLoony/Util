@@ -17,9 +17,8 @@ public class TestTest {
         if( !ir.valid )
             throw new IllegalStateException( "Configuration problem: " + ir.message );
 
-        TestManager.Config config = (TestManager.Config) ir.config;
+        TestManager.configure( (TestManager.Config) ir.config );
         TestManager mgr = TestManager.getInstance();
-        mgr.setConfig( config );
 
         TestEnabler te1 = mgr.register( "te1" );
         TestEnabler te2 = mgr.register( "te2" );
