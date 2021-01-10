@@ -1,4 +1,6 @@
-package com.dilatush.util.cli;
+package com.dilatush.util.cli.argdefs;
+
+import com.dilatush.util.cli.ParameterMode;
 
 /**
  * Provides an abstract base class with a convenience constructor and defaults for optional argument definitions.

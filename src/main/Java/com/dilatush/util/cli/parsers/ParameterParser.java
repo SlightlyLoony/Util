@@ -1,4 +1,6 @@
-package com.dilatush.util.cli;
+package com.dilatush.util.cli.parsers;
+
+import com.dilatush.util.cli.argdefs.ArgDef;
 
 import static com.dilatush.util.General.isNull;
 import static com.dilatush.util.Strings.isEmpty;

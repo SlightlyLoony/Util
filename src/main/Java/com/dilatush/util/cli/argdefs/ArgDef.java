@@ -1,4 +1,9 @@
-package com.dilatush.util.cli;
+package com.dilatush.util.cli.argdefs;
+
+import com.dilatush.util.cli.InteractiveMode;
+import com.dilatush.util.cli.ParameterMode;
+import com.dilatush.util.cli.validators.ParameterValidator;
+import com.dilatush.util.cli.parsers.ParameterParser;
 
 import static com.dilatush.util.Strings.isEmpty;
 import static com.dilatush.util.cli.ParameterMode.MANDATORY;
@@ -16,15 +21,13 @@ public abstract class ArgDef {
     public String             detail;            // an arbitrary length detail of this option
     public int                maxAllowed;        // maximum number of appearances allowed; zero means infinity
 
-    // these fields pertain to the argument's value...
+    // these fields pertain to the argument's parameter...
     public Class<?>           type;              // the type of the option's value
-    public String             defaultValue;      // the value for the parameter if optional argument present and optional parameter not present
-    public String             absentValue;       // the value for the parameter if optional argument not present and parameter not disallowed
     public ParameterMode      parameterMode;     // whether a parameter value is disallowed, optional, or mandatory
+    public String             defaultValue;      // the value for the parameter if optional argument present and optional parameter not present
     public ParameterValidator validator;         // the validator for this argument's parameter
     public ParameterParser    parser;            // the parser for this argument's parameter
-    public InteractiveMode    interactiveMode;   // whether a prompt for this parameter value is disallowed, plain text, or obscured text
-    public String             prompt;            // if interactive is allowed, the prompt for the value
+
 
 
     /**
@@ -32,12 +35,8 @@ public abstract class ArgDef {
      * <ul>
      *     <li>{@link #type} is set to {@link String}.class, consistent with no parser.</li>
      *     <li>{@link #defaultValue} is set to the empty string ("").</li>
-     *     <li>{@link #absentValue} is set to the empty string ("").</li>
      *     <li>{@link #parser} is set to <code>null</code>, indicating no parser will be used.</li>
      *     <li>{@link #validator} is set to <code>null</code>, indicating no validator will be used.</li>
-     *     <li>{@link #interactiveMode} is set to {@link InteractiveMode#DISALLOWED}, indicating that the parameter value will not be captured
-     *     interactively.</li>
-     *     <li>{@link #prompt} is set to {@code true}, consistent with interactive mode being disallowed.</li>
      * </ul>
      * @param _referenceName The reference name for this argument.
      * @param _summary The summary help for this argument.
@@ -56,11 +55,8 @@ public abstract class ArgDef {
 
         type            = String.class;
         defaultValue    = "";
-        absentValue     = "";
         validator       = null;
         parser          = null;
-        interactiveMode = InteractiveMode.DISALLOWED;
-        prompt          = null;
 
         if( isEmpty( _referenceName ) )
             throw new IllegalArgumentException( "No reference name supplied for argument definition" );
@@ -70,40 +66,6 @@ public abstract class ArgDef {
             throw new IllegalArgumentException( "No detail help supplied for argument definition: " + referenceName );
         if( _maxAllowed < 0 )
             throw new IllegalArgumentException( "Invalid maximum allowed value for argument definition '" + referenceName + "': " + _maxAllowed );
-    }
-
-
-    /**
-     * Sets {@link #interactiveMode} to {@link InteractiveMode#PLAIN}, and {@link #prompt} to the given prompt.  This is the ordinary use of the
-     * interactive capability, with the characters the user types echoed on his screen.
-     *
-     * @param _prompt The prompt to use when capturing this argument interactively.
-     */
-    public void setInteractiveMode( final String _prompt ) {
-
-        interactiveMode = InteractiveMode.PLAIN;
-        prompt = _prompt;
-
-        if( isEmpty( _prompt ) )
-            throw new IllegalArgumentException( "No prompt for interactive mode supplied for: " + referenceName );
-    }
-
-
-    /**
-     * Sets {@link #interactiveMode} to {@link InteractiveMode#HIDDEN}, and {@link #prompt} to the given prompt.  This is normally used for passwords
-     * or other secret information.  The characters the user types are echoed as asterisks so that someone looking over his or her shoulder cannot
-     * see what is being typed.
-     *
-     * @param _prompt The prompt to use when capturing this argument interactively.
-     */
-    @SuppressWarnings( "unused" )
-    public void setHiddenInteractiveMode( final String _prompt ) {
-
-        interactiveMode = InteractiveMode.HIDDEN;
-        prompt = _prompt;
-
-        if( isEmpty( _prompt ) )
-            throw new IllegalArgumentException( "No prompt for interactive mode supplied for: " + referenceName );
     }
 
 

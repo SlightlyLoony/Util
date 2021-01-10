@@ -1,7 +1,11 @@
 package com.dilatush.util.cli;
 
 import com.dilatush.util.Files;
-import com.dilatush.util.cli.ParameterParser.Result;
+import com.dilatush.util.cli.argdefs.AOptionalArgDef;
+import com.dilatush.util.cli.argdefs.APositionalArgDef;
+import com.dilatush.util.cli.argdefs.ArgDef;
+import com.dilatush.util.cli.parsers.ParameterParser;
+import com.dilatush.util.cli.validators.ParameterValidator;
 
 import java.io.Console;
 import java.io.File;
@@ -213,8 +217,10 @@ public class CommandLine {
             // if we have a name with no leading hyphen, then we have a reference name - time to go to work...
             if( name.charAt( 0 ) != '-' ) {
 
-                // resolve the absent value for this argument...
-                Object value = resolveParameterValue( def, def.absentValue );
+                //if this is an optional argument and there is an absent value specified, resolve the absent value; null otherwise...
+                Object value = ((def instanceof AOptionalArgDef) && !isEmpty( ((AOptionalArgDef) def).absentValue ))
+                        ? resolveParameterValue( def, ((AOptionalArgDef) def).absentValue )
+                        : null ;
 
                 // stuff it away in our results...
                 _context.argumentResults.put( name, new ParsedArg( def, value ) );
@@ -251,7 +257,7 @@ public class CommandLine {
         if( _argDef.parser != null ) {
 
             // invoke the parser and get the result...
-            Result parseResult = _argDef.parser.parse( parameter );
+            ParameterParser.Result parseResult = _argDef.parser.parse( parameter );
 
             // if the parser had problem...
             if( !parseResult.valid ) {
@@ -271,9 +277,11 @@ public class CommandLine {
         // if we have a parameter validator, use it...
         if( _argDef.validator != null ) {
 
-            if( !_argDef.validator.validate( value ) ) {
+            // get our validation result...
+            ParameterValidator.Result vr = _argDef.validator.validate( value );
+            if( !vr.valid ) {
                 throw new ParseException( "On argument '" + _argDef.referenceName + "' with parameter '" + parameter
-                                          + "', got validation error: " + _argDef.validator.getErrorMessage() );
+                                          + "', got validation error: " + vr.message );
             }
         }
 
@@ -290,27 +298,40 @@ public class CommandLine {
 
             // if we have no parameter, and the parameter is mandatory, see if we can do interactive...
             String parameter = parts.parameter;
-            if( (def.parameterMode == MANDATORY) && isEmpty( parameter ) && (def.interactiveMode != InteractiveMode.DISALLOWED)) {
+            if( (def instanceof AOptionalArgDef) && (def.parameterMode == MANDATORY) && isEmpty( parameter )
+                    && (((AOptionalArgDef) def).interactiveMode != InteractiveMode.DISALLOWED)) {
+
+                // get our optional argument definition...
+                AOptionalArgDef optDef = (AOptionalArgDef) def;
 
                 // then we'll get the parameter from the user interactively...
                 Console console = System.console();
 
-                // if we can't get a Console (for instance, while running inside of an IDE), we skip this...
+                // if we can get a Console, get the input interactively...
                 if( !isNull( console ) ) {
 
                     // prompt and read the answer...
-                    String prompt = isEmpty( def.prompt ) ? "Enter value for '" + parts.name + "': " : def.prompt;
-                    if( def.interactiveMode == InteractiveMode.PLAIN ) {
+                    String prompt = isEmpty( optDef.prompt ) ? "Enter value for '" + parts.name + "': " : optDef.prompt;
+                    if( optDef.interactiveMode == InteractiveMode.PLAIN ) {
                         parameter = console.readLine( prompt );
                     } else {
                         parameter = new String( console.readPassword( prompt ) );
                     }
+                }
+
+                // if we can't get a Console (for example, when running in the IDE), bail out...
+                else {
+                    throw new ParseException( "Cannot get a Console to capture this argument interactively: " + parts.name );
                 }
             }
 
             // if we have a parameter, and our parameter is disallowed, we have a problem...
             if( (def.parameterMode == DISALLOWED) && !isEmpty( parameter ) )
                 throw new ParseException( "Unexpected parameter for argument '" + parts.name + "': " + parameter );
+
+            // if we have a disallowed parameter, then we have a binary optional argument with an implied value of true...
+            if( def.parameterMode == DISALLOWED )
+                parameter = "true";
 
             // if we have no parameter and our parameter is optional, use the default parameter...
             if( (def.parameterMode == OPTIONAL) && isEmpty( parameter ) ) {

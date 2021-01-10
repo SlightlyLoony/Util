@@ -1,4 +1,7 @@
-package com.dilatush.util.cli;
+package com.dilatush.util.cli.argdefs;
+
+import com.dilatush.util.cli.ParameterMode;
+import com.dilatush.util.cli.parsers.BooleanParser;
 
 /**
  * Instances of this class create a mutable definition for a binary optional argument, with no argument parameter allowed and a single occurrence
@@ -13,10 +16,10 @@ public class BinaryOptionalArgDef extends AOptionalArgDef {
 
         super( _referenceName, _summary, _detail, 1, ParameterMode.DISALLOWED, _shortNames, _longNames );
 
-        type            = Integer.class;
-        defaultValue    = "0";
-        absentValue     = "0";
-        parser          = new IntegerParser();
+        type            = Boolean.class;
+        defaultValue    = "false";
+        absentValue     = "false";
+        parser          = new BooleanParser();
         validator       = null;
     }
 }

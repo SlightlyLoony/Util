@@ -1,4 +1,7 @@
-package com.dilatush.util.cli;
+package com.dilatush.util.cli.argdefs;
+
+import com.dilatush.util.cli.InteractiveMode;
+import com.dilatush.util.cli.ParameterMode;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -16,6 +19,9 @@ public abstract class AOptionalArgDef extends ArgDef {
 
     public String[]           shortNames;        // all the short (one character) names for this optional argument
     public String[]           longNames;         // all the long (one or more characters) names for this optional argument
+    public String             absentValue;       // the value for the parameter if optional argument not present and parameter not disallowed
+    public InteractiveMode    interactiveMode;   // whether a prompt for this parameter value is disallowed, plain text, or obscured text
+    public String             prompt;            // if interactive is allowed, the prompt for the value
 
 
     // TODO: default and absent values need to be checked here, so they should be in the constructor
@@ -99,5 +105,39 @@ public abstract class AOptionalArgDef extends ArgDef {
 
         // if we survived validation, return the long names...
         return longNames;
+    }
+
+
+    /**
+     * Sets {@link #interactiveMode} to {@link InteractiveMode#PLAIN}, and {@link #prompt} to the given prompt.  This is the ordinary use of the
+     * interactive capability, with the characters the user types echoed on his screen.
+     *
+     * @param _prompt The prompt to use when capturing this argument interactively.
+     */
+    public void setInteractiveMode( final String _prompt ) {
+
+        interactiveMode = InteractiveMode.PLAIN;
+        prompt = _prompt;
+
+        if( isEmpty( _prompt ) )
+            throw new IllegalArgumentException( "No prompt for interactive mode supplied for: " + referenceName );
+    }
+
+
+    /**
+     * Sets {@link #interactiveMode} to {@link InteractiveMode#HIDDEN}, and {@link #prompt} to the given prompt.  This is normally used for passwords
+     * or other secret information.  The characters the user types are echoed as asterisks so that someone looking over his or her shoulder cannot
+     * see what is being typed.
+     *
+     * @param _prompt The prompt to use when capturing this argument interactively.
+     */
+    @SuppressWarnings( "unused" )
+    public void setHiddenInteractiveMode( final String _prompt ) {
+
+        interactiveMode = InteractiveMode.HIDDEN;
+        prompt = _prompt;
+
+        if( isEmpty( _prompt ) )
+            throw new IllegalArgumentException( "No prompt for interactive mode supplied for: " + referenceName );
     }
 }

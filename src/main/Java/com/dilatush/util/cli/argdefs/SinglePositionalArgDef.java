@@ -1,8 +1,12 @@
-package com.dilatush.util.cli;
+package com.dilatush.util.cli.argdefs;
+
+import com.dilatush.util.cli.ParameterMode;
+import com.dilatush.util.cli.validators.ParameterValidator;
+import com.dilatush.util.cli.parsers.ParameterParser;
 
 /**
  * Instances of this class create a mutable argument definition for a positional argument that is allowed one appearance, has a mandatory parameter,
- * does not allow interactive parameters, has a parameter parser, and has a parameter validator.
+ * has a parameter parser, and has a parameter validator.
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
@@ -17,7 +21,6 @@ public class SinglePositionalArgDef extends APositionalArgDef {
 
         type            = _type;
         defaultValue    = null;
-        absentValue     = null;
         parser          = _parser;
         validator       = _validator;
 

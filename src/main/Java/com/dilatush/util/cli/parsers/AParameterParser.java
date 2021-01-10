@@ -1,6 +1,6 @@
-package com.dilatush.util.cli;
+package com.dilatush.util.cli.parsers;
 
-import com.dilatush.util.cli.ParameterParser.Result;
+import com.dilatush.util.cli.parsers.ParameterParser.Result;
 
 /**
  * Abstract base class for {@link ParameterParser} implementations.
@@ -22,10 +22,10 @@ public abstract class AParameterParser {
 
 
     /**
-     * Returns a {@link Result} instance that indicates an invalid result with the given explanatory message.
+     * Returns a {@link Result} instance that indicates a valid result with the given result object.
      *
-     * @param _value The message explaining why there was a parsing problem.
-     * @return a {@link Result} instance that indicates an invalid result with the given explanatory message
+     * @param _value The result object.
+     * @return a {@link Result} instance that indicates a valid result with the given result object
      */
     protected Result result( final Object _value ) {
         return new Result( true, _value, null );

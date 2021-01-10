@@ -1,4 +1,4 @@
-package com.dilatush.util.cli;
+package com.dilatush.util.cli.parsers;
 
 import com.dilatush.util.AConfig;
 

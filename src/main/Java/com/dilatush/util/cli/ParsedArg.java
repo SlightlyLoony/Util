@@ -1,8 +1,12 @@
 package com.dilatush.util.cli;
 
+import com.dilatush.util.cli.argdefs.ArgDef;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+
+import static com.dilatush.util.General.isNull;
 
 /**
  * Simple immutable POJO that contains the value of a defined argument, optional or positional.  Instances of this class are immutable and
@@ -51,7 +55,7 @@ public class ParsedArg {
     public final ArgDef argumentDefinition;
 
 
-    public ParsedArg( final boolean _present, final Object _value, final List<Object> _values,
+    private ParsedArg( final boolean _present, final Object _value, final List<Object> _values,
                       final int _appearances, final ArgDef _argumentDefinition ) {
         present = _present;
         value = _value;
@@ -61,6 +65,15 @@ public class ParsedArg {
     }
 
 
+    /**
+     * Create a new instance of this class with the given argument definition and value.  If the given value is {@code null} , both the {@link #value}
+     * and  {@link #values} fields will be {@code null}; otherwise the {@link #value} field is set to the given value, and the {@link #values} field
+     * is set to an immutable list with a single element equal to the given value.  The resulting object will have the {@link #present} field equal
+     * to {@code null}, the {@link #appearances} field equal to zero, and the {@link #argumentDefinition} field set to the given argument definition.
+     *
+     * @param _argDef The argument definition for this argument.
+     * @param _value The value (generally the absent value) for this field.
+     */
     public ParsedArg( final ArgDef _argDef, final Object _value ) {
         this( false, _value, initValues( _value), 0, _argDef );
     }
@@ -81,6 +94,8 @@ public class ParsedArg {
 
 
     private static List<Object> initValues( final Object _value ) {
+        if( isNull( _value ) )
+            return null;
         List<Object> list = new ArrayList<>();
         list.add( _value );
         return Collections.unmodifiableList( list );

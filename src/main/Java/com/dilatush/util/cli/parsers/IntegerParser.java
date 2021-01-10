@@ -1,4 +1,4 @@
-package com.dilatush.util.cli;
+package com.dilatush.util.cli.parsers;
 
 import static com.dilatush.util.Strings.isEmpty;
 
