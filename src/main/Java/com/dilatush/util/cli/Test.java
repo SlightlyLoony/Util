@@ -3,6 +3,7 @@ package com.dilatush.util.cli;
 import com.dilatush.util.AConfig;
 import com.dilatush.util.cli.argdefs.*;
 import com.dilatush.util.cli.parsers.AConfigParser;
+import com.dilatush.util.cli.parsers.EnumerationParser;
 import com.dilatush.util.cli.parsers.PathParser;
 import com.dilatush.util.cli.validators.CreatableFileValidator;
 import com.dilatush.util.cli.validators.ReadableFileValidator;
@@ -69,15 +70,29 @@ public class Test {
                 "all"
         );
 
+        ArgDef modeDef = new SingleOptionalArgDef(
+                "mode",
+                "Sets the mode for something, but we don't know what.",
+                "This is a wordier description of this mode setting, which is derived from an enumeration, but we know not why.",
+                "m", "mode",
+                ParameterMode.class,
+                null,
+                "DISALLOWED",
+                new EnumerationParser( ParameterMode.class, false ),
+                null
+        );
+
         CommandLine commandLine = new CommandLine( CL_SUMMARY, CL_DETAIL );
         commandLine.add( fileDef         );
         commandLine.add( allWordsDef     );
         commandLine.add( wordsDef        );
         commandLine.add( outFileDef      );
         commandLine.add( configDef       );
+        commandLine.add( modeDef         );
 
         String[] args = new String[] {
                 "--all",
+                "-m=mandatory",
                 "src/main/Java/com/dilatush/util/cli/CommandLine.java",
                 "src/main/Java/com/dilatush/util/cli/InteractiveMode.java",
                 "src/main/Java/com/dilatush/util/cli/ParameterMode.java",
@@ -87,7 +102,6 @@ public class Test {
                 "src/main/Java/com/dilatush/util/cli/package-info.java",
                 "-w=hamburger",
                 "--config=TestCLI2.js",
-                "-c",
                 "--word=sandwich",
                 "test.txt"
         };

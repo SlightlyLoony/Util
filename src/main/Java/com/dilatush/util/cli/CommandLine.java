@@ -15,9 +15,6 @@ import static com.dilatush.util.General.isNull;
 import static com.dilatush.util.Strings.isEmpty;
 import static com.dilatush.util.cli.ParameterMode.*;
 
-// TODO: optional arguments that can have parameters AND can appear multiple times must have a list value, which could be zero length...
-// TODO: positional arguments that can appear more than once must have a list value, which could be zero length...
-// TODO: must check def.maxCount during parsing...
 
 /**
  * Instances of this class define the arguments expected on the command line, and parse an actual command line.

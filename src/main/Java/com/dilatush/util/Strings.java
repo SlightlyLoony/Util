@@ -1,5 +1,7 @@
 package com.dilatush.util;
 
+import java.util.Arrays;
+
 import static com.dilatush.util.General.isNull;
 
 /**
@@ -69,5 +71,23 @@ public class Strings {
                 return true;
         }
         return false;
+    }
+
+
+    /**
+     * Returns a string of the given length, consisting of the given character in every position.
+     *
+     * @param _char The character to repeat in the return string.
+     * @param _length The length of the return string.
+     * @return the string of the given length, consisting of the given character in every position
+     */
+    public static String getStringOfChar( final char _char, final int _length ) {
+
+        if( _length < 0 )
+            throw new IllegalArgumentException( "Length may not be negative" );
+
+        char[] chars = new char[_length];
+        Arrays.fill( chars, _char );
+        return new String( chars );
     }
 }
