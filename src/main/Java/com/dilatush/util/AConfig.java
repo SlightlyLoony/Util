@@ -12,8 +12,8 @@ import java.util.logging.Logger;
 import static com.dilatush.util.General.isNull;
 
 /**
- * Abstract base class for scriptable and validatable configuration POJOs.  Subclasses should store configuration information in public, mutable
- * fields, and implement the {@link #validate} method.  Subclasses intended to be initialized via JavaScript <i>must</i> have no-args constructors
+ * Abstract base class for scriptable and verifiable configuration POJOs.  Subclasses should store configuration information in public, mutable
+ * fields, and implement the {@link #verify} method.  Subclasses intended to be initialized via JavaScript <i>must</i> have no-args constructors
  * (even if just the default constructor).  Create and initialize instances of those subclasses with the {@link #init(Class,String)} method of this
  * class.
  *
@@ -29,24 +29,27 @@ public abstract class AConfig {
      * this method is an instance of {@link InitResult}. If the new {@link AConfig} instance was created, initialized, and validated without any
      * problems, it is returned in {@link InitResult#config} and {@link InitResult#valid} is {@code true}.  If there was any problem then
      * {@link InitResult#valid} is {@code false} and {@link InitResult#message} contains an explanatory message.</p>
-     * <p>The JavaScript script should assume that the variable "config" is the freshly created configuration object, an initialize its fields.</p>
+     * <p>The JavaScript script should assume that the variable "config" is the freshly created configuration object, and initialize its fields.</p>
      *
-     * @param _class The class of the configuration object to be created.
-     * @param _initFunctionPath The path of the JavaScript file that will initialize the newly created configuration object.  This script <i>must</i>
-     *                          define a function {@code init( config )}, where {@code config} is the instantiated, but uninitialized {@link AConfig}
-     *                          subclass, and the function does the initialization.
+     * @param _class The class of the configuration object to be created.  This class <i>must</i> be a subclass of {@link AConfig}, and it <i>must</i>
+     *               have a no-args constructor.
+     * @param _initializationScriptPath The path of the JavaScript file that will initialize the newly created configuration object.  This script
+     *                                  <i>must</i> define a function {@code init( config )}, where {@code config} is the instantiated, but
+     *                                  uninitialized {@link AConfig} subclass, and the function does the initialization.
      * @return the {@link InitResult} instance with the results of this operation
      */
-    public static InitResult init( final Class< ? extends AConfig> _class, final String _initFunctionPath ) {
+    public static InitResult init( final Class< ? extends AConfig> _class, final String _initializationScriptPath ) {
 
         try {
-            if( isNull( _class, _initFunctionPath ) )
-                return new InitResult( false, null, "Arguments to AConfig.init() may not be null" );
+
+            // if we didn't get both parameters, raise a ruckus...
+            if( isNull( _class, _initializationScriptPath ) )
+                return error(  "Arguments to AConfig.init() may not be null", null );
 
             // read our JavaScript initialization script...
-            String script = Files.readToString( new File( _initFunctionPath ) );
+            String script = Files.readToString( new File( _initializationScriptPath ) );
             if( isNull( script ) )
-                return error( "Could not read JavaScript configuration initialization file: " + _initFunctionPath, null  );
+                return error( "Could not read JavaScript configuration initialization file: " + _initializationScriptPath, null  );
 
             // create an instance of the specified class...
             AConfig config = _class.getConstructor().newInstance();
@@ -54,8 +57,7 @@ public abstract class AConfig {
             // get a Nashorn engine and invoke our function...
             ScriptEngine engine = new ScriptEngineManager().getEngineByName( "nashorn" );
             engine.eval( script );
-            Invocable invocable = (Invocable) engine;
-            invocable.invokeFunction( "init", config );
+            ((Invocable) engine).invokeFunction( "init", config );
 
             // now validate the initialized configuration and return the appropriate result...
             ValidationResult vr = config.isValid();
@@ -69,6 +71,13 @@ public abstract class AConfig {
     }
 
 
+    /**
+     * Log an appropriate error and return an {@link InitResult} instance indicating invalid, with an explanatory message.
+     *
+     * @param _message The explanatory message to log, and return in an {@link InitResult} instance.
+     * @param _e The exception associated with the problem, if there is one (may be {@code null}).
+     * @return an {@link InitResult} indicating invalid, with an explanatory message
+     */
     private static InitResult error( final String _message, final Exception _e ) {
         if( isNull( _e ) )
             LOGGER.log( Level.SEVERE, _message );
@@ -78,13 +87,34 @@ public abstract class AConfig {
     }
 
 
+    /**
+     * Simple POJO containing the results of an {@link #init(Class, String)} invocation.
+     */
     public static class InitResult {
 
+        /**
+         * Set to {@code true} if the configuration was successfully instantiated, initialized, and validated; {@code false} otherwise.
+         */
         public final boolean valid;
+
+        /**
+         * If {@link #valid} is {@code true}, set to the instantiated, initialized, and validated configuration; {@code null} otherwise.
+         */
         public final AConfig config;
+
+        /**
+         * If {@link #valid} is {@code false}, set to a message explaining why the operation failed; {@code null} otherwise.
+         */
         public final String  message;
 
 
+        /**
+         * Creates a new instance of this class with the given values.
+         *
+         * @param _valid  {@code True} if the configuration was successfully instantiated, initialized, and validated; {@code false} otherwise.
+         * @param _config The instantiated, initialized, and validated configuration if {@code _valid} is {@code true}.
+         * @param _message The message explaining any problem if {@code _valid} is false.
+         */
         public InitResult( final boolean _valid, final AConfig _config, final String _message ) {
             valid = _valid;
             config = _config;
@@ -94,10 +124,11 @@ public abstract class AConfig {
 
 
     /**
-     * Returns <code>true</code> if the state of this object is valid, and <code>false</code> otherwise, after logging a detail of the invalid
-     * state.
+     * Returns an instance of {@link ValidationResult} with {@link ValidationResult#valid} set to {@code true} if this configuration object is valid
+     * (as indicated by the result of {@link #verify(List)}).  If {@link ValidationResult#valid} is {@code false}, then there were one or more
+     * problems found during validation, and {@link ValidationResult#message} is set to a message explaining what those problems were.
      *
-     * @return <code>true</code> if the state of this object is valid.
+     * @return an instance of {@link ValidationResult}
      */
     public final synchronized ValidationResult isValid() {
 
@@ -116,12 +147,28 @@ public abstract class AConfig {
     }
 
 
+    /**
+     * Simple POJO containing the result of an {@link #isValid()} invocation.
+     */
     public static class ValidationResult {
 
+        /**
+         * Set to {@code true} if the validation succeeded.
+         */
         public final boolean valid;
+
+        /**
+         * Set to a message explaining what problems were encountered during validation, if {@link #valid} is {@code false}.
+         */
         public final String  message;
 
 
+        /**
+         * Create a new instance of this class with the given values.
+         *
+         * @param _valid {@code True} if the validation succeeded.
+         * @param _message A message explaining what problems were encountered during validation, if {@code _valid} is {@code false}.
+         */
         public ValidationResult( final boolean _valid, final String _message ) {
             valid   = _valid;
             message = _message;
@@ -131,7 +178,8 @@ public abstract class AConfig {
 
     /**
      * Implemented by subclasses to verify that their fields are valid.  When possible, this should be accomplished by a series of invocations
-     * of {@link #validate(Validator, List, String)}, one or more times for each field in the configuration.
+     * of {@link #validate(Validator, List, String)}, one or more times for each field in the configuration.  If a field in the configuration is
+     * itself an instance of an {@link AConfig} subclass, then its {@code verify(List)} method should be called.
      *
      * @param _messages The list of messages explaining configuration errors.
      */
@@ -159,6 +207,12 @@ public abstract class AConfig {
      */
     @FunctionalInterface
     protected interface Validator {
+
+        /**
+         * Return {@code true} if the validation test succeeded; {@code false} if the test failed.
+         *
+         * @return {@code True} if the validation test succeeded
+         */
         boolean verify();
     }
 }

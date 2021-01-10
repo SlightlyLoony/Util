@@ -13,4 +13,7 @@ public abstract class APositionalArgDef extends ArgDef {
 
         super( _referenceName, _summary, _detail, _maxAllowed, _parameterMode );
     }
+
+    // TODO: default value needs to be checked, so they need to be in the constructor; only required if parameter mode is OPTIONAL
+    // TODO: absent value should be null
 }

@@ -1,6 +1,7 @@
 package com.dilatush.util.cli;
 
 import static com.dilatush.util.Strings.isEmpty;
+import static com.dilatush.util.cli.ParameterMode.MANDATORY;
 
 /**
  * Abstract base class for all argument definitions.
@@ -103,5 +104,16 @@ public abstract class ArgDef {
 
         if( isEmpty( _prompt ) )
             throw new IllegalArgumentException( "No prompt for interactive mode supplied for: " + referenceName );
+    }
+
+
+    /**
+     * Returns {@code true} if this definition is for a positional argument that must appear exactly once on the command line.
+     *
+     * @return {@code true} if this definition is for a positional argument that must appear exactly once on the command line
+     */
+    public boolean isUnitary() {
+
+        return (this instanceof APositionalArgDef) && (maxAllowed == 1) && (parameterMode == MANDATORY);
     }
 }

@@ -2,7 +2,6 @@ package com.dilatush.util.cli;
 
 import com.dilatush.util.Files;
 import com.dilatush.util.cli.ParameterParser.Result;
-import com.sun.istack.internal.NotNull;
 
 import java.io.Console;
 import java.io.File;
@@ -10,6 +9,11 @@ import java.util.*;
 
 import static com.dilatush.util.General.isNull;
 import static com.dilatush.util.Strings.isEmpty;
+import static com.dilatush.util.cli.ParameterMode.*;
+
+// TODO: optional arguments that can have parameters AND can appear multiple times must have a list value, which could be zero length...
+// TODO: positional arguments that can appear more than once must have a list value, which could be zero length...
+// TODO: must check def.maxCount during parsing...
 
 /**
  * Instances of this class define the arguments expected on the command line, and parse an actual command line.
@@ -18,18 +22,16 @@ import static com.dilatush.util.Strings.isEmpty;
  */
 public class CommandLine {
 
-    private final Map<String, ParsedArg> argumentResults;   // maps argument reference names to argument results
-    private final Map<Character, ArgDef> shortDefs;         // maps short argument names to optional argument definitions
-    private final Map<String, ArgDef>    longDefs;          // maps long argument names to optional argument definitions
-    private final Map<String, ArgDef>    refDefs;           // maps reference names to argument definitions
-    private final List<ArgDef>           positionalDefs;    // ordered list of positional arguments (left-to-right)
+    /*
+     * Maps names to argument definitions.  Three kinds of names are mapped: reference (unmodified), short optional (leading "-"), and
+     * long optional (leading "--").
+     */
+    private final Map<String, ArgDef>    nameDefs;
+
+    private final List<ArgDef>           optionalDefs;      // ordered list of optional argument definitions (in order of their addition)
+    private final List<ArgDef>           positionalDefs;    // ordered list of positional argument definitions (left-to-right)
     private final String                 summary;           // a summary detail of this command
     private final String                 detail;            // a detailed detail of this command
-    private final List<ArgDef>           optionalDefs;      // ordered list of optional arguments (in order of their addition)
-
-    private int     variableAppearanceCount;  // the count of positional parameters with variable number of appearances...
-    private boolean nextArgPositional;        // true if the next argument processed is positional even if it starts with a "-"
-    private boolean allArgsPositional;        // true if all all arguments process are positional even if they start with a "-"
 
 
     /**
@@ -40,10 +42,8 @@ public class CommandLine {
      */
     public CommandLine( final String _summary, final String _detail ) {
 
-        argumentResults = new HashMap<>();
-        shortDefs       = new HashMap<>();
-        longDefs        = new HashMap<>();
-        refDefs         = new HashMap<>();
+        nameDefs = new HashMap<>();
+
         positionalDefs  = new ArrayList<>();
         optionalDefs    = new ArrayList<>();
 
@@ -60,33 +60,345 @@ public class CommandLine {
      */
     public ParsedCommandLine parse( final String[] _args ) {
 
-        // a little setup...
-        variableAppearanceCount = 0;
-        nextArgPositional = false;
-        allArgsPositional = false;
-
+        // create a context for this parse operation...
+        ParseContext context = new ParseContext();
 
         try {
 
-            // first we process all the arguments we find on the command line...
-            processPresentArguments( _args );
+            // normalize and do simple checking on our arguments...
+            normalize( context, _args );
 
-            // then we process all those arguments that we didn't find on the command line...
-            processAbsentArguments();
+            // initialize all defined argument results to absent values...
+            initialize( context );
+
+            // parse all the optional arguments...
+            parseOptionalArguments( context );
+
+            // parse all the positional arguments...
+            parsePositionalArguments( context );
         }
 
         // this exception is thrown when some error occurs during parsing
-        catch( CLDefException _e ) {
+        catch( ParseException _e ) {
 
             // return an invalid result, with an explanatory message (bummer!)...
             return new ParsedCommandLine( _e.getMessage() );
         }
 
         // count our appearances...
-        Counts counts = countAppearances();
+        Counts counts = countAppearances( context );
 
         // return a valid result - hooray!
-        return new ParsedCommandLine( argumentResults, counts.optionals, counts.positionals );
+        return new ParsedCommandLine( context.argumentResults, counts.optionals, counts.positionals );
+    }
+
+
+    private static class ParseContext {
+
+        private final List<ArgParts>         optionalArgs    = new ArrayList<>();
+        private final List<String>           positionalArgs  = new ArrayList<>();
+        private final Map<String, ParsedArg> argumentResults = new HashMap<>();    // maps argument reference names to argument results
+    }
+
+    private static class ArgParts {
+
+        private final String name;
+        private final String parameter;
+
+
+        public ArgParts( final String _name, final String _parameter ) {
+            name = _name;
+            parameter = _parameter;
+        }
+    }
+
+
+    /**
+     * Process the given array of command line arguments into (separate) lists of optional and positional arguments.  This handles the special
+     * case of the "--" argument, splits optional arguments into name and parameter, and verifies that all optional argument names exist.
+     *
+     * @param _context The parse context for this operation to use.
+     * @param _args The command line arguments.
+     */
+    private void normalize( final ParseContext _context, final String[] _args ) throws ParseException {
+
+        // some setup...
+        boolean allPositional = false;
+
+        // iterate over all our arguments...
+        for( String arg : _args ) {
+
+            // do we have a positional argument?
+            if( allPositional || (arg.charAt( 0 ) != '-') ) {
+
+                // nothing to check; just add it to our positional arguments list...
+                _context.positionalArgs.add( arg );
+            }
+
+            // do we have our special case ("--")?
+            else if( "--".equals( arg ) ) {
+
+                // switch to all positional mode...
+                allPositional = true;
+            }
+
+            // do we have a long optional name?
+            else if( arg.startsWith( "--" ) ) {
+
+                // get the parts of the argument...
+                String[] parts = arg.substring( 2 ).split( "=" );
+
+                // if the length is more than two, we have a problem...
+                if( parts.length > 2 )
+                    throw new ParseException( "Invalid argument has multiple parameters: " + arg );
+
+                // make sure we know about this name...
+                String name = "--" + parts[0];
+                if( !nameDefs.containsKey( name ) )
+                    throw new ParseException( "Unknown optional argument name: " + name );
+
+                // add it to our optional arguments...
+                _context.optionalArgs.add( new ArgParts( name, (parts.length == 2) ? parts[1] : null ) );
+            }
+
+            // well, if it's none of the above, then it must be one or more short optional names...
+            else {
+
+                // handle the special case of "-" by itself...
+                if( "-".equals( arg ) )
+                    arg = "--";
+
+                // get the parts of the argument...
+                String[] parts = arg.substring( 1 ).split( "=" );
+
+                // if the length is more than two, we have a problem...
+                if( parts.length > 2 )
+                    throw new ParseException( "Invalid argument has multiple parameters: " + arg );
+
+                // iterate over all the names we captured, validating them and adding them to our optional arguments...
+                for( int i = 0; i < parts[0].length(); i++ ) {
+
+                    // get the name we're working on now...
+                    String rawName = parts[0].substring( i, i + 1 );
+
+                    // make sure we know about this name...
+                    String name = "-" + rawName;
+                    if( !nameDefs.containsKey( name ) )
+                        throw new ParseException( "Unknown optional argument name: " + name );
+
+                    // add it to our optional arguments...
+                    String parameter = (i + 1 >= parts[0].length()) ? ((parts.length == 2) ? parts[1] : null ) : null;
+                    _context.optionalArgs.add( new ArgParts( name, parameter ) );
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Initialize all the parse results.  This creates a {@link ParsedArg} instance for each defined argument with the correct values for the case
+     * where the argument does not appear on the command line.
+     *
+     * @param _context The parse context for this operation to use.
+     * @throws ParseException on the occurrence of any parsing problem
+     */
+    private void initialize( final ParseContext _context ) throws ParseException {
+
+        // iterate over all the names...
+        for( Map.Entry<String, ArgDef> entry : nameDefs.entrySet() ) {
+
+            String name = entry.getKey();
+            ArgDef def = entry.getValue();
+
+            // if we have a name with no leading hyphen, then we have a reference name - time to go to work...
+            if( name.charAt( 0 ) != '-' ) {
+
+                // resolve the absent value for this argument...
+                Object value = resolveParameterValue( def, def.absentValue );
+
+                // stuff it away in our results...
+                _context.argumentResults.put( name, new ParsedArg( def, value ) );
+            }
+        }
+    }
+
+
+    /**
+     * Resolves the given parameter string into the appropriate value type for the argument with the given definition.  If the parameter is a
+     * reference to an environment variable, the value of that variable becomes the parameter value.  If the parameter is a reference to a file, the
+     * contents of that file become the parameter value.  If the definition includes a parameter parser, it will be used to convert the given string
+     * to correct type for the argument; otherwise the given parameter string is used directly.  If the definition includes a parameter validator, it
+     * will be used to validate the parameter.  The resulting value is checked to make sure it is the type defined for the argument.
+     *
+     * @param _argDef The argument definition for the argument parameter being resolved.
+     * @param _parameter The string parameter to resolve.
+     * @return the value resulting from resolving the parameter
+     * @throws ParseException on the occurrence of any parsing problem
+     */
+    private Object resolveParameterValue( final ArgDef _argDef, final String _parameter ) throws ParseException {
+
+        // default our parameter and make sure we actually got one...
+        String parameter = _parameter;
+        Object value = parameter;
+        if( isEmpty( parameter ) )
+            throw new ParseException( "Missing parameter for argument: " + _argDef.referenceName );
+
+        // handle translations from environment variables or files...
+        parameter = environmentVariableCheck( parameter );
+        parameter = filePathCheck( parameter );
+
+        // if we have a parameter parser, use it...
+        if( _argDef.parser != null ) {
+
+            // invoke the parser and get the result...
+            Result parseResult = _argDef.parser.parse( parameter );
+
+            // if the parser had problem...
+            if( !parseResult.valid ) {
+                throw new ParseException( "Parameter parsing problem for '" + _argDef.referenceName + "': " + parseResult.message );
+            }
+
+            // ok, we've got our new parsed value...
+            value = parseResult.value;
+
+            // if the result was of the wrong type, we have a worser problem...
+            if( !_argDef.type.isAssignableFrom( value.getClass() ) ) {
+                throw new ParseException( "For argument '" + _argDef.referenceName + "', expected parser result of type "
+                        + _argDef.type.getSimpleName() + ", got: " + value.getClass().getSimpleName() );
+            }
+        }
+
+        // if we have a parameter validator, use it...
+        if( _argDef.validator != null ) {
+
+            if( !_argDef.validator.validate( value ) ) {
+                throw new ParseException( "On argument '" + _argDef.referenceName + "' with parameter '" + parameter
+                                          + "', got validation error: " + _argDef.validator.getErrorMessage() );
+            }
+        }
+
+        return value;
+    }
+
+
+    private void parseOptionalArguments( final ParseContext _context ) throws ParseException {
+
+        // iterate over all our optional arguments...
+        for( ArgParts parts : _context.optionalArgs ) {
+
+            ArgDef def = nameDefs.get( parts.name );   // we've already verified that this argument exists, so no need to check...
+
+            // if we have no parameter, and the parameter is mandatory, see if we can do interactive...
+            String parameter = parts.parameter;
+            if( (def.parameterMode == MANDATORY) && isEmpty( parameter ) && (def.interactiveMode != InteractiveMode.DISALLOWED)) {
+
+                // then we'll get the parameter from the user interactively...
+                Console console = System.console();
+
+                // if we can't get a Console (for instance, while running inside of an IDE), we skip this...
+                if( !isNull( console ) ) {
+
+                    // prompt and read the answer...
+                    String prompt = isEmpty( def.prompt ) ? "Enter value for '" + parts.name + "': " : def.prompt;
+                    if( def.interactiveMode == InteractiveMode.PLAIN ) {
+                        parameter = console.readLine( prompt );
+                    } else {
+                        parameter = new String( console.readPassword( prompt ) );
+                    }
+                }
+            }
+
+            // if we have a parameter, and our parameter is disallowed, we have a problem...
+            if( (def.parameterMode == DISALLOWED) && !isEmpty( parameter ) )
+                throw new ParseException( "Unexpected parameter for argument '" + parts.name + "': " + parameter );
+
+            // if we have no parameter and our parameter is optional, use the default parameter...
+            if( (def.parameterMode == OPTIONAL) && isEmpty( parameter ) ) {
+                parameter = def.defaultValue;
+            }
+
+            // resolve our value...
+            Object value = resolveParameterValue( def, parameter );
+
+            // get our updated parse results for this argument...
+            ParsedArg result = _context.argumentResults.get( def.referenceName ).add( value );
+
+            // if we've gotten too many of this particular argument, barf...
+            if( (def.maxAllowed > 0) && (result.appearances > def.maxAllowed) )
+                throw new ParseException( "Maximum count (" + def.maxAllowed + ") of '" + parts.name + "' exceeded." );
+
+            // stuff it away...
+            _context.argumentResults.put( def.referenceName, result );
+        }
+    }
+
+
+    private void parsePositionalArguments( final ParseContext _context ) throws ParseException {
+
+        // our positional argument index (pay attention: this is important!)...
+        int pai = 0;
+
+        // iterate over all our positional argument definitions...
+        for( int pdi = 0; pdi < positionalDefs.size(); pdi++ ) {
+
+            // get the positional argument definition we're working on...
+            ArgDef def = positionalDefs.get( pdi );
+
+            // if we have a non-unitary argument here, then we have to figure out how many positional arguments to consume here...
+            int eatArgs = 1;  // assume we're going to consume 1, the usual case...
+            if( !def.isUnitary() ) {
+
+                // good thing that computers are good at math...
+                int argsRemaining = (_context.positionalArgs.size() - pai);
+                int unitaryDefinitionsRemaining = (positionalDefs.size() - (pdi + 1));
+                eatArgs =  argsRemaining - unitaryDefinitionsRemaining;
+
+                // if we have no arguments to eat and this is a mandatory argument, or if we have negative arguments to eat, oopsie...
+                if( ((eatArgs == 0) && (def.parameterMode == MANDATORY)) || (eatArgs < 0) )
+                    throw new ParseException( "Mandatory positional argument missing" );
+            }
+
+            // if eatArgs == 0, then we have an optional parameter with no argument, so use the absent value...
+            if( eatArgs == 0 ) {
+                resolveAndAddValue( _context, def, def.defaultValue );
+            }
+
+            // otherwise, eat the appropriate number of arguments...
+            else {
+                for( ; eatArgs > 0; eatArgs-- ) {
+
+                    // if we've run out of arguments, let the user know about their sad, sad situation...
+                    if( pai >= _context.positionalArgs.size() )
+                        throw new ParseException( "Missing one or more mandatory positional arguments" );
+
+                    // add the next value...
+                    resolveAndAddValue( _context, def, _context.positionalArgs.get( pai ) );
+
+                    // bump our argument index...
+                    pai++;
+                }
+            }
+        }
+
+        // if we have arguments left over, then the user gave us too many...
+        if( pai < _context.positionalArgs.size() )
+            throw new ParseException( "Too many positional arguments" );
+    }
+
+
+    private void resolveAndAddValue( final ParseContext _context, final ArgDef _def, final String _parameter ) throws ParseException {
+        // resolve our value...
+        Object value = resolveParameterValue( _def, _parameter );
+
+        // get our updated parse results for this argument...
+        ParsedArg result = _context.argumentResults.get( _def.referenceName ).add( value );
+
+        // if we've gotten too many of this particular argument, barf...
+        if( (_def.maxAllowed > 0) && (result.appearances > _def.maxAllowed) )
+            throw new ParseException( "Maximum count (" + _def.maxAllowed + ") of '" + _def.referenceName + "' exceeded." );
+
+        // stuff it away...
+        _context.argumentResults.put( _def.referenceName, result );
     }
 
 
@@ -95,23 +407,16 @@ public class CommandLine {
      *
      * @return a tuple with the optional and positional appearance counts
      */
-    private Counts countAppearances() {
+    private Counts countAppearances( final ParseContext _context ) {
 
         Counts counts = new Counts();
 
-        // iterate over all the defined arguments...
-        for( Map.Entry<String,ArgDef> entry : refDefs.entrySet() ) {
-
-            // if it's a positional argument, sum its appearances into the positionals count...
-            if( entry.getValue() instanceof APositionalArgDef ) {
-                counts.positionals += argumentResults.get( entry.getKey() ).appearances;
-            }
-
-            // if it's an optional argument, sum its appearances into the optionals count...
-            if( entry.getValue() instanceof AOptionalArgDef ) {
-                counts.optionals += argumentResults.get( entry.getKey() ).appearances;
-            }
-        }
+        _context.argumentResults.forEach( (name, result) -> {
+            if( result.argumentDefinition instanceof AOptionalArgDef )
+                counts.optionals += result.appearances;
+            if( result.argumentDefinition instanceof APositionalArgDef )
+                counts.positionals += result.appearances;
+        } );
 
         return counts;
     }
@@ -123,246 +428,6 @@ public class CommandLine {
     private static class Counts {
         private int optionals;
         private int positionals;
-    }
-
-
-    /**
-     * Checks for missing arguments.
-     *
-     * @throws CLDefException if a required parameter is missing.
-     */
-    private void processAbsentArguments() throws CLDefException {
-
-        // iterate over all our defined arguments...
-        for( String refName : refDefs.keySet() ) {
-
-            // get the definition and parse results for this argument...
-            ArgDef    argDef    = refDefs.get( refName );
-            ParsedArg argParsed = argumentResults.get( refName );
-
-            // if we have no parsed argument, then we don't have this argument on the command line...
-            if( isNull( argParsed ) ) {
-
-                // update the missing argument, mainly to get the absent value...
-                updateArgument( argDef.referenceName, argDef, null, false );
-            }
-        }
-    }
-
-
-    private void processPresentArguments( final String[] _args ) throws CLDefException {
-        // a little setup...
-        RefInt ppi = new RefInt();  // our positional parameter index...
-        RefInt i = new RefInt();    // our command line argument index...
-
-        // walk through our arguments and handle them...
-        for( i.value = 0; i.value < _args.length; i.value++ ) {
-
-            String arg = _args[i.value];
-
-            if     ( nextArgPositional || allArgsPositional ) handleSpecials( arg, ppi );
-            else if( "-".equals( arg ) )                      handleSingleHyphen ();
-            else if( "--".equals( arg ) )                     handleDoubleHyphen ();
-            else if( arg.startsWith( "--" ) )                 handleLongOptional ( _args, i, arg );
-            else if( arg.startsWith( "-" ) )                  handleShortOptional( arg           );
-            else                                              handlePositional   ( arg, ppi      );
-        }
-    }
-
-
-    private void handleSpecials( final String _arg, final RefInt _ppi ) throws CLDefException {
-        nextArgPositional = false;
-        handlePositional( _arg, _ppi );
-    }
-
-
-    private void handleSingleHyphen() {
-        nextArgPositional = true;
-    }
-
-
-    private void handleDoubleHyphen() {
-        allArgsPositional = true;
-    }
-
-
-    private void handlePositional( final String _arg, RefInt _ppi ) throws CLDefException {
-
-        // get our definition, and bump the index...
-        ArgDef def = positionalDefs.get( _ppi.value++ );
-
-        updateArgument( def.referenceName, def, _arg, true );
-    }
-
-
-    private void handleShortOptional( final String _arg ) throws CLDefException {
-        // get the one-or-more short names and the zero-or-one parameters...
-        String[] parts = _arg.substring( 1 ).split( "=" );
-
-        // if the length is more than two, we have a problem...
-        if( parts.length > 2 )
-            throw new CLDefException( "Invalid argument has multiple parameters: " + _arg );
-
-        // walk through the short commands we've got...
-        for( int a = 0; a < parts[0].length(); a++ ) {
-
-            // get the short name and the parameter (if there is one)...
-            char shortName = parts[0].charAt( a );
-            String parameter = ((a + 1 >= parts[0].length()) && (parts.length == 2)) ? parts[1] : null;
-
-            // if we don't have an argument definition for this short name, we've got a problem...
-            if( !shortDefs.containsKey( shortName ) )
-                throw new CLDefException( "Unknown optional argument: -" + shortName );
-
-            // get our argument's definition...
-            ArgDef def = shortDefs.get( shortName );
-
-            updateArgument( "-" + shortName, def, parameter, true );
-        }
-    }
-
-
-    private void handleLongOptional( final String[] _args, RefInt i, final String _arg ) throws CLDefException {
-
-        // get the long name...
-        String longName = _arg.substring( 2 );
-
-        // if we don't have an argument definition for this argument name, we have a problem...
-        if( !longDefs.containsKey( longName ) )
-            throw new CLDefException( "Unknown optional argument: --" + longName );
-
-        // get our argument definition...
-        ArgDef def = longDefs.get( longName );
-
-        // if a parameter is not disallowed, see if we have one...
-        String parameter = null;
-        if( def.parameterMode != ParameterMode.DISALLOWED ) {
-            if( i.value + 1 < _args.length ) {
-                String trial = _args[i.value + 1];
-                if( !trial.startsWith( "-" ) ) {
-                    i.value++;
-                    parameter = trial;
-                }
-            }
-        }
-
-        updateArgument( "--" + longName, def, parameter, true );
-    }
-
-
-    private void updateArgument( final String _nameUsed, final ArgDef _def, final String _parameter, final boolean _present ) throws CLDefException {
-
-        // update the number of appearances...
-        ParsedArg results =  argumentResults.get( _def.referenceName );
-        int     appearances = (isNull( results ) ? 0 : results.appearances) + (_present ? 1 : 0);
-
-        // if we have too many appearances, barf...
-        if( appearances > _def.maxAllowed )
-            throw new CLDefException( "Parameter '" + _nameUsed + "' appeared at least " + appearances
-                    + " times, but the maximum allowed is " + _def.maxAllowed + "." );
-
-        // figure out what value to use for the parameter...
-        String parameter = _parameter;
-
-        // if the argument is present, the parameter is mandatory, the parameter is missing, and we have interactive enabled...
-        if( _present && (_def.parameterMode == ParameterMode.MANDATORY) && isEmpty( _parameter )
-                && (_def.interactiveMode != InteractiveMode.DISALLOWED)) {
-
-            // then we'll get the parameter from the user interactively...
-            Console console = System.console();
-
-            // if we can't get a Console (for instance, while running inside of an IDE), we skip this...
-            if( !isNull( console ) ) {
-
-                // prompt and read the answer...
-                String prompt = isEmpty( _def.prompt ) ? "Enter value for " + _nameUsed + ": " : _def.prompt;
-                if( _def.interactiveMode == InteractiveMode.PLAIN ) {
-                    parameter = console.readLine( prompt );
-                } else {
-                    parameter = new String( console.readPassword( prompt ) );
-                }
-            }
-        }
-
-        // handle optional arguments...
-        if( _def instanceof AOptionalArgDef ) {
-
-            // handle the case of the argument being present...
-            if( _present ) {
-
-                // handle the parameter modes...
-                switch( _def.parameterMode ) {
-                    case DISALLOWED:
-                        if( !isEmpty( parameter) )
-                            throw new CLDefException( "Unexpected parameter '" + parameter + "' for argument '" + _nameUsed + "'." );
-                        parameter = "" + appearances;
-                        break;
-                    case OPTIONAL:
-                        parameter = isEmpty( parameter ) ? _def.defaultValue : parameter;
-                        break;
-                    case MANDATORY:
-                        if( isEmpty( parameter ) )
-                            throw new CLDefException( "Missing mandatory parameter for argument '" + _nameUsed + "'." );
-                        break;
-                }
-            }
-
-            // or not present...
-            else {
-                parameter = _def.absentValue;
-            }
-        }
-
-        // handle positional arguments...
-        if( _def instanceof APositionalArgDef ) {
-
-            // handle case of argument not present...
-            if( !_present ) {
-                if( _def.parameterMode == ParameterMode.MANDATORY )
-                    throw new CLDefException( "Missing mandatory positional argument: " + _nameUsed );
-                parameter = environmentVariableCheck( _def.defaultValue );
-            }
-        }
-
-        // expand the environmental variable, if one was specified...
-        parameter = environmentVariableCheck( parameter );
-
-        // expand the file contents, if one was specified...
-        parameter = filePathCheck( parameter );
-
-        // get our argument's current results and update them...
-        Object  value = null;
-        if( parameter != null ) {
-            if( _def.parser != null ) {
-
-                // invoke the parser and get the result...
-                Result rp = _def.parser.parse( parameter );
-
-                // if the parser had problem...
-                if( !rp.valid ) {
-                    throw new CLDefException( rp.message );
-                }
-
-                value = rp.value;
-
-                // if the result was of the wrong type, we have a worser problem...
-                if( !_def.type.isAssignableFrom( value.getClass() ) ) {
-                    throw new CLDefException( "Expected parser result of type " + _def.type.getSimpleName()
-                            + ", got: " + value.getClass().getSimpleName() );
-                }
-            }
-            else {
-                value = parameter;
-            }
-            if( _def.validator != null ) {
-                if( !_def.validator.validate( value ) ) {
-                    throw new CLDefException( _def.validator.getErrorMessage() );
-                }
-            }
-        }
-
-        // now update the argument's results...
-        argumentResults.put( _def.referenceName, new ParsedArg( _present, value, appearances ) );
     }
 
 
@@ -399,7 +464,7 @@ public class CommandLine {
      *
      * @param _argDef The {@link ArgDef} to add to this command line definition.
      */
-    public void add( @NotNull final ArgDef _argDef ) {
+    public void add( final ArgDef _argDef ) {
 
         // fail fast if some dummy called us with a null...
         Objects.requireNonNull( _argDef, "Cannot add a null argument definition");
@@ -408,11 +473,8 @@ public class CommandLine {
         if( !((_argDef instanceof AOptionalArgDef) || (_argDef instanceof APositionalArgDef)) )
             throw new IllegalArgumentException( "_argDef must be instance of either AOptionalArgDef or APositionalArgDef" );
 
-        // some things apply to any argument type...
         // stuff it away by reference name, checking for duplication...
-        if( refDefs.containsKey( _argDef.referenceName ) )
-            throw new IllegalArgumentException( "Duplicate argument reference name: " + _argDef.referenceName );
-        refDefs.put( _argDef.referenceName, _argDef );
+        addName( _argDef.referenceName, _argDef );
 
         // if we've got a positional argument...
         if( _argDef instanceof APositionalArgDef ) {
@@ -422,41 +484,47 @@ public class CommandLine {
                 throw new IllegalArgumentException( "Tried to add a positional argument with a DISALLOWED parameter mode" );
 
             // if this argument can appear a variable number of times, make sure we're not trying to do more than one of these...
-            if( _argDef.maxAllowed != 1 ) {
-                variableAppearanceCount++;
-                if( variableAppearanceCount >= 2 )
-                    throw new IllegalArgumentException( "Tried to add a second positional arguments with variable number of appearances: "
-                            + _argDef.referenceName );
+            if( !_argDef.isUnitary() ) {
+
+                // scan existing positional argument definitions to see if any of them are non-unitary...
+                for( ArgDef def : positionalDefs ) {
+                    if( !def.isUnitary() )
+                        throw new IllegalArgumentException( "Tried to add a second positional arguments with variable number of appearances: '"
+                                + _argDef.referenceName + "' and '" + def.referenceName + "'" );
+                }
             }
             positionalDefs.add( _argDef );
         }
 
         // if we've got an optional argument...
-        if( _argDef instanceof AOptionalArgDef ) {
+        else /* MUST be an instance of AOptionalArgDef */ {
 
             AOptionalArgDef optionalArgDef = (AOptionalArgDef) _argDef;
 
             // stuff it away by short name(s), checking for duplicates...
-            if( optionalArgDef.shortNames != null ) {
-                for( char shortName : optionalArgDef.shortNames ) {
-                    if( shortDefs.containsKey( shortName ) )
-                        throw new IllegalArgumentException( "Duplicate short optional argument name: '" + shortName + "' in " + _argDef.referenceName );
-                    shortDefs.put( shortName, _argDef );
-                }
+            for( String shortName : optionalArgDef.shortNames ) {
+                addName( "-" + shortName, optionalArgDef );
             }
 
             // stuff it away by long names, checking for duplicates...
-            if( optionalArgDef.longNames != null ) {
-                for( String longName : optionalArgDef.longNames ) {
-                    if( longDefs.containsKey( longName ) )
-                        throw new IllegalArgumentException( "Duplicate long optional argument name: '" + longName + "' in " + _argDef.referenceName );
-                    longDefs.put( longName, _argDef );
-                }
+            for( String longName : optionalArgDef.longNames ) {
+                addName( "--" + longName, _argDef );
             }
 
             // stuff it away in order, for help production...
             optionalDefs.add( optionalArgDef );
         }
+    }
+
+
+    private void addName( final String _name, final ArgDef _def ) {
+        if( nameDefs.containsKey( _name ) ) {
+            if( _def.referenceName.equals( _name ) )
+                throw new IllegalArgumentException( "Duplicate argument reference name: " + _name );
+            throw new IllegalArgumentException( "Duplicate optional argument name '" + _name
+                                                + "' in argument with reference name: " + _def.referenceName );
+        }
+        nameDefs.put( _name, _def );
     }
 
 
@@ -470,15 +538,10 @@ public class CommandLine {
     }
 
 
-    private static class CLDefException extends Exception {
+    private static class ParseException extends Exception {
 
-        private CLDefException( final String _msg ) {
+        private ParseException( final String _msg ) {
             super( _msg );
         }
-    }
-
-
-    private static class RefInt {
-        private int value;
     }
 }

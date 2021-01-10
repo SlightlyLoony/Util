@@ -11,7 +11,7 @@ import static com.dilatush.util.Strings.isEmpty;
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
-public class JSConfigParser extends AParameterParser implements ParameterParser {
+public class AConfigParser extends AParameterParser implements ParameterParser {
 
     private final Class<? extends AConfig> type;
 
@@ -21,7 +21,7 @@ public class JSConfigParser extends AParameterParser implements ParameterParser 
      *
      * @param _type The type of the configuration object to create, initialize, and validate.
      */
-    public JSConfigParser( final Class<? extends AConfig> _type ) {
+    public AConfigParser( final Class<? extends AConfig> _type ) {
 
         if( isNull( _type ) )
             throw new IllegalArgumentException( "Need a configuration object type" );
