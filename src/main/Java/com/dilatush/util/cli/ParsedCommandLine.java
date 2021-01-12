@@ -123,6 +123,20 @@ public class ParsedCommandLine {
     }
 
 
+    public Object getValues( final String _argumentName ) {
+
+        // try to get the parsed argument results...
+        ParsedArg parsedArg = get( _argumentName );
+
+        // if we failed to get the parsed argument results, return null...
+        if( parsedArg == null )
+            return null;
+
+        // otherwise, return the actual value...
+        return parsedArg.values;
+    }
+
+
     /**
      * Returns the number of times that the argument with the given reference name was present on the parsed command line.  Note that zero
      * will be returned if the result of parsing the command line was not valid, if the given reference name is empty or

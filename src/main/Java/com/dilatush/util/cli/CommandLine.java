@@ -1,8 +1,9 @@
 package com.dilatush.util.cli;
 
 import com.dilatush.util.Files;
-import com.dilatush.util.cli.argdefs.AOptionalArgDef;
-import com.dilatush.util.cli.argdefs.APositionalArgDef;
+import com.dilatush.util.TextFormatter;
+import com.dilatush.util.cli.argdefs.OptArgDef;
+import com.dilatush.util.cli.argdefs.PosArgDef;
 import com.dilatush.util.cli.argdefs.ArgDef;
 import com.dilatush.util.cli.parsers.ParameterParser;
 import com.dilatush.util.cli.validators.ParameterValidator;
@@ -27,29 +28,54 @@ public class CommandLine {
      * Maps names to argument definitions.  Three kinds of names are mapped: reference (unmodified), short optional (leading "-"), and
      * long optional (leading "--").
      */
-    private final Map<String, ArgDef>    nameDefs;
+    private final Map<String, ArgDef> nameDefs;
 
-    private final List<ArgDef>           optionalDefs;      // ordered list of optional argument definitions (in order of their addition)
-    private final List<ArgDef>           positionalDefs;    // ordered list of positional argument definitions (left-to-right)
-    private final String                 summary;           // a summary detail of this command
-    private final String                 detail;            // a detailed detail of this command
+    private final List<OptArgDef>     optionalDefs;      // ordered list of optional argument definitions (in order of their addition)
+    private final List<PosArgDef>     positionalDefs;    // ordered list of positional argument definitions (left-to-right)
+    private final String              name;              // the name of the app this command line is for
+    private final String              summary;           // a summary detail of this command
+    private final String              detail;            // a detailed detail of this command
+    private final int                 width;             // width of help text
+    private final int                 indent;            // indent width for help text
 
 
     /**
-     * Creates a new instance of this class, with the given summary and detail help.
+     * Creates a new instance of this class with the given values.
      *
-     * @param _summary The (shorter) summary help for this command.
-     * @param _detail The (longer) detailed help for this command.
+     * @param _name The name of this command.  This is used only for generating help text.
+     * @param _summary The (shorter) summary description for this command.  Conventionally this is no more than a line or two, but there is no
+     *                 actual restriction.
+     * @param _detail The (longer) detailed help for this command.  This should be a very complete description, ideally similar to what one would
+     *                find in a man page.
+     * @param _width The width of generated help text, in characters.  Conventionally this is 80 characters, and probably shouldn't be set much
+     *               differently than this.  Values less than 20 or greater than 150 will cause an {@link IllegalArgumentException} to be thrown.
+     * @param _indent The left indent (tab size) of generated help text.  Conventionally this is 4, but there is no requirement other than it must
+     *                be larger than 1.  Values less than 2 will cause an {@link IllegalArgumentException} to be thrown.
      */
-    public CommandLine( final String _summary, final String _detail ) {
+    public CommandLine( final String _name, final String _summary, final String _detail, final int _width, final int _indent ) {
 
         nameDefs = new HashMap<>();
 
         positionalDefs  = new ArrayList<>();
         optionalDefs    = new ArrayList<>();
 
-        summary         = _summary;
-        detail          = _detail;
+        name    = _name;
+        summary = _summary;
+        detail  = _detail;
+        width   = _width;
+        indent  = _indent;
+
+        // some validation...
+        if( isEmpty( _name ) )
+            throw new IllegalArgumentException( "No command name supplied." );
+        if( isEmpty( _summary ) )
+            throw new IllegalArgumentException( "No summary description supplied." );
+        if( isEmpty( _detail ) )
+            throw new IllegalArgumentException( "No detailed description supplied." );
+        if( (width < 20) || (width > 150) )
+            throw new IllegalArgumentException( "Width is outside acceptable range of [20..150]." );
+        if( indent < 2 )
+            throw new IllegalArgumentException( "Indent is less than 2." );
     }
 
 
@@ -215,8 +241,8 @@ public class CommandLine {
             if( name.charAt( 0 ) != '-' ) {
 
                 //if this is an optional argument and there is an absent value specified, resolve the absent value; null otherwise...
-                Object value = ((def instanceof AOptionalArgDef) && !isEmpty( ((AOptionalArgDef) def).absentValue ))
-                        ? resolveParameterValue( def, ((AOptionalArgDef) def).absentValue )
+                Object value = ((def instanceof OptArgDef) && !isEmpty( ((OptArgDef) def).absentValue ))
+                        ? resolveParameterValue( def, ((OptArgDef) def).absentValue )
                         : null ;
 
                 // stuff it away in our results...
@@ -295,11 +321,11 @@ public class CommandLine {
 
             // if we have no parameter, and the parameter is mandatory, see if we can do interactive...
             String parameter = parts.parameter;
-            if( (def instanceof AOptionalArgDef) && (def.parameterMode == MANDATORY) && isEmpty( parameter )
-                    && (((AOptionalArgDef) def).interactiveMode != InteractiveMode.DISALLOWED)) {
+            if( (def instanceof OptArgDef) && (def.parameterMode == MANDATORY) && isEmpty( parameter )
+                    && (((OptArgDef) def).interactiveMode != InteractiveMode.DISALLOWED)) {
 
                 // get our optional argument definition...
-                AOptionalArgDef optDef = (AOptionalArgDef) def;
+                OptArgDef optDef = (OptArgDef) def;
 
                 // then we'll get the parameter from the user interactively...
                 Console console = System.console();
@@ -360,11 +386,11 @@ public class CommandLine {
         for( int pdi = 0; pdi < positionalDefs.size(); pdi++ ) {
 
             // get the positional argument definition we're working on...
-            ArgDef def = positionalDefs.get( pdi );
+            PosArgDef def = positionalDefs.get( pdi );
 
             // if we have a non-unitary argument here, then we have to figure out how many positional arguments to consume here...
             int eatArgs = 1;  // assume we're going to consume 1, the usual case...
-            if( !def.isUnitary() ) {
+            if( def.isNotUnitary() ) {
 
                 // good thing that computers are good at math...
                 int argsRemaining = (_context.positionalArgs.size() - pai);
@@ -430,9 +456,9 @@ public class CommandLine {
         Counts counts = new Counts();
 
         _context.argumentResults.forEach( (name, result) -> {
-            if( result.argumentDefinition instanceof AOptionalArgDef )
+            if( result.argumentDefinition instanceof OptArgDef )
                 counts.optionals += result.appearances;
-            if( result.argumentDefinition instanceof APositionalArgDef )
+            if( result.argumentDefinition instanceof PosArgDef )
                 counts.positionals += result.appearances;
         } );
 
@@ -488,36 +514,38 @@ public class CommandLine {
         Objects.requireNonNull( _argDef, "Cannot add a null argument definition");
 
         // make sure we've got either a positional or an optional argument definition - nothing else will do...
-        if( !((_argDef instanceof AOptionalArgDef) || (_argDef instanceof APositionalArgDef)) )
-            throw new IllegalArgumentException( "_argDef must be instance of either AOptionalArgDef or APositionalArgDef" );
+        if( !((_argDef instanceof OptArgDef) || (_argDef instanceof PosArgDef)) )
+            throw new IllegalArgumentException( "_argDef must be instance of either OptArgDef or PosArgDef" );
 
         // stuff it away by reference name, checking for duplication...
         addName( _argDef.referenceName, _argDef );
 
         // if we've got a positional argument...
-        if( _argDef instanceof APositionalArgDef ) {
+        if( _argDef instanceof PosArgDef ) {
+
+            PosArgDef posDef = (PosArgDef) _argDef;
 
             // if we have a parameter mode of DISALLOWED, that's not allowed...
-            if( _argDef.parameterMode == ParameterMode.DISALLOWED )
+            if( posDef.parameterMode == ParameterMode.DISALLOWED )
                 throw new IllegalArgumentException( "Tried to add a positional argument with a DISALLOWED parameter mode" );
 
             // if this argument can appear a variable number of times, make sure we're not trying to do more than one of these...
-            if( !_argDef.isUnitary() ) {
+            if( posDef.isNotUnitary() ) {
 
                 // scan existing positional argument definitions to see if any of them are non-unitary...
-                for( ArgDef def : positionalDefs ) {
-                    if( !def.isUnitary() )
+                for( PosArgDef def : positionalDefs ) {
+                    if( def.isNotUnitary() )
                         throw new IllegalArgumentException( "Tried to add a second positional arguments with variable number of appearances: '"
-                                + _argDef.referenceName + "' and '" + def.referenceName + "'" );
+                                + posDef.referenceName + "' and '" + def.referenceName + "'" );
                 }
             }
-            positionalDefs.add( _argDef );
+            positionalDefs.add( posDef );
         }
 
         // if we've got an optional argument...
-        else /* MUST be an instance of AOptionalArgDef */ {
+        else /* MUST be an instance of OptArgDef */ {
 
-            AOptionalArgDef optionalArgDef = (AOptionalArgDef) _argDef;
+            OptArgDef optionalArgDef = (OptArgDef) _argDef;
 
             // stuff it away by short name(s), checking for duplicates...
             for( String shortName : optionalArgDef.shortNames ) {
@@ -543,6 +571,49 @@ public class CommandLine {
                                                 + "' in argument with reference name: " + _def.referenceName );
         }
         nameDefs.put( _name, _def );
+    }
+
+
+    /**
+     * Returns the length of the longest option name line.
+     *
+     * @return the length of the longest option name line
+     */
+    public int getOptionalCommandWidth() {
+
+        int length = 0;
+        for( OptArgDef def : optionalDefs ) {
+            int argLength = def.getNames().length();
+            if( argLength > length )
+                length = argLength;
+        }
+        return length;
+    }
+
+
+    /**
+     * Returns a summary help string, suitable for display on a console.
+     *
+     * @return a summary help string
+     */
+    public String getSummaryHelp() {
+
+        TextFormatter tf = new TextFormatter( width, 0, 0, 2 );
+        tf.add( name + ": " + summary );
+
+        // handle the optional arguments...
+        int nameWidth = getOptionalCommandWidth() + 1;
+        for( OptArgDef def : optionalDefs ) {
+
+            tf.add( def.getNames() + " //TAB" + nameWidth + "//" + def.summary );
+        }
+
+        return tf.getFormattedText();
+    }
+
+
+    public String getName() {
+        return name;
     }
 
 
