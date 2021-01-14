@@ -12,8 +12,22 @@ import static com.dilatush.util.Strings.isEmpty;
  */
 public class OptArgNames {
 
+
+    /**
+     * The short names (e.g., the "c" for "-c") that may be used on the command line for this argument.
+     */
     public final String[] shortNames;
+
+
+    /**
+     * The long names (e.g., the "count" for "--count") that may be used on the command line for this argument.
+     */
     public final String[] longNames;
+
+
+    /**
+     * The explanatory message when there is a problem parsing the names in the constructor; {@code null} if there was no problem.
+     */
     public final String message;
 
 
@@ -25,7 +39,8 @@ public class OptArgNames {
      * define at least one name (either short or long).  On successful parsing, the explanatory {@link #message} will be {@code null}, and the
      * {@link #shortNames} and {@link #longNames} values will be set.  If there is any problem with parsing the pattern, an explanatory
      * {@link #message} will be set, and both {@link #shortNames} and {@link #longNames} will be {@code null}.  To include a backslash, comma or a
-     * semicolon in a name, precede it with a backslash.  Argument names may not contain either a hyphen ({@code -} or an equals sign ({@code =}.
+     * semicolon in a name, precede it with a backslash.  Argument names may not contain an equals sign ({@code =}.  Long argument names may not
+     * contain a hyphen ("-").  A short option name of hyphen <i>is</i> permitted, as a special case of an optional argument that is just a hyphen.
      *
      * @param _pattern the pattern to parse
      */
@@ -86,8 +101,8 @@ public class OptArgNames {
                 }
 
                 // check for = or -, which are disallowed...
-                else if( (c == '-') || (c == '=') )
-                    throw new NamesException( "Name patterns may not include a hypen ('-') or equals sign ('='): " + _pattern );
+                else if( ((c == '-') && !inShorts) || (c == '=') )
+                    throw new NamesException( "Name patterns may not include a hyphen ('-') or equals sign ('='): " + _pattern );
 
                 // accumulate the character into the name...
                 else
@@ -149,13 +164,5 @@ public class OptArgNames {
         public NamesException( final String message ) {
             super( message );
         }
-    }
-
-
-    public static void main( final String[] _args ) {
-
-        OptArgNames oan = new OptArgNames( "a,b\\;c" );
-
-        oan.hashCode();
     }
 }

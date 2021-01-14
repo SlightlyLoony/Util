@@ -1,6 +1,7 @@
 package com.dilatush.util.cli;
 
 import com.dilatush.util.cli.argdefs.ArgDef;
+import com.dilatush.util.cli.argdefs.OptArgDef;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -9,8 +10,7 @@ import java.util.List;
 import static com.dilatush.util.General.isNull;
 
 /**
- * Simple immutable POJO that contains the value of a defined argument, optional or positional.  Instances of this class are immutable and
- * threadsafe.
+ * Simple POJO that contains the value of a defined argument, optional or positional.  Instances of this class are immutable and threadsafe.
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
@@ -25,22 +25,26 @@ public class ParsedArg {
 
 
     /**
-     * The value of this argument.  There are several possibilities for its value:
+     * The parameter value of this argument.  There are several possibilities for its value:
      * <ul>
-     *     <li>For arguments that <i>cannot</i> have a parameter (boolean arguments), the value is a {@link Boolean} instance, <code>true</code> if
-     *         the argument appeared at least once, and <code>false</code> otherwise.</li>
-     *     <li>For arguments that can only have a single <i>optional</i> parameter, if the parameter is not supplied the value is <code>null</code>;
-     *         otherwise the value is an object of the class defined in the argument's {@link ArgDef}.</li>
-     *     <li>For arguments that can only have a single <i>mandatory</i> parameter, the value is an object of the class defined in the argument's
-     *         {@link ArgDef}.</li>
-     *     <li>For arguments that can have multiple parameters, whether <i>optional</i> or <i>mandatory</i>, the value is a {@link List} instance
-     *         with zero or more elements, each element is an object of the class defined in the argument's {@link ArgDef}.  Note that this means
-     *         that if this argument did not appear on the command line parsed, then the value will be an empty list, not a <code>nul.</code>.</li>
+     *     <li>For optional arguments that <i>cannot</i> have a parameter (boolean arguments), the value is a {@link Boolean} instance,
+     *     <code>true</code> if the argument appeared at least once, and <code>false</code> otherwise.</li>
+     *     <li>For arguments with an <i>optional</i> parameter, if the parameter is not supplied on the command line, then the value is determined by
+     *     the {@link ArgDef#defaultValue} and {@link ArgDef#parser}in its definition.</li>
+     *     <li>For optional arguments that don't appear on the command line, the value is determined by the {@link OptArgDef#absentValue} and
+     *     {@link ArgDef#parser}in its definition.</li>
+     *     <li>For arguments with parameters that appear multiple times on the command line, the value is determined by the last argument parsed
+     *     (the rightmost argument).</li>
      * </ul>
      */
     public final Object value;
 
 
+    /**
+     * The list of the parameter values of this argument.  This field is relevant mainly for arguments (optional or positional) that may appear
+     * multiple times on the command line.  For those arguments, their parameter values are in this list, in left-to-right order of their appearance
+     * on the command line.
+     */
     public final List<Object> values;
 
 
@@ -52,9 +56,21 @@ public class ParsedArg {
     public final int appearances;
 
 
+    /**
+     * The argument definition for this argument.
+     */
     public final ArgDef argumentDefinition;
 
 
+    /**
+     * Creates a new instance of this class with the given values.
+     *
+     * @param _present The present value.
+     * @param _value The value value.
+     * @param _values The values value.
+     * @param _appearances The appearances value.
+     * @param _argumentDefinition The argument definition.
+     */
     private ParsedArg( final boolean _present, final Object _value, final List<Object> _values,
                       final int _appearances, final ArgDef _argumentDefinition ) {
         present = _present;
@@ -79,6 +95,14 @@ public class ParsedArg {
     }
 
 
+    /**
+     * Returns a new instance of {@link ParsedArg} indicating the argument was present on the command line with the given parameter value.  If this
+     * instance was not present (thus indicating that this invocation is marking the first presence), then the existing value is replaced with the
+     * new one.  Otherwise, the new value is added to the existing values.  In all cases, the number of appearances is incremented.
+     *
+     * @param _value The parameter value to add.
+     * @return the new instance of {@link ParsedArg}
+     */
     public ParsedArg add( final Object _value ) {
 
         // if this is the first appearance, we need to replace the value...
@@ -93,9 +117,17 @@ public class ParsedArg {
     }
 
 
+    /**
+     * Returns a newly instantiated immutable list containing one element with the given value.
+     *
+     * @param _value The value to put in the list.
+     * @return the newly instantiated immutable list
+     */
     private static List<Object> initValues( final Object _value ) {
+
         if( isNull( _value ) )
             return null;
+
         List<Object> list = new ArrayList<>();
         list.add( _value );
         return Collections.unmodifiableList( list );

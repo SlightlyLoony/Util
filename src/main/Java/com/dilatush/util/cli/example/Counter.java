@@ -17,10 +17,6 @@ import java.util.regex.PatternSyntaxException;
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
-// TODO: test with hyphen "-"...
-// TODO: test with environment variable...
-// TODO: test with file for parameter...
-// TODO: test with interactive parameter...
 public class Counter {
 
     public static void main( final String[] _args ) {
@@ -56,7 +52,7 @@ public class Counter {
 
         // if we're counting regexes, then we better have a regex!
         if( (countType == CountType.REGEX) && (regex == null) ) {
-            out( "Counting regex hits, but no regex was supplied!" );
+            out( "Counting regex hits, but no regex was supplied.  Specify a -r or --regex option." );
             System.exit( 1 );
         }
 
@@ -181,7 +177,7 @@ public class Counter {
     }
 
 
-    public static void out( final String _msg ) {
+    private static void out( final String _msg ) {
         System.out.println( _msg );
     }
 }

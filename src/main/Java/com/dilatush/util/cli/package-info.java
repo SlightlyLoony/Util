@@ -1,6 +1,5 @@
 /**
- * The classes in this package ease the chore of creating command line applications with flexible processing of command line arguments, including
- * options, positional parameters, and interactive parameters.
+ * The classes in this package (greatly) ease the chore of creating command line applications with flexible processing of command line arguments.
  *
  * @author Tom Dilatush  tom@dilatush.com
  */

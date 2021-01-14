@@ -13,7 +13,7 @@ public class WritableFileValidator extends AValidatorParser implements Parameter
 
     /**
      * Returns a {@link Result} instance with {@link Result#valid} set to {@code true} if the given parameter value (after parsing and translation)
-     * is valid for the associated argument.  Otherwise a {@link Result} instance with {@link Result#valid} set to {@code false} and
+     * is a file that can be written to.  Otherwise a {@link Result} instance with {@link Result#valid} set to {@code false} and
      * {@link Result#message} set to an explanatory message is returned.
      *
      * @param _parameterValue The value to validate.

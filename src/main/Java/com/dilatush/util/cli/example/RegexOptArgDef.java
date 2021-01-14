@@ -6,6 +6,8 @@ import com.dilatush.util.cli.argdefs.OptArgDef;
 import com.dilatush.util.cli.argdefs.OptArgNames;
 
 /**
+ * Example of a class that builds an optional argument definition.
+ *
  * @author Tom Dilatush  tom@dilatush.com
  */
 public class RegexOptArgDef extends OptArgDef {

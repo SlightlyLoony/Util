@@ -6,6 +6,8 @@ import com.dilatush.util.cli.argdefs.OptArgDef;
 import com.dilatush.util.cli.argdefs.OptArgNames;
 
 /**
+ * Example of a class that builds an optional argument definition.
+ *
  * @author Tom Dilatush  tom@dilatush.com
  */
 public class WordsOptArgDef extends OptArgDef {
@@ -19,7 +21,7 @@ public class WordsOptArgDef extends OptArgDef {
                 "word",
                 "Specify a word to be counted (multiple allowed).",
                 "Specify a word to be counted.  Any number of words may be specified in separate arguments.  By default the word matching is " +
-                        "insensitive to case, but that can be changed (see -s, --case_sensitive).  If no words are specified, then ALL words " +
+                        "insensitive to case, but that can be changed (see -s, --case_sensitive).  If this argument is not given, then ALL words " +
                         "will be counted.  Only complete matches will be counted; for instance 'oh' will not match 'ohio'.  The specified word " +
                         "must be bounded by whitespace or standard punctuation (period, comma, colon, etc.) to be counted.",
                 0,

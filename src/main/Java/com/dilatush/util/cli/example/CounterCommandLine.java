@@ -16,6 +16,8 @@ public class CounterCommandLine {
 
     /**
      * Returns a new, initialized instance of {@link CommandLine} for the counter program.
+     *
+     * @return a new, initialized instance of {@link CommandLine}
      */
     public static CommandLine get( ) {
 
@@ -26,7 +28,7 @@ public class CounterCommandLine {
         OptArgDef wordsDef = new OptArgDef(
                 "countType",
                 "The type of counting to do: WORDS, LINES, LOC, or REGEX.",
-                "The type of counting to do.  The parameter defaults to LINES if the argument is absent or if the parameter is missing, and must" +
+                "The type of counting to do.  The parameter defaults to LINES if the argument is absent or if the parameter is missing, and must " +
                         "be one of WORDS, LINES, LOC or REGEX.  The parameter is not case sensitive",
                 1,
                 "type",
@@ -54,15 +56,15 @@ public class CounterCommandLine {
         // creating a multiple readable file positional argument definition using a PosArgDef helper method...
         PosArgDef filesDef = PosArgDef.getMultiReadableFilePosArgDef(
                 "files",
-                "Files to count things in.",
-                "Files to count things in.",
+                "Text files to count things in.",
+                "Text files to count things in.",
                 "files"
         );
         commandLine.add( filesDef );
 
         // creating some optional argument definitions in (almost) one-liners...
         commandLine.add( new WordsOptArgDef() );
-        commandLine.add( OptArgDef.getSingleBinaryOptArgDef( "case", "Make tests case-sensitive.", "Make tests case-sensitive.",
+        commandLine.add( OptArgDef.getSingleBinaryOptArgDef( "case", "Makes word counting case-sensitive.", "Make word counting case-sensitive.",
                 new OptArgNames( "s;case_sensitive" ) ) );
         commandLine.add( new RegexOptArgDef() );
         commandLine.add( OptArgDef.getSingleBinaryOptArgDef( "detail", "Get detailed help.", "Get detailed help on the counter command",

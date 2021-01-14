@@ -2,14 +2,13 @@ package com.dilatush.util.cli;
 
 import com.dilatush.util.Files;
 import com.dilatush.util.TextFormatter;
+import com.dilatush.util.cli.argdefs.ArgDef;
 import com.dilatush.util.cli.argdefs.OptArgDef;
 import com.dilatush.util.cli.argdefs.PosArgDef;
-import com.dilatush.util.cli.argdefs.ArgDef;
 import com.dilatush.util.cli.parsers.ParameterParser;
 import com.dilatush.util.cli.validators.ParameterValidator;
 
-import java.io.Console;
-import java.io.File;
+import java.io.*;
 import java.util.*;
 
 import static com.dilatush.util.General.isNull;
@@ -133,7 +132,7 @@ public class CommandLine {
         private final String parameter;
 
 
-        public ArgParts( final String _name, final String _parameter ) {
+        private ArgParts( final String _name, final String _parameter ) {
             name = _name;
             parameter = _parameter;
         }
@@ -268,13 +267,15 @@ public class CommandLine {
 
         // default our parameter and make sure we actually got one...
         String parameter = _parameter;
-        Object value = parameter;
         if( isEmpty( parameter ) )
-            throw new ParseException( "Missing parameter for argument: " + _argDef.referenceName );
+            throw new ParseException( "Missing parameter: " + _argDef.helpName );
 
         // handle translations from environment variables or files...
         parameter = environmentVariableCheck( parameter );
         parameter = filePathCheck( parameter );
+
+        // our parameter IS our value, unless we have a parser...
+        Object value = parameter;
 
         // if we have a parameter parser, use it...
         if( _argDef.parser != null ) {
@@ -284,7 +285,7 @@ public class CommandLine {
 
             // if the parser had problem...
             if( !parseResult.valid ) {
-                throw new ParseException( "Parameter parsing problem for '" + _argDef.referenceName + "': " + parseResult.message );
+                throw new ParseException( "Parameter parsing problem for '" + _argDef.helpName + "': " + parseResult.message );
             }
 
             // ok, we've got our new parsed value...
@@ -292,7 +293,7 @@ public class CommandLine {
 
             // if the result was of the wrong type, we have a worser problem...
             if( !_argDef.type.isAssignableFrom( value.getClass() ) ) {
-                throw new ParseException( "For argument '" + _argDef.referenceName + "', expected parser result of type "
+                throw new ParseException( "For parameter '" + _argDef.helpName + "', expected parser result of type "
                         + _argDef.type.getSimpleName() + ", got: " + value.getClass().getSimpleName() );
             }
         }
@@ -303,7 +304,7 @@ public class CommandLine {
             // get our validation result...
             ParameterValidator.Result vr = _argDef.validator.validate( value );
             if( !vr.valid ) {
-                throw new ParseException( "On argument '" + _argDef.referenceName + "' with parameter '" + parameter
+                throw new ParseException( "On parameter '" + _argDef.helpName + "' with value '" + parameter
                                           + "', got validation error: " + vr.message );
             }
         }
@@ -312,6 +313,12 @@ public class CommandLine {
     }
 
 
+    /**
+     * Parse the optional arguments present on the command line (and now in the context).
+     *
+     * @param _context The parse context.
+     * @throws ParseException if the given command line cannot be parsed; the message explains why
+     */
     private void parseOptionalArguments( final ParseContext _context ) throws ParseException {
 
         // iterate over all our optional arguments...
@@ -342,9 +349,18 @@ public class CommandLine {
                     }
                 }
 
-                // if we can't get a Console (for example, when running in the IDE), bail out...
+                // if we can't get a Console (for example, when running in the IDE), we'll do it the hard way, plain only...
                 else {
-                    throw new ParseException( "Cannot get a Console to capture this argument interactively: " + parts.name );
+                    try {
+                        System.out.println( "WARNING: cannot get a console in this environment, so using stdout and stdin." );
+                        System.out.println( "Passwords will be visible as you type them." );
+                        System.out.print( optDef.prompt );
+                        BufferedReader br =  new BufferedReader( new InputStreamReader( System.in  ) );
+                        parameter = br.readLine();
+                    }
+                    catch( IOException _e ) {
+                        throw new ParseException( "Could not read from console: " + _e.getMessage() );
+                    }
                 }
             }
 
@@ -377,6 +393,12 @@ public class CommandLine {
     }
 
 
+    /**
+     * Parse the positional arguments present on the command line (and now in the context).
+     *
+     * @param _context The parse context.
+     * @throws ParseException if the given command line cannot be parsed; the message explains why
+     */
     private void parsePositionalArguments( final ParseContext _context ) throws ParseException {
 
         // our positional argument index (pay attention: this is important!)...
@@ -430,7 +452,16 @@ public class CommandLine {
     }
 
 
+    /**
+     * Resolve the given parameter into a value for the argument in the given definition, updating the results in the context.
+     *
+     * @param _context The parse context.
+     * @param _def The definition of the argument whose parameter is being resolved.
+     * @param _parameter The parameter being resolved.
+     * @throws ParseException if the maximum allowed number of occurrences has been exceeded
+     */
     private void resolveAndAddValue( final ParseContext _context, final ArgDef _def, final String _parameter ) throws ParseException {
+
         // resolve our value...
         Object value = resolveParameterValue( _def, _parameter );
 
@@ -439,7 +470,7 @@ public class CommandLine {
 
         // if we've gotten too many of this particular argument, barf...
         if( (_def.maxAllowed > 0) && (result.appearances > _def.maxAllowed) )
-            throw new ParseException( "Maximum count (" + _def.maxAllowed + ") of '" + _def.referenceName + "' exceeded." );
+            throw new ParseException( "Maximum count (" + _def.maxAllowed + ") of '" + _def.helpName + "' exceeded." );
 
         // stuff it away...
         _context.argumentResults.put( _def.referenceName, result );
@@ -475,6 +506,14 @@ public class CommandLine {
     }
 
 
+    /**
+     * Checks to see if the given parameter string specifies an environment variable (by being surrounded with percent ("%") symbols), in which
+     * case the value of the environment variable becomes the parameter.  If a non-existent environment variable is specified, the empty string
+     * is returned.
+     *
+     * @param _parameter The parameter string to check and (possibly) replace.
+     * @return the possibly modified parameter string
+     */
     private String environmentVariableCheck( final String _parameter ) {
 
         // if we have an environment variable name surrounded by percent signs, extract it...
@@ -488,6 +527,13 @@ public class CommandLine {
     }
 
 
+    /**
+     * Checks to see if the given parameter string specifies a file (by being surrounded with hash ("#") symbols), in which case the contents of the
+     * file becomes the parameter.  If the file can't be found or can't be read, the empty string is returned.
+     *
+     * @param _parameter The parameter string to check and (possibly) replace.
+     * @return the possibly modified parameter string
+     */
     private String filePathCheck( final String _parameter ) {
 
         // if we have a file path surrounded by pound signs, extract it...
@@ -503,8 +549,8 @@ public class CommandLine {
 
 
     /**
-     * Add the given {@link ArgDef} to this command line definition.  Optional argument definitions may be added in any order.  Positional arguments
-     * <i>must</i> be added in left-to-right order.
+     * Add the given {@link ArgDef} to this command line definition.  Optional argument definitions appear in the help in the order they are added.
+     * Positional arguments <i>must</i> be added in left-to-right order they appear on the command line.
      *
      * @param _argDef The {@link ArgDef} to add to this command line definition.
      */
@@ -536,7 +582,7 @@ public class CommandLine {
                 for( PosArgDef def : positionalDefs ) {
                     if( def.isNotUnitary() )
                         throw new IllegalArgumentException( "Tried to add a second positional arguments with variable number of appearances: '"
-                                + posDef.referenceName + "' and '" + def.referenceName + "'" );
+                                + posDef.helpName + "' and '" + def.helpName + "'" );
                 }
             }
             positionalDefs.add( posDef );
@@ -563,7 +609,16 @@ public class CommandLine {
     }
 
 
+    /**
+     * Adds the given name (which could be an argument reference name, short optional argument name, or long optional argument name) to the name
+     * definitions, checking for duplicates.
+     *
+     * @param _name The name to add to the name definitions.
+     * @param _def The argument definition the given name belongs to.
+     * @throws IllegalArgumentException if the given name is a duplicate
+     */
     private void addName( final String _name, final ArgDef _def ) {
+
         if( nameDefs.containsKey( _name ) ) {
             if( _def.referenceName.equals( _name ) )
                 throw new IllegalArgumentException( "Duplicate argument reference name: " + _name );
@@ -579,6 +634,7 @@ public class CommandLine {
      *
      * @return the length of the longest option name line
      */
+    @SuppressWarnings( "unused" )
     public int getOptionalCommandWidth() {
 
         int length = 0;
@@ -598,17 +654,35 @@ public class CommandLine {
      */
     public String getSummaryHelp() {
 
+        StringBuilder sb = new StringBuilder();
+
+        // emit a pro forma command line and description...
         TextFormatter tf = new TextFormatter( width, 0, 0, 2 );
-        tf.add( name + ": " + summary );
+        tf.add( getProFormaCommandLine() );
+        tf.add( "//BR//" + summary );
+        sb.append( tf.getFormattedText() );
 
-        // handle the optional arguments...
-        int nameWidth = getOptionalCommandWidth() + 1;
-        for( OptArgDef def : optionalDefs ) {
-
-            tf.add( def.getArgumentDescription() + " //TAB" + nameWidth + "//" + def.summary );
+        // handle the positional arguments...
+        sb.append( System.lineSeparator() );
+        for( PosArgDef def : positionalDefs ) {
+            sb.append( def.getArgumentDescription() );
+            sb.append( System.lineSeparator() );
+            tf = new TextFormatter( width, indent, 0, 2 );
+            tf.add( def.summary );
+            sb.append( tf.getFormattedText() );
         }
 
-        return tf.getFormattedText();
+        // handle the optional arguments...
+        sb.append( System.lineSeparator() );
+        for( OptArgDef def : optionalDefs ) {
+            sb.append( def.getArgumentDescription() );
+            sb.append( System.lineSeparator() );
+            tf = new TextFormatter( width, indent, 0, 2 );
+            tf.add( def.summary );
+            sb.append( tf.getFormattedText() );
+        }
+
+        return sb.toString();
     }
 
 
@@ -619,28 +693,36 @@ public class CommandLine {
      */
     public String getDetailedHelp() {
 
-        TextFormatter tf = new TextFormatter( width, 0, 0, 2 );
-
-        // emit a pro forma command line...
         StringBuilder sb = new StringBuilder();
-        sb.append( "Command: " );
-        sb.append( name );
-        for( PosArgDef def : positionalDefs ) {
-            sb.append( " " );
-            sb.append( def.getArgumentDescription() );
-        }
-        tf.add( sb.toString() );
+
+        // emit a pro forma command line and description...
+        TextFormatter tf = new TextFormatter( width, 0, 0, 2 );
+        tf.add( getProFormaCommandLine() );
         tf.add( "//BR//" + detail );
-        tf.add( "//BR//Optional arguments:" );
+        sb.append( tf.getFormattedText() );
+
+        // handle the positional arguments...
+        sb.append( System.lineSeparator() );
+        sb.append( "Positional arguments:" );
+        sb.append( System.lineSeparator() );
+        for( PosArgDef def : positionalDefs ) {
+            sb.append( System.lineSeparator() );
+            sb.append( def.getArgumentDescription() );
+            sb.append( System.lineSeparator() );
+            tf = new TextFormatter( width, indent, 0, 2 );
+            tf.add( def.detail );
+            sb.append( tf.getFormattedText() );
+        }
 
         // handle the optional arguments...
-        sb.setLength( 0 );
-        sb.append( tf.getFormattedText() );
+        sb.append( System.lineSeparator() );
+        sb.append( "Optional arguments:" );
+        sb.append( System.lineSeparator() );
         for( OptArgDef def : optionalDefs ) {
             sb.append( System.lineSeparator() );
             sb.append( def.getArgumentDescription() );
             sb.append( System.lineSeparator() );
-            tf = new TextFormatter( width, 4, 0, 2 );
+            tf = new TextFormatter( width, indent, 0, 2 );
             tf.add( def.detail );
             sb.append( tf.getFormattedText() );
         }
@@ -649,21 +731,58 @@ public class CommandLine {
     }
 
 
+    /**
+     * Return a <i>pro forma</i> command line for use in help.
+     *
+     * @return the <i>pro forma</i> command line
+     */
+    private String getProFormaCommandLine() {
+        StringBuilder sb = new StringBuilder();
+        sb.append( name );
+        if( optionalDefs.size() > 0 ) {
+            sb.append( " [optional arguments]" );
+        }
+        for( PosArgDef def : positionalDefs ) {
+            sb.append( " " );
+            sb.append( def.getArgumentDescription() );
+        }
+        return sb.toString();
+    }
+
+
+    /**
+     * Return the name of the command whose command line is defined in this instance.
+     *
+     * @return the name of the command
+     */
     public String getName() {
         return name;
     }
 
 
+    /**
+     * Return the summary help for the command whose command line is defined in this instance.
+     *
+     * @return the summary help.
+     */
     public String getSummary() {
         return summary;
     }
 
 
+    /**
+     * Return the detailed help for the command whose command line is defined in this instance.
+     *
+     * @return the detailed help.
+     */
     public String getDetail() {
         return detail;
     }
 
 
+    /**
+     * An exception used internally to simply handling of parsing problems.
+     */
     private static class ParseException extends Exception {
 
         private ParseException( final String _msg ) {

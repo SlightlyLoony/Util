@@ -41,6 +41,16 @@ public class PosArgDef extends ArgDef {
     }
 
 
+    /**
+     * Returns an instance of {@link PosArgDef} with the given values, allowing an unlimited number of appearances on the command line, a type of
+     * {@link File}, at least one appearance mandatory, and the files validated as readable.
+     *
+     * @param _referenceName The reference name for this argument.
+     * @param _summary The summary help for this argument.
+     * @param _detail The detailed help for this argument.
+     * @param _helpName The help name for this argument's parameter.
+     * @return an instance of {@link PosArgDef} with the given values
+     */
     public static PosArgDef getMultiReadableFilePosArgDef(final String _referenceName, final String _summary, final String _detail,
                                                           final String _helpName ) {
         return new PosArgDef(
@@ -55,7 +65,10 @@ public class PosArgDef extends ArgDef {
      * @return the argument description string
      */
     public String getArgumentDescription() {
-        return (parameterMode == OPTIONAL) ? "[" + helpName + "]" : "<" + helpName + ">";
+        String result = (parameterMode == OPTIONAL) ? "[" + helpName + "]" : "<" + helpName + ">";
+        if( maxAllowed != 1 )
+            result = result + "*";
+        return result;
     }
 
 

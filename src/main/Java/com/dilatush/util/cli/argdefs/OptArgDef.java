@@ -19,13 +19,13 @@ public class OptArgDef extends ArgDef {
 
 
     /**
-     * The short names (e.g., "-c") that may be used on the command line for this argument.
+     * The short names (e.g., the "c" for "-c") that may be used on the command line for this argument.
      */
     public final String[]           shortNames;        // all the short (one character) names for this optional argument
 
 
     /**
-     * The long names (e.g., "--count") that may be used on the command line for this argument.
+     * The long names (e.g., the "count" for "--count") that may be used on the command line for this argument.
      */
     public final String[]           longNames;         // all the long (one or more characters) names for this optional argument
 
@@ -101,6 +101,16 @@ public class OptArgDef extends ArgDef {
     }
 
 
+    /**
+     * Returns an instance of {@link OptArgDef} with the given values, with no parameters allowed, a type of boolean, an absent value of {@code false},
+     * and a maximum of one appearance.
+     *
+     * @param _referenceName The reference name for this argument.
+     * @param _summary The summary help for this argument.
+     * @param _detail The detailed help for this argument.
+     * @param _names The short and long names for this argument.
+     * @return an instance of {@link OptArgDef} with the given values
+     */
     public static OptArgDef getSingleBinaryOptArgDef(final String _referenceName, final String _summary,
                                                      final String _detail, final OptArgNames _names) {
 

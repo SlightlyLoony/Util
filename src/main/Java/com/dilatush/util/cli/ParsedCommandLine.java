@@ -1,5 +1,7 @@
 package com.dilatush.util.cli;
 
+import com.dilatush.util.cli.argdefs.ArgDef;
+
 import java.util.Map;
 
 import static com.dilatush.util.Strings.isEmpty;
@@ -98,8 +100,7 @@ public class ParsedCommandLine {
 
 
     /**
-     * Returns the value of the argument with the given reference name (as an object of the class defined in the argument definition) if it was
-     * present on the parsed command line, or if it is a binary argument and it was not present on the parsed command line.  Note that
+     * Returns the value of the argument with the given reference name (as an object of {@link ArgDef#type} type).  Note that
      * <code>null</code> will be returned if the result of parsing the command line was not valid, if the given reference name is empty or
      * <code>null</code>, or if the given reference name is not present in the argument definitions.
      * @see ParsedArg#value
@@ -123,6 +124,16 @@ public class ParsedCommandLine {
     }
 
 
+    /**
+     * Returns the values of the argument with the given reference name (as a list of objects of {@link ArgDef#type} type).  Note that
+     * <code>null</code> will be returned if the result of parsing the command line was not valid, if the given reference name is empty or
+     * <code>null</code>, or if the given reference name is not present in the argument definitions.
+     * @see ParsedArg#value
+     *
+     * @param _argumentName The reference name of the argument whose value is being queried.
+     * @return  the value of the argument (as an object of the class defined in the argument definition) if the argument with the given reference
+     *          name was present on the parsed command line, or if it is a binary argument and it was not present on the parsed command line
+     */
     public Object getValues( final String _argumentName ) {
 
         // try to get the parsed argument results...

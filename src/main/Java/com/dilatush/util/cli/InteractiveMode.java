@@ -1,6 +1,10 @@
 package com.dilatush.util.cli;
 
+import com.dilatush.util.cli.argdefs.OptArgDef;
+
 /**
+ * Specifies the kind of interactive parameter entry allowed for an argument defined in {@link OptArgDef}.
+ *
  * @author Tom Dilatush  tom@dilatush.com
  */
 public enum InteractiveMode {
