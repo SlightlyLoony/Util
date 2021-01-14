@@ -2,6 +2,7 @@ package com.dilatush.util.cli.argdefs;
 
 import com.dilatush.util.cli.InteractiveMode;
 import com.dilatush.util.cli.ParameterMode;
+import com.dilatush.util.cli.ParsedArg;
 import com.dilatush.util.cli.parsers.BooleanParser;
 import com.dilatush.util.cli.parsers.ParameterParser;
 import com.dilatush.util.cli.validators.ParameterValidator;
@@ -30,7 +31,8 @@ public class OptArgDef extends ArgDef {
 
 
     /**
-     * The value of this argument's parameter when the argument does not appear on the command line.
+     * The optional value of this argument's parameter when the argument does not appear on the command line.  If this value is {@code null}, the
+     * {@link ParsedArg#value} and {@link ParsedArg#values} will be {@code null} when the argument is absent from the command line.
      */
     public final String             absentValue;       // the value for the parameter if optional argument not present and parameter not disallowed
 
@@ -92,8 +94,6 @@ public class OptArgDef extends ArgDef {
             throw new IllegalArgumentException( _names.message );
 
         // some validation...
-        if( isEmpty( absentValue ) )
-            throw new IllegalArgumentException( "No absent value was supplied" );
         if( isNull( interactiveMode ) && (parameterMode == ParameterMode.MANDATORY) )
             throw new IllegalArgumentException( "No interactive mode was supplied" );
         if( isEmpty( prompt ) && (parameterMode == ParameterMode.MANDATORY) && (interactiveMode != InteractiveMode.DISALLOWED) )
@@ -112,15 +112,18 @@ public class OptArgDef extends ArgDef {
 
 
     /**
-     * Returns a string containing all the names of this argument.  The names are listed in the same order they were defined, short names first,
-     * then long names, with each name separated by a ", " sequence.
+     * Returns a string containing a representation of this argument on the command line.  First the names are listed in the same order they were
+     * defined, short names first, then long names, with each name separated by a ", " sequence.  If this argument has a mandatory parameter, the
+     * names are followed by an equals sign and the parameter help name in angle brackets.  If this argument has an optional parameter, the names
+     * are followed by an equals sign and the parameter help name in angle brackets, all enclosed in square brackets.
      *
      * @return a string containing all the names of this argument
      */
-    public String getNames() {
+    public String getArgumentDescription() {
 
         StringBuilder result = new StringBuilder();
 
+        // first emit the short names...
         for( String shortName : shortNames ) {
             if( result.length() > 0 )
                 result.append( ", " );
@@ -128,11 +131,24 @@ public class OptArgDef extends ArgDef {
             result.append( shortName );
         }
 
+        // then the long names...
         for( String longName : longNames ) {
             if( result.length() > 0 )
                 result.append( ", " );
             result.append( "--" );
             result.append( longName );
+        }
+
+        // if we have an optional or mandatory parameter, the parameter is next...
+        if( parameterMode != ParameterMode.DISALLOWED ) {
+            result.append( ' ' );
+            if( parameterMode == ParameterMode.OPTIONAL )
+                result.append( '[' );
+            result.append( "=<" );
+            result.append( helpName );
+            result.append( '>' );
+            if( parameterMode == ParameterMode.OPTIONAL )
+                result.append( ']' );
         }
 
         return result.toString();

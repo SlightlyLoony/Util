@@ -583,7 +583,7 @@ public class CommandLine {
 
         int length = 0;
         for( OptArgDef def : optionalDefs ) {
-            int argLength = def.getNames().length();
+            int argLength = def.getArgumentDescription().length();
             if( argLength > length )
                 length = argLength;
         }
@@ -605,10 +605,47 @@ public class CommandLine {
         int nameWidth = getOptionalCommandWidth() + 1;
         for( OptArgDef def : optionalDefs ) {
 
-            tf.add( def.getNames() + " //TAB" + nameWidth + "//" + def.summary );
+            tf.add( def.getArgumentDescription() + " //TAB" + nameWidth + "//" + def.summary );
         }
 
         return tf.getFormattedText();
+    }
+
+
+    /**
+     * Returns a detailed help string, suitable for display on a console.
+     *
+     * @return a detailed help string
+     */
+    public String getDetailedHelp() {
+
+        TextFormatter tf = new TextFormatter( width, 0, 0, 2 );
+
+        // emit a pro forma command line...
+        StringBuilder sb = new StringBuilder();
+        sb.append( "Command: " );
+        sb.append( name );
+        for( PosArgDef def : positionalDefs ) {
+            sb.append( " " );
+            sb.append( def.getArgumentDescription() );
+        }
+        tf.add( sb.toString() );
+        tf.add( "//BR//" + detail );
+        tf.add( "//BR//Optional arguments:" );
+
+        // handle the optional arguments...
+        sb.setLength( 0 );
+        sb.append( tf.getFormattedText() );
+        for( OptArgDef def : optionalDefs ) {
+            sb.append( System.lineSeparator() );
+            sb.append( def.getArgumentDescription() );
+            sb.append( System.lineSeparator() );
+            tf = new TextFormatter( width, 4, 0, 2 );
+            tf.add( def.detail );
+            sb.append( tf.getFormattedText() );
+        }
+
+        return sb.toString();
     }
 
 

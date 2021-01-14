@@ -2,17 +2,14 @@ package com.dilatush.util.cli.example;
 
 import com.dilatush.util.Files;
 import com.dilatush.util.cli.CommandLine;
-import com.dilatush.util.cli.ParameterMode;
 import com.dilatush.util.cli.ParsedCommandLine;
-import com.dilatush.util.cli.argdefs.OptArgDef;
-import com.dilatush.util.cli.argdefs.OptArgNames;
-import com.dilatush.util.cli.argdefs.PosArgDef;
-import com.dilatush.util.cli.parsers.BooleanParser;
+import com.dilatush.util.cli.example.CounterCommandLine.CountType;
 
 import java.io.File;
 import java.util.List;
-
-import static com.dilatush.util.General.isNotNull;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 /**
  * Command line application that provides an example of using the {@link CommandLine} argument interpreter.  This application accepts one or more
@@ -20,127 +17,167 @@ import static com.dilatush.util.General.isNotNull;
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
+// TODO: test with hyphen "-"...
+// TODO: test with environment variable...
+// TODO: test with file for parameter...
+// TODO: test with interactive parameter...
 public class Counter {
-
 
     public static void main( final String[] _args ) {
 
-        // creating an optional argument definition directly...
-        OptArgDef wordsDef = new OptArgDef(
-                "words",
-                "Count the words in the specified files.",
-                "Count all the words (defined as whitespace-separated strings of non-whitespace characters) in the specified files.",
-                1,
-                null,
-                Boolean.class,
-                ParameterMode.DISALLOWED,
-                null,
-                new BooleanParser(),
-                null,
-                new OptArgNames( "w;words" ),
-                "false",
-                null,
-                null
-        );
+        // get our command line interpreter...
+        CommandLine commandLine = CounterCommandLine.get();
 
-        // creating a binary optional argument definition using an OptArgDef helper method...
-        OptArgDef summaryDef = OptArgDef.getSingleBinaryOptArgDef(
-                "summary",
-                "Displays a summary description of this command.",
-                "Displays a summary description of this command, with all the arguments it accepts.",
-                new OptArgNames( "?;summary" )
-        );
-
-        // creating a multiple readable file positional argument definition using a PosArgDef helper method...
-        PosArgDef filesDef = PosArgDef.getMultiReadableFilePosArgDef(
-                "files",
-                "Files to count things in.",
-                "Files to count things in.",
-                "files"
-        );
-
-        // creating a binary optional argument definition using a OptArgDef subclass...
-        OptArgDef linesDef = new LinesOptArgDef();
-
-
-        CommandLine commandLine = new CommandLine( "counter", "Counts things in files.", "Counts lots of different things in files.", 80, 4 );
-        commandLine.add( wordsDef );
-        commandLine.add( summaryDef );
-        commandLine.add( filesDef );
-        commandLine.add( linesDef );
-
+        // parse our argument...
         ParsedCommandLine result = commandLine.parse( _args );
 
-        if( !result.isValid() ) {
-            out( "Invalid command line" );
-            out( result.getErrorMsg() );
-            out( commandLine.getSummaryHelp() );
+        if( !result.isValid() )
+            handleInvalid( commandLine, result );
+
+        if( (Boolean) result.getValue( "summary" ) )
+            handleSummary( commandLine );
+
+        if( (Boolean) result.getValue( "detail" ) )
+            handleDetail( commandLine );
+
+        // get the kind of count we're going to make...
+        CountType countType = (CountType) result.getValue( "countType" );
+
+        // get any specified words..
+        // noinspection unchecked
+        List<String> words = (List<String>) result.getValues( "word" );
+        boolean haveWords = result.isPresent( "word" );
+
+        // get our case sensitivity...
+        boolean caseSensitive = (Boolean) result.getValue( "case" );
+
+        // get our regular expression...
+        String regex = (String) result.getValue( "regex" );
+
+        // if we're counting regexes, then we better have a regex!
+        if( (countType == CountType.REGEX) && (regex == null) ) {
+            out( "Counting regex hits, but no regex was supplied!" );
             System.exit( 1 );
         }
 
-        if( (Boolean) result.getValue( "summary" ) ) {
-            out( commandLine.getSummaryHelp() );
-            System.exit( 1 );
-        }
-
-        // figure out what we're going to count
-        What count = null;
-        if( (Boolean) result.getValue( "words" ) ) {
-            if( isNotNull( count ) ) {
-                out( "Multiple types of count specified" );
+        // if we have a regex, compile it...
+        Pattern pattern = null;
+        if( countType == CountType.REGEX ) {
+            try {
+                pattern = Pattern.compile( regex );
+            }
+            catch( PatternSyntaxException _e ) {
+                out( "Invalid regex: " + regex );
+                out( _e.getMessage() );
                 System.exit( 1 );
             }
-            count = What.WORDS;
-        }
-        if( (Boolean) result.getValue( "lines" ) ) {
-            if( isNotNull( count ) ) {
-                out( "Multiple types of count specified" );
-                System.exit( 1 );
-            }
-            count = What.LINES;
-        }
-
-        // if we didn't specify what to count, barf...
-        if( count == null ) {
-            out( "No type of counting was specified!" );
-            System.exit( 1 );
         }
 
         // initialize our counter...
         int counter = 0;
 
         // iterate over all the specified files...
-        for( Object obj  : (List<?>) result.getValues( "files" ) ) {
+        // noinspection unchecked
+        for( File file  : (List<File>) result.getValues( "files" ) ) {
 
             // get our file's text...
-            File file = (File) obj;
             String text = Files.readToString( file );
+            if( text == null ) continue;
 
             // do the right kind of counting...
-            switch( count ) {
+            switch( countType ) {
 
                 case WORDS:
-                    counter += (text == null) ? 0 : text.split( "\\s+" ).length;
+                    if( !haveWords )
+                        counter += text.split( "\\s+" ).length;
+                    else
+                        for( String word : words ) { counter += countSpecificWords( word, text, caseSensitive ); }
                     break;
 
                 case LINES:
-                    counter += (text == null) ? 0 : text.split( "\\R" ).length;
+                    counter += text.split( "\\R" ).length;
                     break;
 
-                default:
+                case LOC:
+                    counter += countLinesOfCode( text );
+                    break;
+
+                case REGEX:
+                    counter += countRegexHits( pattern, text );
                     break;
             }
         }
 
         // output our results...
         out( "Count: " + counter );
-
-        commandLine.hashCode();
     }
 
 
-    private enum What {
-        WORDS,LINES
+    private static int countRegexHits( final Pattern _pattern, final String _text ) {
+
+        // count the occurrences of our regex...
+        Matcher mat = _pattern.matcher( _text );
+        int count = 0;
+        while( mat.find() ) {
+            count++;
+        }
+        return count;
+    }
+
+
+    private static final Pattern LOCFinder = Pattern.compile( "^[ \\t]+([a-zA-Z])" );
+
+    private static int countLinesOfCode( final String _text ) {
+
+        // first we split our text into lines...
+        String[] lines = _text.split( "\\R" );
+
+        // now we count those lines whose first non-whitespace character is a letter...
+        int count = 0;
+        for( String line : lines ) {
+            Matcher mat = LOCFinder.matcher( line );
+            if( mat.find() )
+                count++;
+        }
+
+        return count;
+    }
+
+
+    private static int countSpecificWords( final String _word, final String _text, final boolean _caseSensitive ) {
+
+        // first we split our text into words...
+        String[] words = _text.split( "[ ,;.!?:]+" );
+
+        // now iterate over all those words, counting the matches...
+        int count = 0;
+        for( String word : words ) {
+            if( _caseSensitive ? word.equals( _word ) : word.equalsIgnoreCase( _word ) ) {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+
+    private static void handleSummary( final CommandLine _commandLine ) {
+        out( _commandLine.getSummaryHelp() );
+        System.exit( 0 );
+    }
+
+
+    private static void handleDetail( final CommandLine _commandLine ) {
+        out( _commandLine.getDetailedHelp() );
+        System.exit( 0 );
+    }
+
+
+    private static void handleInvalid( final CommandLine commandLine, final ParsedCommandLine result ) {
+        out( "Invalid command line" );
+        out( result.getErrorMsg() );
+        out( commandLine.getSummaryHelp() );
+        System.exit( 1 );
     }
 
 

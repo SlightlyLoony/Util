@@ -9,6 +9,7 @@ import com.dilatush.util.cli.validators.ReadableFileValidator;
 import java.io.File;
 
 import static com.dilatush.util.cli.ParameterMode.MANDATORY;
+import static com.dilatush.util.cli.ParameterMode.OPTIONAL;
 
 /**
  * Define a positional argument.
@@ -45,6 +46,16 @@ public class PosArgDef extends ArgDef {
         return new PosArgDef(
                 _referenceName, _summary, _detail, 0, _helpName, File.class, MANDATORY, null, new PathParser(), new ReadableFileValidator()
         );
+    }
+
+
+    /**
+     * Returns a string with the parameter name surrounded by square brackets if optional, and by angle brackets if mandatory.
+     *
+     * @return the argument description string
+     */
+    public String getArgumentDescription() {
+        return (parameterMode == OPTIONAL) ? "[" + helpName + "]" : "<" + helpName + ">";
     }
 
 
