@@ -37,6 +37,9 @@ public class CommandLine {
     private final int                 width;             // width of help text
     private final int                 indent;            // indent width for help text
 
+    private PrintStream  printStream;                    // the print stream to send warning messages to
+    private String       summaryHelpReferenceName;       // the reference name of the argument whose presence indicates summary help
+    private String       detailedHelpReferenceName;      // the reference name of the argument whose presence indicates detailed help
 
     /**
      * Creates a new instance of this class with the given values.
@@ -64,6 +67,10 @@ public class CommandLine {
         width   = _width;
         indent  = _indent;
 
+        printStream = System.out;
+        summaryHelpReferenceName = null;
+        detailedHelpReferenceName = null;
+
         // some validation...
         if( isEmpty( _name ) )
             throw new IllegalArgumentException( "No command name supplied." );
@@ -81,7 +88,7 @@ public class CommandLine {
     /**
      * Parse the command line represented by the given arguments, returning a {@link ParsedCommandLine} with the results of that parsing.
      *
-     * @param _args The application's command line arguments, as the parameter to it's <code>main( String[] args )</code> method.
+     * @param _args The application's command line arguments, as the parameter to its <code>main( String[] args )</code> method.
      * @return the results of parsing the command line
      */
     public ParsedCommandLine parse( final String[] _args ) {
@@ -119,12 +126,68 @@ public class CommandLine {
     }
 
 
+    /**
+     * <p>Parse the command line represented by the given arguments, obtaining a {@link ParsedCommandLine} with the results of that parsing.  One of
+     * four things happens after that:</p>
+     * <ol>
+     *     <li>If the results of the parsing were not valid, then an explanatory message is sent to the print stream, followed by the summary help.
+     *     After that, the program will exit with status code 1 (so this method never returns).</li>
+     *     <li>If the results of the parsing were valid, and {@link #detailedHelpReferenceName} is not empty, and an argument matching that name
+     *     was present, then the detailed help is sent to the print stream.  After that, the program will exit with status code 0 (so this method
+     *     never returns).</li>
+     *     <li>If the results of the parsing were valid, and {@link #summaryHelpReferenceName} is not empty, and an argument matching that name
+     *     was present, then the summary help is sent to the print stream.  After that, the program will exit with status code 0 (so this method
+     *     never returns).</li>
+     *     <li>If none of the preceding conditions were met, this method exits with the {@link ParsedCommandLine} result.</li>
+     * </ol>
+     * <p>In other words, if the command line was valid and the user didn't specify any optional help arguments, then this method returns the
+     * result of parsing the command line.  Otherwise, it does the right thing and exits.  An invalid result will never be returned by this
+     * method.</p>
+     *
+     * @param _args The application's command line arguments, as the parameter to its <code>main( String[] args )</code> method.
+     * @return the results of parsing the command line
+     */
+    @SuppressWarnings( "unused" )
+    public ParsedCommandLine parseAndHandle( final String[] _args ) {
+
+        // do the actual parsing...
+        ParsedCommandLine parsedCommandLine = parse( _args );
+
+        // if the command line is not valid, tell the user what happened...
+        if( !parsedCommandLine.isValid() ) {
+            printStream.println( name + " has a problem with the command line:" );
+            printStream.println( "    " + parsedCommandLine.getErrorMsg() );
+            printStream.println();
+            printStream.println( getSummaryHelp() );
+            System.exit( 1 );
+        }
+
+        // if the user asked for detailed help, give it to him...
+        if( parsedCommandLine.isPresent( detailedHelpReferenceName ) ) {
+            printStream.println( getDetailedHelp() );
+            System.exit( 0 );
+        }
+
+        // if the user asked for summary help, give it to him...
+        if( parsedCommandLine.isPresent( summaryHelpReferenceName ) ) {
+            printStream.println( getSummaryHelp() );
+            System.exit( 0 );
+        }
+
+        // we've got a valid result, and no requests for help, so return this thing...
+        return parsedCommandLine;
+    }
+
+
     private static class ParseContext {
 
         private final List<ArgParts>         optionalArgs    = new ArrayList<>();
         private final List<String>           positionalArgs  = new ArrayList<>();
         private final Map<String, ParsedArg> argumentResults = new HashMap<>();    // maps argument reference names to argument results
+
+        private boolean warn = false;  // if true, parse errors are treated as warnings (used with absent and default value resolution)...
     }
+
 
     private static class ArgParts {
 
@@ -136,6 +199,30 @@ public class CommandLine {
             name = _name;
             parameter = _parameter;
         }
+    }
+
+
+    /**
+     * Set the {@link PrintStream} used to print warnings and help messages to something other than the default stdout.
+     *
+     * @param _printStream The print stream to use when printing warnings and help messages.
+     */
+    @SuppressWarnings( "unused" )
+    public void setPrintStream( final PrintStream _printStream ) {
+        printStream = _printStream;
+    }
+
+
+    /**
+     * Set the argument reference names for the arguments whose presence means the user is requesting help.
+     *
+     * @param _summaryHelpReferenceName The argument reference name for the argument whose presence means a request for summary help.
+     * @param _detailedHelpReferenceName The argument reference name for the argument whose presence means a request for detailed help.
+     */
+    @SuppressWarnings( "unused" )
+    public void setHelpReferenceNames( final String _summaryHelpReferenceName, final String _detailedHelpReferenceName ) {
+        summaryHelpReferenceName = _summaryHelpReferenceName;
+        detailedHelpReferenceName = _detailedHelpReferenceName;
     }
 
 
@@ -230,6 +317,9 @@ public class CommandLine {
      */
     private void initialize( final ParseContext _context ) throws ParseException {
 
+        // while initializing, we don't want parameter resolution to cause us to bail out...
+        _context.warn = true;
+
         // iterate over all the names...
         for( Map.Entry<String, ArgDef> entry : nameDefs.entrySet() ) {
 
@@ -241,13 +331,15 @@ public class CommandLine {
 
                 //if this is an optional argument and there is an absent value specified, resolve the absent value; null otherwise...
                 Object value = ((def instanceof OptArgDef) && !isEmpty( ((OptArgDef) def).absentValue ))
-                        ? resolveParameterValue( def, ((OptArgDef) def).absentValue )
+                        ? resolveParameterValue( _context, def, ((OptArgDef) def).absentValue )
                         : null ;
 
                 // stuff it away in our results...
                 _context.argumentResults.put( name, new ParsedArg( def, value ) );
             }
         }
+
+        _context.warn = false;
     }
 
 
@@ -258,17 +350,18 @@ public class CommandLine {
      * to correct type for the argument; otherwise the given parameter string is used directly.  If the definition includes a parameter validator, it
      * will be used to validate the parameter.  The resulting value is checked to make sure it is the type defined for the argument.
      *
+     * @param _context The parse context.
      * @param _argDef The argument definition for the argument parameter being resolved.
      * @param _parameter The string parameter to resolve.
      * @return the value resulting from resolving the parameter
      * @throws ParseException on the occurrence of any parsing problem
      */
-    private Object resolveParameterValue( final ArgDef _argDef, final String _parameter ) throws ParseException {
+    private Object resolveParameterValue( final ParseContext _context, final ArgDef _argDef, final String _parameter ) throws ParseException {
 
         // default our parameter and make sure we actually got one...
         String parameter = _parameter;
         if( isEmpty( parameter ) )
-            throw new ParseException( "Missing parameter: " + _argDef.helpName );
+            return handleError( _context, "Missing parameter: " + _argDef.helpName );
 
         // handle translations from environment variables or files...
         parameter = environmentVariableCheck( parameter );
@@ -284,18 +377,16 @@ public class CommandLine {
             ParameterParser.Result parseResult = _argDef.parser.parse( parameter );
 
             // if the parser had problem...
-            if( !parseResult.valid ) {
-                throw new ParseException( "Parameter parsing problem for '" + _argDef.helpName + "': " + parseResult.message );
-            }
+            if( !parseResult.valid )
+                return handleError( _context, "Parameter parsing problem for '" + _argDef.helpName + "': " + parseResult.message );
 
             // ok, we've got our new parsed value...
             value = parseResult.value;
 
             // if the result was of the wrong type, we have a worser problem...
-            if( !_argDef.type.isAssignableFrom( value.getClass() ) ) {
-                throw new ParseException( "For parameter '" + _argDef.helpName + "', expected parser result of type "
+            if( !_argDef.type.isAssignableFrom( value.getClass() ) )
+                return handleError( _context,  "For parameter '" + _argDef.helpName + "', expected parser result of type "
                         + _argDef.type.getSimpleName() + ", got: " + value.getClass().getSimpleName() );
-            }
         }
 
         // if we have a parameter validator, use it...
@@ -303,13 +394,26 @@ public class CommandLine {
 
             // get our validation result...
             ParameterValidator.Result vr = _argDef.validator.validate( value );
-            if( !vr.valid ) {
-                throw new ParseException( "On parameter '" + _argDef.helpName + "' with value '" + parameter
+            if( !vr.valid )
+                return handleError( _context, "On parameter '" + _argDef.helpName + "' with value '" + parameter
                                           + "', got validation error: " + vr.message );
-            }
         }
 
         return value;
+    }
+
+
+    private Object handleError( final ParseContext _context, final String _msg ) throws ParseException {
+
+        // if our context tells us to warn rather than error out, send the warning message and return with a null value...
+        if( _context.warn ) {
+            printStream.println( "WARNING: " + _msg );
+            return null;
+        }
+
+        // otherwise, throw an exception and stop processing the command line...
+        else
+            throw new ParseException( _msg );
     }
 
 
@@ -378,7 +482,7 @@ public class CommandLine {
             }
 
             // resolve our value...
-            Object value = resolveParameterValue( def, parameter );
+            Object value = resolveParameterValue( _context, def, parameter );
 
             // get our updated parse results for this argument...
             ParsedArg result = _context.argumentResults.get( def.referenceName ).add( value );
@@ -424,10 +528,9 @@ public class CommandLine {
                     throw new ParseException( "Mandatory positional argument missing" );
             }
 
-            // if eatArgs == 0, then we have an optional parameter with no argument, so use the absent value...
-            if( eatArgs == 0 ) {
+            // if eatArgs == 0, then we have an optional parameter with no argument, so use the default value...
+            if( eatArgs == 0 )
                 resolveAndAddValue( _context, def, def.defaultValue );
-            }
 
             // otherwise, eat the appropriate number of arguments...
             else {
@@ -463,7 +566,7 @@ public class CommandLine {
     private void resolveAndAddValue( final ParseContext _context, final ArgDef _def, final String _parameter ) throws ParseException {
 
         // resolve our value...
-        Object value = resolveParameterValue( _def, _parameter );
+        Object value = resolveParameterValue( _context, _def, _parameter );
 
         // get our updated parse results for this argument...
         ParsedArg result = _context.argumentResults.get( _def.referenceName ).add( value );

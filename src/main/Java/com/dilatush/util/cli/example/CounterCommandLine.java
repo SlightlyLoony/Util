@@ -2,6 +2,7 @@ package com.dilatush.util.cli.example;
 
 import com.dilatush.util.cli.CommandLine;
 import com.dilatush.util.cli.ParameterMode;
+import com.dilatush.util.cli.ParsedCommandLine;
 import com.dilatush.util.cli.argdefs.OptArgDef;
 import com.dilatush.util.cli.argdefs.OptArgNames;
 import com.dilatush.util.cli.argdefs.PosArgDef;
@@ -69,9 +70,22 @@ public class CounterCommandLine {
         commandLine.add( new RegexOptArgDef() );
         commandLine.add( OptArgDef.getSingleBinaryOptArgDef( "detail", "Get detailed help.", "Get detailed help on the counter command",
                 new OptArgNames( "h;help" ) ) );
+        commandLine.add( OptArgDef.getSingleBinaryOptArgDef( "quiet", "Output just the count.", "Output just the count, no description.",
+                new OptArgNames( "q;quiet" ) ) );
+
+        // add the names of our help arguments...
+        commandLine.setHelpReferenceNames( "summary", "detail" );
 
         return commandLine;
     }
+
+
+    public static ParsedCommandLine getParseAndHandle( final String[] _args ) {
+
+        CommandLine commandLine = get();
+        return commandLine.parseAndHandle( _args );
+    }
+
 
     public enum CountType {
         WORDS, LINES, LOC, REGEX

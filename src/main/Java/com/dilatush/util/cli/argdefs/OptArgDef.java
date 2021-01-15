@@ -125,7 +125,8 @@ public class OptArgDef extends ArgDef {
      * Returns a string containing a representation of this argument on the command line.  First the names are listed in the same order they were
      * defined, short names first, then long names, with each name separated by a ", " sequence.  If this argument has a mandatory parameter, the
      * names are followed by an equals sign and the parameter help name in angle brackets.  If this argument has an optional parameter, the names
-     * are followed by an equals sign and the parameter help name in angle brackets, all enclosed in square brackets.
+     * are followed by an equals sign and the parameter help name in angle brackets, all enclosed in square brackets.  If the argument may appear
+     * more than once, a parenthetical message explains that.
      *
      * @return a string containing all the names of this argument
      */
@@ -159,6 +160,17 @@ public class OptArgDef extends ArgDef {
             result.append( '>' );
             if( parameterMode == ParameterMode.OPTIONAL )
                 result.append( ']' );
+        }
+
+        // if this argument may appear an unlimited number of times, say so...
+        if( maxAllowed == 0 )
+            result.append( "   (may appear any number of times)" );
+
+        // if this argument may appear more than once, say so...
+        if( maxAllowed > 1 ) {
+            result.append( "   (may appear up to " );
+            result.append( maxAllowed );
+            result.append( " times)" );
         }
 
         return result.toString();

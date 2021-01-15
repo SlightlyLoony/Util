@@ -119,3 +119,6 @@ If a parameter value specifies an environment variable, but that variable does n
 
 == Getting parameter values from files
 In a manner very similar to the way this package can get parameter values from environment variables (as described above), it can also get parameter values from text files.  To do this, any parameter value (whether on the command line, a default value, or an absent value) can be in the form "+#FILE_PATH#+".  In this case the FILE_PATH is treated as a (wait for it!) file path, and if there's a readable file at that path its contents are used as the parameter value.  Simple!  If the file path doesn't resolve to a readable file, then the parameter value is the empty string ("").
+
+== An Example
+This package includes an example application using the command line interpreter.  It's a working program, called "counter", that counts lines, all words, specified words, lines of code, or regular expression matches in any number of files.  The classes in the https://github.com/SlightlyLoony/Util/tree/master/src/main/Java/com/dilatush/util/cli/example[example package] implement this example, demonstrating various ways to define arguments as well as ways to use those arguments.

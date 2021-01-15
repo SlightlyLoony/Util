@@ -21,20 +21,8 @@ public class Counter {
 
     public static void main( final String[] _args ) {
 
-        // get our command line interpreter...
-        CommandLine commandLine = CounterCommandLine.get();
-
-        // parse our argument...
-        ParsedCommandLine result = commandLine.parse( _args );
-
-        if( !result.isValid() )
-            handleInvalid( commandLine, result );
-
-        if( (Boolean) result.getValue( "summary" ) )
-            handleSummary( commandLine );
-
-        if( (Boolean) result.getValue( "detail" ) )
-            handleDetail( commandLine );
+        // parse our command line...
+        ParsedCommandLine result = CounterCommandLine.getParseAndHandle( _args );
 
         // get the kind of count we're going to make...
         CountType countType = (CountType) result.getValue( "countType" );
@@ -105,7 +93,38 @@ public class Counter {
         }
 
         // output our results...
-        out( "Count: " + counter );
+        if( result.isPresent( "quiet" ) )
+            out( "" + counter );
+        else {
+            switch( countType ) {
+                case LOC:
+                    out( counter + " lines of code" );
+                    break;
+                case LINES:
+                    out( counter + " lines" );
+                    break;
+                case REGEX:
+                    out( counter + " matches to regular expression \"" + regex + "\"" );
+                    break;
+                case WORDS:
+                    if( haveWords )
+                        out( counter + " matches to the words " + wordsToString( words ) );
+                    else
+                        out( counter + " words" );
+                    break;
+            }
+        }
+    }
+
+
+    private static String wordsToString( final List<String> _words ) {
+        if( _words.size() == 0 ) return "";
+        if( _words.size() == 1 ) return _words.get( 0 );
+        String[] words = _words.toArray( new String[0] );
+        String joined = String.join( ", ", words );
+        int index = joined.lastIndexOf( ", " );
+        joined = joined.substring( 0, index ) + ", or " + joined.substring( index + 2 );
+        return joined;
     }
 
 
@@ -154,26 +173,6 @@ public class Counter {
         }
 
         return count;
-    }
-
-
-    private static void handleSummary( final CommandLine _commandLine ) {
-        out( _commandLine.getSummaryHelp() );
-        System.exit( 0 );
-    }
-
-
-    private static void handleDetail( final CommandLine _commandLine ) {
-        out( _commandLine.getDetailedHelp() );
-        System.exit( 0 );
-    }
-
-
-    private static void handleInvalid( final CommandLine commandLine, final ParsedCommandLine result ) {
-        out( "Invalid command line" );
-        out( result.getErrorMsg() );
-        out( commandLine.getSummaryHelp() );
-        System.exit( 1 );
     }
 
 
