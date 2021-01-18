@@ -45,7 +45,8 @@ public class TestConsoleServer {
             config.port = 8217;
             config.bindTo = null;
             config.maxClients = 1;
-            config.name = "Test";
+            config.name = "test";
+            config.key = "abcdefghijklmnopqrstuv";
             ConsoleServer server = new ConsoleServer( config );
             server.start();
 

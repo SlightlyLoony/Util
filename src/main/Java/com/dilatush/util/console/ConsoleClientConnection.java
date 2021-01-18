@@ -1,11 +1,17 @@
 package com.dilatush.util.console;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import com.dilatush.util.Base64;
+import com.dilatush.util.Crypto;
+import com.dilatush.util.Sockets;
+
+import javax.crypto.CipherInputStream;
+import javax.crypto.CipherOutputStream;
+import javax.crypto.spec.SecretKeySpec;
+import java.io.*;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.security.Key;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -38,7 +44,6 @@ public class ConsoleClientConnection extends Thread {
     @Override
     public void run() {
 
-
         try {
 
             // get our data streams...
@@ -48,6 +53,29 @@ public class ConsoleClientConnection extends Thread {
             // send our banner to the client...
             rawOS.write( getBanner() );
             rawOS.flush();
+
+            // get our key...
+            Key key = getKey();
+
+            // get our decrypting input stream and turn it into a buffered reader...
+            CipherInputStream cis = Crypto.getSocketInputStream_AES_128_CTR( socket, key );
+            InputStreamReader isr = new InputStreamReader( cis, StandardCharsets.UTF_8 );
+            BufferedReader br = new BufferedReader( isr, 1000 );
+
+            // read the name of the desired console...
+            String consoleName = br.readLine();
+            // TODO: check whether we have the console, and invoke it...
+
+            // get our encrypting output stream...
+            CipherOutputStream cos = Crypto.getSocketOutputStream_AES_128_CTR( socket, key );
+            OutputStreamWriter osw = new OutputStreamWriter( cos, StandardCharsets.UTF_8 );
+            BufferedWriter bw = new BufferedWriter( osw, 1000 );
+
+            // send our ok...
+            bw.write( "OK\n" );
+            bw.flush();
+
+            rawIS.hashCode();
 
 //            // hand off our data streams to the console provider...
 //            provider.setStreams( socket.getInputStream(), socket.getOutputStream() );
@@ -61,21 +89,24 @@ public class ConsoleClientConnection extends Thread {
 //            }
         }
         catch( IOException _e ) {
-            LOGGER.log( Level.WARNING, "Problem getting input or output stream from connected socket for console client", _e );
+            LOGGER.log( Level.WARNING, "Console problem: " + _e.getMessage(), _e );
+        }
+        finally {
+            Sockets.close( socket );
         }
 
-        // the console provider has finished (or we've had a problem), so close our connection and we're done...
-        try {
-            socket.close();
-        }
-        catch( IOException _e ) {
-            LOGGER.log( Level.WARNING, "Problem when closing connected socket for console client", _e );
-        }
+        // the console provider has finished (or we've had a problem), so decrement our client count and we're done...
         server.clients.decrementAndGet();
     }
 
 
+    private Key getKey() {
+        byte[] keyBytes = Base64.decodeBytes( server.config.key );
+        return new SecretKeySpec( keyBytes, "AES" );
+    }
+
+
     private byte[] getBanner() {
-        return ("Console Server," + ConsoleServer.VERSION + "," + server.config.name + "\n").getBytes( StandardCharsets.UTF_8 );
+        return ("Loony Console Server," + ConsoleServer.VERSION + "," + server.config.name + "\n").getBytes( StandardCharsets.UTF_8 );
     }
 }
