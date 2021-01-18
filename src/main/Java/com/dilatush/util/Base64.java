@@ -1,220 +1,280 @@
 package com.dilatush.util;
 
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import static com.dilatush.util.General.isNull;
-import static com.dilatush.util.Strings.isEmpty;
 
 /**
- * Implements base64 encoding decoding per RFC 4648, section 4 ("Base 64 Encoding").  This implementation provides direct encoders/decoders for common data
- * types.  It does not handle or produce line breaks.  It does not produce padding, as the padding can be inferred from the length of the encoded result.
+ * <p>Implements base64 encoding and decoding per the alphabet defined in RFC 4648, section 4 ("Base 64 Encoding"), but without any provision for
+ * padding or line breaks.  Eliminating all base64 features other than the actual encoding means that for any given bytes being encoded, there is
+ * exactly one encoded base64 string, and vice versa.  The length of the resulting base64 string for any given number of bytes is always the same,
+ * and the number of bytes decoded from a base64 string of any given length is always the same.</p>
+ * <p>This implementation provides direct encoders/decoders for some common data types.</p>
+ * <p>Note that this implementation replaces a prior implementation that was roughly half the speed of this one, couldn't encode or decode
+ * length byte arrays or base64 strings, and was much more complex.</p>
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
 public class Base64 {
 
+    /**
+     * The characters of the base 64 "alphabet", in the order of the value they represent, [0..63].
+     */
     private static final String ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    private static final char[] BIN2CHAR = getBIN2CHAR();
-    private static final byte[] CHAR2BIN = getCHAR2BIN();
+
+    /**
+     * For characters with values in the range [0..127] (the index) contains the base 64 value of them.
+     */
+    private static final byte[] CHAR_TO_VALUE = getCharToValueTable();
 
 
     /**
-     * Returns a base 64 string that encodes the given long number.  Leading zero bits are not encoded, so the string returned has between 2 and 11
-     * characters.
+     * Returns the base 64 string that encodes the given long number.  A long contains up to 8 bytes of data, but any zero bytes that can be ignored
+     * (the most significant bytes) are not encoded.  If the given number is zero, then a zero length string is the result.  Since between zero and
+     * eight bytes could be encoded, the returned base64 string may contain between 0 and 11 (but never 1, 5, or 9) characters long.
      *
      * @param _number the long integer to encode into base 64.
      * @return the base 64 encoding of the specified long.
      */
+    @SuppressWarnings( "unused" )
     public static String encode( final long _number ) {
 
-        int lzb = bytesToEncode( _number );
+        // figure out how many bytes we need to encode...
+        int numBits = 64 - Long.numberOfLeadingZeros( _number );
+        int numBytes = (numBits >>> 3) + (((numBits & 0x7) == 0) ? 0 : 1);
 
-        StringBuilder sb = new StringBuilder( charactersNeededForBytes( lzb ) );
-        int remainingBytes = lzb;
-        while( remainingBytes > 0 ) {
-            if( remainingBytes >= 3 ) {
-                sb.append( encodeBits( _number >>> ((remainingBytes - 3) << 3), 3 ) );
-                remainingBytes -= 3;
-            }
-            else {
-                sb.append( encodeBits( _number, remainingBytes ) );
-                remainingBytes = 0;
-            }
+        // adjust our input so the most significant byte has bits...
+        long val = _number << (8 * (8 - numBytes));
+
+        // turn our long into a byte array...
+        byte[] bytes = new byte[numBytes];
+        for( int b = 0; b < bytes.length; b++ ) {
+            bytes[b] = (byte)((val >>> 8 * (7 - b)) & 0xFF);
         }
-        return sb.toString();
+
+        return encode( bytes );
     }
 
 
     /**
-     * Returns the long encoded by the specified base 64 string.  Throws an {@link IllegalArgumentException} if the given string is missing, zero length,
-     * represents a value too large to fit in a long, is an impossible length to contain an encoding, or contains invalid characters.
+     * Returns the long encoded by the specified base64 string.  If the given string decodes to fewer than 8 bytes, they will be the least
+     * significant bytes of the result.  Valid lengths for the given string are between 0 and 11, but not 1, 5, or 9.  Throws an
+     * {@link IllegalArgumentException} if the given string is missing, represents a value too large to fit in a long, is an impossible length to
+     * contain an encoding, or contains invalid characters.
      *
      * @param _base64 the base 64 encoding to decode into a long.
      * @return the long decoded from the specified encoding.
      */
+    @SuppressWarnings( "unused" )
     public static long decodeLong( final String _base64 ) {
-        if( isEmpty( _base64 ) ) throw new IllegalArgumentException( "Missing or empty base 64 encoding" );
-        int bn = bytesNeededForCharacters( _base64.length() );
-        if( bn > 8 ) throw new IllegalArgumentException( "Decoded base 64 encoding will not fit in long: " + _base64 );
-        int start = 0;
-        int end = Math.min( 4, _base64.length() );
+        byte[] bytes = decodeBytes( _base64 );
+        if( bytes.length > 8 )
+            throw new IllegalArgumentException( "Base 64 string encodes more than 8 bytes" );
+
+        // shift our bytes into a long...
         long result = 0;
-        while( start < _base64.length() ) {
-            result <<= ((end - (start + 1)) << 3);
-            result |= decodeBits( _base64, start, end );
-            start = end;
-            end = Math.min( start + 4, _base64.length() );
+        for( byte b : bytes ) {
+            result = (result << 8) | (b & 0xFF);
         }
         return result;
     }
 
 
     /**
-     * Returns a base 64 string that encodes the given bytes.
+     * Returns the base 64 string that encodes the given bytes.
      *
      * @param _bytes the bytes to encode to base 64.
      * @return the base 64 encoding of the specified bytes.
-     * @throws IllegalArgumentException if the bytes are missing or are zero-length
+     * @throws IllegalArgumentException if the bytes are missing
      */
     public static String encode( final byte[] _bytes ) {
 
-        if( isNull( (Object) _bytes ) || (_bytes.length == 0) ) throw new IllegalArgumentException( "Missing or empty bytes" );
+        // fail fast if we got no argument...
+        if( _bytes == null )
+            throw new IllegalArgumentException( "Missing bytes to encode to base 64" );
 
-        int len = charactersNeededForBytes( _bytes.length );
-        StringBuilder sb = new StringBuilder( len );
-        int i = 0;
-        while( i < _bytes.length ) {
-            long bits = 0;
-            int lim = Math.min( 3, _bytes.length - i);
-            for( int s = 0; s < lim; s++ ) {
-                bits <<= 8;
-                bits |= (0xff & _bytes[s + i]);
+        // if we got a zero-length byte array, then we have a simple answer...
+        if( _bytes.length == 0 )
+            return "";
+
+        // calculate how long our output will be...
+        int len = (_bytes.length << 2) / 3;  // this is close, but not correct...
+        len += ((len & 0x03) == 0) ? 0 : 1;  // apply a correction...
+
+        // make an array for our result...
+        char[] result = new char[len];
+
+        /*
+         * The loop below is processing triplets of input bytes, or a part thereof.  Each triplet results in a quadruplet of characters.
+         * It COULD have been done one byte at a time, but it is unrolled for performance...
+         */
+
+        // iterate over our byte triplets...
+        int cdex = 0;
+        int bdex = 0;
+        int val;
+        while( bdex < _bytes.length ) {
+
+            /* the first byte of the triplet */
+
+            // get the next byte...
+            int b = (_bytes[bdex++] & 0xFF);
+
+            // the upper six bits translate to a character to emit...
+            result[cdex++] = ALPHABET.charAt( b >>> 2 );
+
+            // we have two bits left over; shift and save...
+            val = (b & 0x03) << 4;
+
+            // if there are no more bytes, then emit the trailing character and break out...
+            if( bdex >= _bytes.length ) {
+                result[cdex] = ALPHABET.charAt( val );
+                break;
             }
-            sb.append( encodeBits( bits, lim ) );
-            i += 3;
+
+            /* the second byte of the triplet */
+
+            // get the next byte...
+            b = (_bytes[bdex++] & 0xFF);
+
+            // the two bits leftover plus the four upper bits here translate to a character to emit...
+            result[cdex++] = ALPHABET.charAt( val | (b >>> 4) );
+
+            // we have four bits left over; shift and save...
+            val = (b & 0x0F) << 2;
+
+            // if there are no more bytes, then emit the trailing character and break out...
+            if( bdex >= _bytes.length ) {
+                result[cdex] = ALPHABET.charAt( val );
+                break;
+            }
+
+            /* the third byte of the triplet */
+
+            // get the next byte...
+            b = (_bytes[bdex++] & 0xFF);
+
+            // the four bits leftover plus the two upper bits here translate to a character to emit...
+            result[cdex++] = ALPHABET.charAt( val | (b >>> 6) );
+
+            // our leftover six bits translate to a second character to emit...
+            result[cdex++] = ALPHABET.charAt( b & 0x3F );
         }
-        return sb.toString();
+
+        return new String( result );
     }
 
 
     /**
-     * Returns a byte array encoded by the specified base 64 string.  Throws an {@link IllegalArgumentException} if the given string is missing, zero length,
+     * Returns a byte array encoded by the specified base 64 string.  Throws an {@link IllegalArgumentException} if the given string is missing,
      * is an impossible length to contain an encoding, or contains invalid characters.
      *
      * @param _base64 the base 64 encoding to decode into a byte array.
      * @return the byte array decoded from the specified encoding.
      */
     public static byte[] decodeBytes( final String _base64 ) {
-        if( isEmpty( _base64 ) ) throw new IllegalArgumentException( "Missing or empty base 64 encoding" );
-        int bn = bytesNeededForCharacters( _base64.length() );
-        ByteBuffer result = ByteBuffer.allocate( bn );
-        int start = 0;
-        int end = Math.min( 4, _base64.length() );
-        while( start < _base64.length() ) {
-            int bytes = end - (start + 1);
-            int bits = decodeBits( _base64, start, end );
-            for( int i = bytes - 1; i >= 0; i-- ) {
-                result.put( (byte) (bits >>> (i << 3) ) );
-            }
-            start = end;
-            end = Math.min( end + 4, _base64.length() );
-        }
-        return result.array();
-    }
 
+        // fail fast if we got no argument...
+        if( isNull( _base64 ) )
+            throw new IllegalArgumentException( "Base64 string is missing" );
 
-    private static char[] getBIN2CHAR() {
-        char[] result = new char[64];
-        for( int i = 0; i < ALPHABET.length(); i++ ) {
-            result[i] = ALPHABET.charAt( i );
+        // if we got a zero-length string, then we have a simple answer...
+        int charLen = _base64.length();
+        if( charLen == 0 )
+            return new byte[0];
+
+        // if the number of characters modulo 4 is 1, the number of characters in our input is invalid base64...
+        if( (charLen & 0x03) == 1 )
+            throw new IllegalArgumentException( "Base64 string is not a valid length: " + _base64.length() );
+
+        // calculate how long our output array will be...
+        int len = ((charLen << 1) + charLen) >>> 2;  // this calculates 0.75 * charLen IS our output length...
+
+        // make an array for our result...
+        byte[] result = new byte[len];
+
+        // get our characters into an array...
+        char[] in = _base64.toCharArray();
+
+        /*
+         * The loop below is processing quadruplets of input characters, or a part thereof.  Each quad results in a triplet of bytes.
+         * It COULD have been done one character at a time, but it is unrolled for performance.
+         */
+
+        // iterate over our character quadruplets...
+        int cdex = 0;
+        int bdex = 0;
+        int val = 0;
+        int c;
+        while( cdex < in.length ) {
+
+            /* the first character of the quad */
+
+            // get the next character's value, checking for validity...
+            c = (in[cdex] >= 128) ? -1 : CHAR_TO_VALUE[in[cdex]];
+            if( c < 0 )
+                throw new IllegalArgumentException( "Invalid character in base 64 string: " + in[cdex] );
+            cdex++;  // we don't need to check for end-of-string here, as we've already thrown an exception for strings that ended here...
+
+            // we just save this, shifted, in the value; we only have six bits of our byte...
+            val = c << 2;
+
+            /* the second character of the quad */
+
+            // get the next character's value, checking for validity...
+            c = (in[cdex] >= 128) ? -1 : CHAR_TO_VALUE[in[cdex]];
+            if( c < 0 )
+                throw new IllegalArgumentException( "Invalid character in base 64 string: " + in[cdex] );
+            cdex++;
+
+            // we have the two more bits we needed for a byte, so stuff it away...
+            result[bdex++] = (byte)(val | c >>> 4);
+
+            // save our leftover four bits, shifted, to the value...
+            val = (c & 0x0F) << 4;
+
+            // if we're out of characters, break out of the loop...
+            if( cdex >= in.length )
+                break;
+
+            /* the third character of the quad */
+
+            // get the next character's value, checking for validity...
+            c = (in[cdex] >= 128) ? -1 : CHAR_TO_VALUE[in[cdex]];
+            if( c < 0 )
+                throw new IllegalArgumentException( "Invalid character in base 64 string: " + in[cdex] );
+            cdex++;
+
+            // we have the four more bits we needed for a byte, so stuff it away...
+            result[bdex++] = (byte)(val | c >>> 2);
+
+            // save our leftover two bits, shifted, to the value...
+            val = (c & 0x03) << 6;
+
+            // if we're out of characters, break out of the loop...
+            if( cdex >= in.length )
+                break;
+
+            /* the fourth character of the quad */
+
+            // get the next character's value, checking for validity...
+            c = (in[cdex] >= 128) ? -1 : CHAR_TO_VALUE[in[cdex]];
+            if( c < 0 )
+                throw new IllegalArgumentException( "Invalid character in base 64 string: " + in[cdex] );
+            cdex++;
+
+            // we have the six more bits we needed for a byte, so stuff it away...
+            result[bdex++] = (byte)(val | c );
+
+            // we have no bits left over...
+            val = 0;
         }
+
+        // if our leftover bits are non-zero, we've got an invalid encoding...
+        if( val != 0 )
+            throw new IllegalArgumentException( "Invalid base 64 encoding - leftover bits are non-zero" );
+
         return result;
-    }
-
-
-    private static byte[] getCHAR2BIN() {
-        byte[] result = new byte[128];
-        Arrays.fill( result, (byte) -1 );  // -1 means an invalid character...
-        for( int i = 0; i < ALPHABET.length(); i++ ) {
-            result[ ALPHABET.charAt( i ) ] = (byte) i;
-        }
-        return result;
-    }
-
-
-    /**
-     * Decodes the specified characters, returning 1, 2, or 3 bytes of decoded bits.  The decoded bits are right-justified in the result.  The number of
-     * characters to decode (_end - _start) must be 2, 3, or 4 (returning 1, 2, or 3 bytes respectively).  Throws an {@link IllegalArgumentException} if any
-     * of the arguments are invalid.
-     *
-     * @param _base64 the base 64 encoded string being decoded.
-     * @param _start the index to first character of the string to decode.
-     * @param _end the index to the character following the last character of the string to decode.
-     * @return the decoded bytes.
-     */
-    private static int decodeBits( final String _base64, final int _start, final int _end ) {
-
-        if( isEmpty( _base64 ) ) throw new IllegalArgumentException( "Missing or empty base64 string to decode" );
-        if( (_end <= _start + 1) || (_start < 0) || (_end > _base64.length()) || (_end - _start > 4) )
-            throw new IllegalArgumentException( "Invalid start or end index: " + _start + ", " + _end );
-
-        int bits = 0;
-        int index = _start;
-        while( index < _end ) {
-            bits <<= 6;
-            char c = _base64.charAt( index );
-            if( c >= 128 ) throw new IllegalArgumentException( "Invalid character in base 64 encoding: " + c );
-            int sextet = CHAR2BIN[c];
-            if( sextet < 0 ) throw new IllegalArgumentException( "Invalid character in base 64 encoding: " + c );
-            bits |= sextet;
-            index++;
-        }
-        return bits;
-    }
-
-
-    /**
-     * Encodes the specified bits, returning two, three, or four characters.  The bits to encode are right-justified.  The number of bytes to encode must be
-     * one of 1 (returns two characters), 2 (returns three characters, or 3 (returns four characters).
-     *
-     * @param _bits the bits to encode in base 64.
-     * @param _numBytes the number of bytes to encode (1, 2, or 3).
-     * @return the base 64 encoded result (2, 3, or 4 characters).
-     */
-    private static char[] encodeBits( final long _bits, final int _numBytes ) {
-        char[] result = new char[_numBytes + 1];
-        int bitShift = _numBytes * 6;
-        for( int i = 0; i < result.length; i++ ) {
-            long bits = _bits >>> bitShift;
-            result[i] = BIN2CHAR[ 0x3f & (int) bits ];
-            bitShift -= 6;
-        }
-        return result;
-    }
-
-
-    // Returns the number of bytes required to hold the given number.
-    private static int bytesToEncode( final long _number ) {
-        return Math.max( 1, 8 - (Long.numberOfLeadingZeros( _number ) >> 3) );
-    }
-
-
-    // Given the number of bytes to be encoded, returns the number of characters needed for the encoding.
-    private static int charactersNeededForBytes( final int _bytes ) {
-        int rem = _bytes % 3;
-        int triplets = _bytes / 3;
-        return (4 * triplets) + ((rem == 0) ? 0 : 1 + rem);
-    }
-
-
-    // Given the number of characters in a base 64 encoding, returns the number of bytes that represents.
-    // Throws an IllegalArgumentException of the number of characters is impossible.
-    private static int bytesNeededForCharacters( final int _characters ) {
-        int quads = _characters / 4;
-        int rem = _characters % 4;
-        if( rem == 1 ) throw new IllegalArgumentException( "Invalid number of characters in base 64 encoding: " + _characters );
-        return (3 * quads) + ((rem == 0) ? 0 : rem - 1);
     }
 
 
@@ -224,8 +284,24 @@ public class Base64 {
      * @param _char the character to test.
      * @return true if the specified character is valid in a base 64 encoding, false otherwise.
      */
+    @SuppressWarnings( "unused" )
     public static boolean isValidBase64Char( final char _char ) {
-        if( _char >= 128 ) return false;
-        return CHAR2BIN[ _char ] >= 0;
+        return ALPHABET.indexOf( _char ) >= 0;
+    }
+
+
+    /**
+     * Returns an array of byte values corresponding to character values (the index).  A value of -1 indicates an invalid character.
+     *
+     * @return an array of byte values corresponding to character values (the index)
+     */
+    private static byte[] getCharToValueTable() {
+
+        byte[] result = new byte[128];
+        Arrays.fill( result, (byte)-1 );  // the default is an invalid character...
+        for( int i = 0; i < ALPHABET.length(); i++ ) {
+            result[ALPHABET.charAt( i )] = (byte)i;
+        }
+        return result;
     }
 }
