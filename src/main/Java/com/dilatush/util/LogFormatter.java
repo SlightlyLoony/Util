@@ -100,8 +100,8 @@ public class LogFormatter extends Formatter {
         sb.append( left( _record.getLevel().toString(), 7 ) );
         sb.append( ' ' );
 
-        // now the thread ID, right justified in the selected length...
-        sb.append( right( threadName, threadIDWidth ) );
+        // now the thread ID, left justified in the selected length...
+        sb.append( leftTrunc( threadName, threadIDWidth ) );
         sb.append( ' ' );
 
         // now the source, right justified in the selected length...
@@ -232,8 +232,10 @@ public class LogFormatter extends Formatter {
 
     @SuppressWarnings( "unused" )
     private String leftTrunc( final String _field, final int _width ) {
-        if( _field.length() <= _width )
+        if( _field.length() == _width )
             return _field;
+        if( _field.length() <= _width )
+            return _field + BOS.substring( 0, _width - _field.length() );
         return _field.substring( 0, _width - 1 ) + "…";
     }
 
