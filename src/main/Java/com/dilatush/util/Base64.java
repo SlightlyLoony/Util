@@ -11,7 +11,9 @@ import static com.dilatush.util.General.isNull;
  * and the number of bytes decoded from a base64 string of any given length is always the same.</p>
  * <p>This implementation provides direct encoders/decoders for some common data types.</p>
  * <p>Note that this implementation replaces a prior implementation that was roughly half the speed of this one, couldn't encode or decode
- * length byte arrays or base64 strings, and was much more complex.</p>
+ * length byte arrays or base64 strings, and was much more complex.  This implementation benchmarks at roughly 18% faster than the JRE's
+ * {@link java.util.Base64} implementation (see {@code Base64Test} in the test package), but of course only for the subset of base 64 that this class
+ * implements.</p>
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
