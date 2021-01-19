@@ -13,7 +13,12 @@ import java.util.logging.LogRecord;
 import static com.dilatush.util.Strings.isEmpty;
 
 /**
- * Implements a simple log formatter for use with {@link java.util.logging.Logger}.
+ * Implements a simple log formatter for use with {@link java.util.logging.Logger}.  Three of the column widths are adjustable by logging properties:
+ * <li>
+ *     <ul>The message column width defaults to 60 characters and can be set with {@code com.dilatush.util.LogFormatter.messageWidth}.</ul>
+ *     <ul>The source (class) column width defaults to 30 characters and can be set with {@code com.dilatush.util.LogFormatter.sourceWidth}.</ul>
+ *     <ul>The thread ID column width defaults to 30 characters and can be set with {@code com.dilatush.util.LogFormatter.threadIDWidth}.</ul>
+ * </li>
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
@@ -22,7 +27,7 @@ public class LogFormatter extends Formatter {
     final static private String BOS = "                                                                                                                        ";
 
     // maps thread IDs to thread names...
-    final static private Map<Long,String> threadNames = new ConcurrentHashMap<>();
+    final private Map<Long,String> threadNames = new ConcurrentHashMap<>();
 
     final private int messageWidth;
     final private int sourceWidth;
@@ -55,7 +60,7 @@ public class LogFormatter extends Formatter {
         }
         sourceWidth = swa;
 
-        int twa = 25;
+        int twa = 30;
         if( tw != null ) {
             Integer twi = General.parseInt( tw );
             if( (twi != null) && (twi > 3) )
@@ -225,6 +230,7 @@ public class LogFormatter extends Formatter {
     }
 
 
+    @SuppressWarnings( "unused" )
     private String leftTrunc( final String _field, final int _width ) {
         if( _field.length() <= _width )
             return _field;

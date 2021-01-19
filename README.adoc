@@ -23,6 +23,19 @@ It's very hard to give a general description of these, as there are a wide varie
 |Provides everything needed for a Java command line application (or server daemon) to have Unix-style arguments.  Optional arguments can have any number of long and short names.  Passwords (and other arguments) can be entered interactively.  Parses and validates argument parameters.  Provides summary and detailed help. Much more in the https://github.com/SlightlyLoony/Util/blob/master/CommandLine.adoc[Command Line document].
 |===
 
+=== Some particular mentions...
+==== LogFormatter
+This is a formatter for the `java.util.logging` file or console logging, providing a format to the author's liking.  Of note, it supports logging thread names (instead of the standard thread IDs), and it supports logging stack traces for exceptions being logged.  It has some properties which modify its behavior:
+
+.LogFormatter properties
+|===
+|*Property*|*Description*
+|com.dilatush.util.LogFormatter.messageWidth|You'll be stunned to know that this property will set the message column width to something other than its default (60).
+|com.dilatush.util.LogFormatter.sourceWidth|Just as amazing is this versatile property, which will set the source class column width to something other than its default (30).
+|com.dilatush.util.LogFormatter.threadIDWidth|Last, but certainly not least, is this vital property, which will set the thread ID column width to something other than its default (30).
+|===
+
+
 == Why does the world need these utilities?
 Well, probably the world doesn't actually _need_ ShedSolar &ndash; it's mainly here for the author's personal use and enjoyment, but with some faint hope that someone else with the same challenges the author faced will also find it useful.
 
@@ -38,7 +51,7 @@ If you dig into this package in detail, you may notice that the source code in s
 == How is this package licensed?
 Util is licensed with the quite permissive MIT license: +
 ....
-Created: November 16, 2020
+Created: January 19, 2021
 Author: Tom Dilatush <tom@dilatush.com>
 Github:  https://github.com/SlightlyLoony/ShedSolar
 License: MIT
