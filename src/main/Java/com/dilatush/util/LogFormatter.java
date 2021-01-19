@@ -4,9 +4,13 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Formatter;
 import java.util.logging.LogManager;
 import java.util.logging.LogRecord;
+
+import static com.dilatush.util.Strings.isEmpty;
 
 /**
  * Implements a simple log formatter for use with {@link java.util.logging.Logger}.
@@ -16,6 +20,9 @@ import java.util.logging.LogRecord;
 public class LogFormatter extends Formatter {
 
     final static private String BOS = "                                                                                                                        ";
+
+    // maps thread IDs to thread names...
+    final static private Map<Long,String> threadNames = new ConcurrentHashMap<>();
 
     final private int messageWidth;
     final private int sourceWidth;
@@ -48,7 +55,7 @@ public class LogFormatter extends Formatter {
         }
         sourceWidth = swa;
 
-        int twa = 8;
+        int twa = 25;
         if( tw != null ) {
             Integer twi = General.parseInt( tw );
             if( (twi != null) && (twi > 3) )
@@ -73,6 +80,9 @@ public class LogFormatter extends Formatter {
     @Override
     public String format( final LogRecord _record ) {
 
+        // get our thread name...
+        String threadName = getThreadName( _record.getThreadID() );
+
         // build our output string...
         StringBuilder sb = new StringBuilder( 180 );
 
@@ -86,7 +96,7 @@ public class LogFormatter extends Formatter {
         sb.append( ' ' );
 
         // now the thread ID, right justified in the selected length...
-        sb.append( right( Integer.toString( _record.getThreadID() ), threadIDWidth ) );
+        sb.append( right( threadName, threadIDWidth ) );
         sb.append( ' ' );
 
         // now the source, right justified in the selected length...
@@ -104,6 +114,44 @@ public class LogFormatter extends Formatter {
         sb.append( System.lineSeparator() );
 
         return sb.toString();
+    }
+
+
+    /**
+     * Gets our thread's name by looking it up in the thread groups; caches the result.
+     *
+     * @param _threadID the {@code long} thread ID
+     * @return the thread name
+     */
+    private String getThreadName( final long _threadID ) {
+
+        // if we know this name already, just leave with it...
+        String threadName = threadNames.get( _threadID );
+        if( threadName != null )
+            return threadName;
+
+        // we don't know it, so we're gonna do it the hard way - first, get the root thread group...
+        ThreadGroup top = Thread.currentThread().getThreadGroup();
+        while( top.getParent() != null )
+            top = top.getParent();
+
+        // now get a list of all our threads (we're gonna assume we never have more than 500 threads going)...
+        Thread[] threads = new Thread[ 500 ];
+        int count = top.enumerate( threads, true );
+
+        // now we just map everything we found...
+        for( int i = 0; i < count; i++ ) {
+            threadNames.put( threads[i].getId(), threads[i].getName() );
+        }
+
+        // now we try looking it up again (because it's possible the ID we wanted a name for wasn't there anymore)...
+        threadName = threadNames.get( _threadID );
+
+        // if we don't have a sensible name, poke the thread ID in it's place...
+        if( isEmpty( threadName ) )
+            threadNames.put( _threadID, Long.toString( _threadID ) );
+
+        return threadName;
     }
 
 
