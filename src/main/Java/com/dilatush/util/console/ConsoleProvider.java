@@ -1,8 +1,8 @@
 package com.dilatush.util.console;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.net.Socket;
 
 /**
  * Implemented by classes providing consoles.  In general, these classes read commands from an input stream, and provide response through an
@@ -12,7 +12,5 @@ import java.io.OutputStream;
  */
 public interface ConsoleProvider {
 
-    void setStreams( final InputStream _inputStream, final OutputStream _outputStream );
-
-    void run() throws IOException;
+    void run( final Socket _socket, final BufferedReader _reader, final BufferedWriter _writer);
 }

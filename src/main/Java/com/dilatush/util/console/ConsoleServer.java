@@ -39,6 +39,9 @@ public class ConsoleServer {
 
         config = _config;
         clients       = new AtomicInteger( 0 );
+
+        // add our echo provider...
+        config.providers.put( "echo", "com.dilatush.util.console.EchoConsoleProvider" );
     }
 
 
@@ -112,6 +115,8 @@ public class ConsoleServer {
                             clients.decrementAndGet();
                             continue;  // keep on waiting...
                         }
+
+                        LOGGER.fine( "Console client connected from " + ((InetSocketAddress)clientSocket.getRemoteSocketAddress()).getHostString() );
 
                         // we're ok with this connection, so make our console client connection and let it go to town...
                         new ConsoleClientConnection( clientSocket, ConsoleServer.this );

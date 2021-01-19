@@ -8,12 +8,16 @@ import javax.crypto.CipherInputStream;
 import javax.crypto.CipherOutputStream;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import static com.dilatush.util.Strings.isEmpty;
 
 /**
  * <p>Instances of this class are created and started (in their own thread) when a client TCP connection has been successfully accepted.  This class
@@ -64,29 +68,52 @@ public class ConsoleClientConnection extends Thread {
 
             // read the name of the desired console...
             String consoleName = br.readLine();
-            // TODO: check whether we have the console, and invoke it...
+            String consoleClassName = server.config.providers.get( consoleName );
 
-            // get our encrypting output stream...
-            CipherOutputStream cos = Crypto.getSocketOutputStream_AES_128_CTR( socket, key );
-            OutputStreamWriter osw = new OutputStreamWriter( cos, StandardCharsets.UTF_8 );
-            BufferedWriter bw = new BufferedWriter( osw, 1000 );
+            // if we know about the provider, keep on truckin'...
+            if( !isEmpty( consoleClassName) ) {
 
-            // send our ok...
-            bw.write( "OK\n" );
-            bw.flush();
+                // get our encrypting output stream...
+                CipherOutputStream cos = Crypto.getSocketOutputStream_AES_128_CTR( socket, key );
+                OutputStreamWriter osw = new OutputStreamWriter( cos, StandardCharsets.UTF_8 );
+                BufferedWriter bw = new BufferedWriter( osw, 1000 );
+
+                // send our ok...
+                bw.write( "OK\n" );
+                bw.flush();
+
+                // instantiate our console provider...
+                try {
+
+                    // get the class object for our console provider...
+                    Class<?> klass = Class.forName( consoleClassName );
+
+                    // make sure it implements ConsoleProvider...
+                    if( !ConsoleProvider.class.isAssignableFrom( klass ) )
+                        throw new IOException( "Class is not a ConsoleProvider: " + consoleClassName );
+
+                    // get the no-args constructor for the console provider class...
+                    Constructor<?> ctor = klass.getConstructor();
+
+                    // instantiate our provider...
+                    ConsoleProvider provider = (ConsoleProvider) ctor.newInstance();
+                    LOGGER.fine( "Instantiated console provider: " + consoleClassName );
+
+                    // run the provider; we return when it's finished or there was a problem...
+                    provider.run( socket, br, bw );
+
+                }
+                catch( ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InstantiationException
+                        | InvocationTargetException _e ) {
+                    throw new IOException( "Problem instantiating console provider: " + _e.getMessage() );
+                }
+            }
+            else {
+                LOGGER.fine( "Could not find provider by this name: " + consoleName );
+            }
 
             rawIS.hashCode();
 
-//            // hand off our data streams to the console provider...
-//            provider.setStreams( socket.getInputStream(), socket.getOutputStream() );
-//
-//            // now run our console provider...
-//            try {
-//                provider.run();
-//            }
-//            catch( IOException _e ) {
-//                LOGGER.log( Level.WARNING, "Problem when running console client", _e );
-//            }
         }
         catch( IOException _e ) {
             LOGGER.log( Level.WARNING, "Console problem: " + _e.getMessage(), _e );
@@ -96,6 +123,7 @@ public class ConsoleClientConnection extends Thread {
         }
 
         // the console provider has finished (or we've had a problem), so decrement our client count and we're done...
+        LOGGER.fine( "Shutting down console client connection" );
         server.clients.decrementAndGet();
     }
 

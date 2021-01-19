@@ -1,5 +1,8 @@
 package com.dilatush.util.console;
 
+import java.util.HashMap;
+import java.util.logging.Logger;
+
 import static java.lang.Thread.sleep;
 
 /**
@@ -7,38 +10,14 @@ import static java.lang.Thread.sleep;
  */
 public class TestConsoleServer {
 
+    private static Logger LOGGER;
+
     public static void main( final String[] _args ) {
 
-//        try {
-//            SecureRandom random = new SecureRandom();
-//            Cipher cipher = Cipher.getInstance( "AES/CTR/NoPadding" );
-//            byte[] key = new byte[ 128 / 8 ];
-//            random.nextBytes( key );
-//            byte[] nonce = new byte[ 64 / 8 ];
-//            random.nextBytes( nonce );
-//            byte[] iv = new byte[ 128 / 8 ];
-//            arraycopy( nonce, 0, iv, 0, nonce.length );
-//            Key keySpec = new SecretKeySpec( key, "AES" );
-//            IvParameterSpec ivSpec = new IvParameterSpec( iv );
-//            cipher.init( Cipher.ENCRYPT_MODE, keySpec, ivSpec );
-//
-//            byte[] c1 = cipher.update( "This.\n".getBytes( StandardCharsets.UTF_8 ) );
-//            byte[] c2 = cipher.update( "And this is the second part, I hope.\n".getBytes( StandardCharsets.UTF_8 ) );
-//            byte[] c3 = cipher.doFinal();
-//
-//            cipher.init( Cipher.DECRYPT_MODE, keySpec, ivSpec );
-//            byte[] d1 = cipher.update( c1 );
-//            byte[] d2 = cipher.update( c2 );
-//            byte[] d3 = cipher.update( c3 );
-//            byte[] d4 = cipher.doFinal();
-//
-//
-//            cipher.hashCode();
-//        }
-//        catch( Exception _e ) {
-//            _e.printStackTrace();
-//        }
-//    }
+        // set the configuration file location (must do before any logging actions occur)...
+        System.getProperties().setProperty( "java.util.logging.config.file", "logging.properties" );
+        LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getSimpleName() );
+
 
         try {
             ConsoleServer.Config config = new ConsoleServer.Config();
@@ -46,7 +25,8 @@ public class TestConsoleServer {
             config.bindTo = null;
             config.maxClients = 1;
             config.name = "test";
-            config.key = "abcdefghijklmnopqrstuv";
+            config.key = "abcdefghijklmnopqrstuA";
+            config.providers = new HashMap<>();
             ConsoleServer server = new ConsoleServer( config );
             server.start();
 
