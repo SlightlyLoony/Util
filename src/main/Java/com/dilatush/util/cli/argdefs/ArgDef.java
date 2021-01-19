@@ -136,6 +136,6 @@ public abstract class ArgDef {
         if( isNull( parameterMode ) )
             throw new IllegalArgumentException( "No parameter mode supplied for argument definition: " + referenceName );
         if( isEmpty( defaultValue ) && (parameterMode == ParameterMode.OPTIONAL) )
-            throw new IllegalArgumentException( "No parameter mode supplied for argument with optional parameter definition: " + referenceName );
+            throw new IllegalArgumentException( "No default value supplied for argument with optional parameter definition: " + referenceName );
     }
 }
