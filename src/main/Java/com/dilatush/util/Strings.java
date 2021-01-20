@@ -5,6 +5,8 @@ import java.util.Arrays;
 import static com.dilatush.util.General.isNull;
 
 /**
+ * Static container class for utility methods related to {@link String}s.
+ *
  * @author Tom Dilatush  tom@dilatush.com
  */
 public class Strings {
@@ -90,4 +92,65 @@ public class Strings {
         Arrays.fill( chars, _char );
         return new String( chars );
     }
+
+
+    /**
+     * Returns the given string left-justified in a field of the given width.  If the given string is the same length as the field, it is returned
+     * without change.  If the given string is shorter than the field, then spaces are appended to it to make its length the same as the field's.  If
+     * the given string is longer than the field, it is truncated to a length one less than the width and an ellipsis ('…') is appended.
+     *
+     * @param _str The string to left-justify in a fixed length field.
+     * @param _width The width of the fixed-length field, in characters.
+     * @return the left-justified string
+     */
+    public static String leftJustify( final String _str, final int _width ) {
+
+        // if the width is the same, just return...
+        if( _str.length() == _width )
+            return _str;
+
+        // if the string is too long, truncate and append an ellipsis...
+        if( _str.length() > _width )
+            return _str.substring( 0, _width - 1 ) + "…";
+
+        // otherwise, pad with spaces to get the right width...
+        return _str + getStringOfChar( ' ', _width - _str.length() );
+    }
+
+
+    /**
+     * Returns the given string right-justified in a field of the given width.  If the given string is the same length as the field, it is returned
+     * without change.  If the given string is shorter than the field, then spaces are prepended to it to make its length the same as the field's.  If
+     * the given string is longer than the field, it is truncated to a length one less than the width and an ellipsis ('…') is prepended.
+     *
+     * @param _str The string to right-justify in a fixed length field.
+     * @param _width The width of the fixed-length field, in characters.
+     * @return the right-justified string
+     */
+    public static String rightJustify( final String _str, final int _width ) {
+
+        // if the width is the same, just return...
+        if( _str.length() == _width )
+            return _str;
+
+        // if the string is too long, truncate and prepend an ellipsis...
+        if( _str.length() > _width )
+            return "…" + _str.substring( 1 + _str.length() - _width );
+
+        // otherwise, pad with spaces to get the right width...
+        return getStringOfChar( ' ', _width - _str.length() ) + _str;
+    }
+
+
+    /**
+     * Returns a non-null string even if the given string is {@code null}.  If the given string is non-null already, it is returned without change.
+     * If the given string is {@code null}, an empty string ("") is returned.
+     *
+     * @param _arg The string to make safe.
+     * @return the given string, or an empty string if the given string was {@code null}
+     */
+    public static String safe( final String _arg ) {
+        return (_arg == null) ? "" : _arg;
+    }
+
 }
