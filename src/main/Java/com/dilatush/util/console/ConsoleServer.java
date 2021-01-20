@@ -1,6 +1,7 @@
 package com.dilatush.util.console;
 
 import com.dilatush.util.AConfig;
+import com.dilatush.util.Networking;
 
 import java.io.IOException;
 import java.net.*;
@@ -61,7 +62,7 @@ public class ConsoleServer {
     private class ServerThread extends Thread {
 
         private ServerThread() {
-            setName( "Console server listener" );
+            setName( "Console Listener" );
             setDaemon( true );
             start();
         }
@@ -116,7 +117,7 @@ public class ConsoleServer {
                             continue;  // keep on waiting...
                         }
 
-                        LOGGER.fine( "Console client connected from " + ((InetSocketAddress)clientSocket.getRemoteSocketAddress()).getHostString() );
+                        LOGGER.fine( "Console client connected from " + Networking.toString( clientSocket.getRemoteSocketAddress() ) );
 
                         // we're ok with this connection, so make our console client connection and let it go to town...
                         new ConsoleClientConnection( clientSocket, ConsoleServer.this );

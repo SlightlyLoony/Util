@@ -2,6 +2,7 @@ package com.dilatush.util.console;
 
 import com.dilatush.util.Base64;
 import com.dilatush.util.Crypto;
+import com.dilatush.util.Networking;
 import com.dilatush.util.Sockets;
 
 import javax.crypto.CipherInputStream;
@@ -10,7 +11,6 @@ import javax.crypto.spec.SecretKeySpec;
 import java.io.*;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
@@ -39,7 +39,7 @@ public class ConsoleClientConnection extends Thread {
         socket        = _socket;
         server        = _server;
 
-        setName( "Console client connection " + ((InetSocketAddress)socket.getRemoteSocketAddress()).getAddress().toString() );
+        setName( "Console from: " + Networking.toString( socket.getRemoteSocketAddress() ) );
         setDaemon( true );
         start();
     }
@@ -51,7 +51,6 @@ public class ConsoleClientConnection extends Thread {
         try {
 
             // get our data streams...
-            InputStream  rawIS = socket.getInputStream();
             OutputStream rawOS = socket.getOutputStream();
 
             // send our banner to the client...
@@ -111,9 +110,6 @@ public class ConsoleClientConnection extends Thread {
             else {
                 LOGGER.fine( "Could not find provider by this name: " + consoleName );
             }
-
-            rawIS.hashCode();
-
         }
         catch( IOException _e ) {
             LOGGER.log( Level.WARNING, "Console problem: " + _e.getMessage(), _e );

@@ -18,6 +18,8 @@ public class EchoConsoleProvider extends AConsoleProvider {
     @Override
     protected void onLine( final String _line ) {
         writeLine( _line );
+        if( "exit".equals( _line ) )
+            exit( "It was a pleasure to echo you, sir!  Good bye.");
     }
 
 
