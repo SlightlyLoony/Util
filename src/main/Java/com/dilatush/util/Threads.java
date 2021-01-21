@@ -47,6 +47,7 @@ public class Threads {
      * Interrupts all threads other than the current {@link Thread} that are members of the current thread's {@link ThreadGroup} or its child
      * groups.
      */
+    @SuppressWarnings( "unused" )
     public static void interruptAllOtherThreads() {
 
         // get a list of all the candidate threads...
@@ -58,6 +59,163 @@ public class Threads {
             if( thread.getId() != current )
                 thread.interrupt();
         }
+    }
+
+
+    /**
+     * <p>Creates and returns a new {@link Thread} instance with the following characteristics:</p>
+     * <ul>
+     *     <li>A member of the same {@link ThreadGroup} as the current thread.</li>
+     *     <li>The given {@link Runnable} as its target.</li>
+     *     <li>The given name, which is not required to be unique.</li>
+     *     <li>If {@code _daemon} is {@code true}, as a daemon thread, which if active will not block the JVM from exiting, or if {@code false}, as
+     *     a user thread, which <i>will</i> block the JVM from exiting while the thread is active.</li>
+     *     <li>The given stack size, which is treated by the JVM as just a suggestion and may be completely ignored.  This parameter should be used
+     *     with great caution, as different JVM implementations <i>and</i> different platforms have widely varying stack requirements.  This
+     *     parameter will likely need tuning for every installation.  If {@code _stackSize} is zero, a default stack size (which is JVM and
+     *     platform dependent) will be used.</li>
+     * </ul>
+     *
+     * @param _runnable The {@link Runnable} target for the new thread.
+     * @param _name The name for the new thread.
+     * @param _daemon The type of thread, {@code true} for daemon, {@code false} for user.
+     * @param _stackSize The suggested stack size.
+     * @return the newly created thread
+     */
+    @SuppressWarnings( "unused" )
+    public static Thread getThread( final Runnable _runnable, final String _name, final boolean _daemon, final long _stackSize ) {
+        Thread thread = new Thread( Thread.currentThread().getThreadGroup(), _runnable, _name, _stackSize );
+        thread.setDaemon( _daemon );
+        return thread;
+    }
+
+
+    /**
+     * <p>Creates and returns a new {@link Thread} instance with the following characteristics:</p>
+     * <ul>
+     *     <li>A member of the same {@link ThreadGroup} as the current thread.</li>
+     *     <li>The given {@link Runnable} as its target.</li>
+     *     <li>The given name, which is not required to be unique.</li>
+     *     <li>If {@code _daemon} is {@code true}, as a daemon thread, which if active will not block the JVM from exiting, or if {@code false}, as
+     *     a user thread, which <i>will</i> block the JVM from exiting while the thread is active.</li>
+     *     <li>The default stack size (which is JVM and platform dependent).</li>
+     * </ul>
+     *
+     * @param _runnable The {@link Runnable} target for the new thread.
+     * @param _name The name for the new thread.
+     * @param _daemon The type of thread, {@code true} for daemon, {@code false} for user.
+     * @return the newly created thread
+     */
+    @SuppressWarnings( "unused" )
+    public static Thread getThread( final Runnable _runnable, final String _name, final boolean _daemon ) {
+        Thread thread = new Thread( _runnable, _name );
+        thread.setDaemon( _daemon );
+        return thread;
+    }
+
+
+    /**
+     * <p>Creates and returns a new {@link Thread} instance with the following characteristics:</p>
+     * <ul>
+     *     <li>A member of the same {@link ThreadGroup} as the current thread.</li>
+     *     <li>The given {@link Runnable} as its target.</li>
+     *     <li>The given name, which is not required to be unique.</li>
+     *     <li>As a daemon thread, which if active will not block the JVM from exiting.</li>
+     *     <li>The default stack size (which is JVM and platform dependent).</li>
+     * </ul>
+     *
+     * @param _runnable The {@link Runnable} target for the new thread.
+     * @param _name The name for the new thread.
+     * @return the newly created thread
+     */
+    @SuppressWarnings( "unused" )
+    public static Thread getDaemonThread( final Runnable _runnable, final String _name ) {
+        return getThread( _runnable, _name, true );
+    }
+
+
+    /**
+     * <p>Creates and returns a new {@link Thread} instance with the following characteristics:</p>
+     * <ul>
+     *     <li>A member of the same {@link ThreadGroup} as the current thread.</li>
+     *     <li>The given {@link Runnable} as its target.</li>
+     *     <li>The given name, which is not required to be unique.</li>
+     *     <li>As a user thread, which <i>will</i> block the JVM from exiting while the thread is active.</li>
+     *     <li>The default stack size (which is JVM and platform dependent).</li>
+     * </ul>
+     *
+     * @param _runnable The {@link Runnable} target for the new thread.
+     * @param _name The name for the new thread.
+     * @return the newly created thread
+     */
+    @SuppressWarnings( "unused" )
+    public static Thread getUserThread( final Runnable _runnable, final String _name ) {
+        return getThread( _runnable, _name, false );
+    }
+
+
+    /**
+     * <p>Creates, starts, and returns a new {@link Thread} instance with the following characteristics:</p>
+     * <ul>
+     *     <li>A member of the same {@link ThreadGroup} as the current thread.</li>
+     *     <li>The given {@link Runnable} as its target.</li>
+     *     <li>The given name, which is not required to be unique.</li>
+     *     <li>If {@code _daemon} is {@code true}, as a daemon thread, which if active will not block the JVM from exiting, or if {@code false}, as
+     *     a user thread, which <i>will</i> block the JVM from exiting while the thread is active.</li>
+     *     <li>The default stack size (which is JVM and platform dependent).</li>
+     * </ul>
+     *
+     * @param _runnable The {@link Runnable} target for the new thread.
+     * @param _name The name for the new thread.
+     * @param _daemon The type of thread, {@code true} for daemon, {@code false} for user.
+     * @return the newly created thread
+     */
+    @SuppressWarnings( "unused" )
+    public static Thread startThread( final Runnable _runnable, final String _name, final boolean _daemon ) {
+        Thread thread = new Thread( _runnable, _name );
+        thread.setDaemon( _daemon );
+        thread.start();
+        return thread;
+    }
+
+
+    /**
+     * <p>Creates, starts, and returns a new {@link Thread} instance with the following characteristics:</p>
+     * <ul>
+     *     <li>A member of the same {@link ThreadGroup} as the current thread.</li>
+     *     <li>The given {@link Runnable} as its target.</li>
+     *     <li>The given name, which is not required to be unique.</li>
+     *     <li>As a daemon thread, which if active will not block the JVM from exiting.</li>
+     *     <li>The default stack size (which is JVM and platform dependent).</li>
+     * </ul>
+     *
+     * @param _runnable The {@link Runnable} target for the new thread.
+     * @param _name The name for the new thread.
+     * @return the newly created thread
+     */
+    @SuppressWarnings( "unused" )
+    public static Thread startDaemonThread( final Runnable _runnable, final String _name ) {
+        return startThread( _runnable, _name, true );
+    }
+
+
+    /**
+     * <p>Creates, starts, and returns a new {@link Thread} instance with the following characteristics:</p>
+     * <ul>
+     *     <li>A member of the same {@link ThreadGroup} as the current thread.</li>
+     *     <li>The given {@link Runnable} as its target.</li>
+     *     <li>The given name, which is not required to be unique.</li>
+     *     <li>As a user thread, which <i>will</i> block the JVM from exiting while the thread is active.</li>
+     *     <li>The default stack size (which is JVM and platform dependent).</li>
+     * </ul>
+     *
+     * @param _runnable The {@link Runnable} target for the new thread.
+     * @param _name The name for the new thread.
+     * @return the newly created thread
+     */
+    @SuppressWarnings( "unused" )
+    public static Thread startUserThread( final Runnable _runnable, final String _name ) {
+        return startThread( _runnable, _name, false );
     }
 
 
