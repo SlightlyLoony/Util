@@ -1,0 +1,83 @@
+= Finite State Machine
+Tom Dilatush (tom@dilatush.com) +
+V1.0, 2021-01-03
+:toc:
+:toc-placement!:
+toc::[]
+
+== What is a finite state machine, anyway?
+Finite state machines, or FSMs, is an abstract "machine" that at any given moment can be in exactly one of a finite number of states.  There's a very detailed https://en.wikipedia.org/wiki/Finite-state_machine[Wikipedia] article that will likely confuse you if you've never heard of FSMs before, but it's full of good information if you're at all familiar with them.  https://statecharts.github.io/what-is-a-state-machine.html[This article] describes event-driven FSMs, a particular kind of FSM, which is what this package provides.  The key elements:
+
+=== States
+The FSM has exactly one mutable variable: its current state.  In a completely generalized FSM, this variable could be anything at all.  In this package, the variable is an enum.  If the enum has 'n' values, then the FSM has 'n' possible states.  For instance, suppose you wanted to represent the states of a door opener - you might have OPEN, CLOSED, OPENING, CLOSING as the possible states.  The set of possible states is part of the definition of a given FSM.
+
+=== Events
+An FSM event is the software equivalent of an event in the real world: an event means that something happened.  In this package, events are the combination of an enum that unambiguously identifies what kind of event we had, and an optional, arbitrary object containing additional information about the event.  In the door opener example above, we might have events REQUEST_OPEN, REQUEST_CLOSE, SENSED_OPEN, SENSED_CLOSE; none of them need any additional data.  In a different FSM you might have an event like RPM, and the data would represent the measurement (how many RPMs).  The set of possible events is part of the definition of a given FSM.
+
+=== Transitions
+An FSM transition is notion of the FSM changing from one state to another.  In this package, a transition is triggered by a specific event occurring while the FSM is in a specific state - so the tuple `<STATE, EVENT>` (which we'll call a transition ID, or TID) unambiguously identifies a transition.  Note that there may be at most one transition with any TID.  In most state machines, many possible TIDs are not identified at all, because they're not possible or because no action is needed.  For example, in our door opener example if the state was CLOSING, and we got a REQUEST_CLOSE event, we can ignore it.
+
+=== Actions
+An FSM action is some code that is executed when the FSM transitions from one state to another; any particular action is associated with one or more transitions.  The action's code can do anything at all.  In the door opener example above, we could imagine that when the door transitions from CLOSING to CLOSED, the associated action might turn on a red light to indicate that the door is closed.  Similarly, when the door transitions from OPENING to OPEN, the associated action might turn on a green light to indicate that the door is open.  While the door is in motion, perhaps the actions would turn on an amber light.
+
+=== Transition Definition
+A transition definition ties together the concepts just discussed.  In this machine, a transition definition (or TD) is a simple tuple `<FROM_STATE, EVENT, ACTION, TO_STATE>`.  The first two elements of the TD are simply the TID, unambiguously identifying the trigger for this transition.  The ACTION element is the action (code) associated with this transition; in this package it is optional (i.e., it can be `null`).  The last element - the TO_STATE - determines what the FSM's state will be _after_ the transition.  A list of these TDs specifies all of the possible transitions in the FSM, which is the same things as saying that it defines the _behavior_ of the FSM.  The set of defined transitions is part of the definition of a given FSM.
+
+== Some notes on threading...
+The FSM can be configured to buffer events, though this is not required.  Let's consider the two cases separately:
+
+* *Event buffering disabled*: In this case all invocations of an `onEvent()` method are synchronized on the FSM instance.  That guarantees that all the things that happen inside of event handling - including processing actions and event transforms - will happen in the caller's thread, but only in one thread at a time.
+* *Event buffering enabled*: In this case all invocations of an `onEvent()` method are unsynchronized additions to the event queue, which is itself threadsafe.  The event queue is emptied by a single thread that's internal to the FSM, pulling events off the event queue and handling them sequentially, one at a time.
+
+The FSM can also be configured to provide a simple event scheduling service.  If event scheduling is enabled, another thread (named `FSMEventScheduler`) is created and used by a single-threaded instance of `ScheduledExecutorService` that is internal to the FSM.  If event buffering is also enabled, then this thread does nothing but post events to the event queue.  However, if event buffering is _not_ enabled, then the scheduled events will be handled in the scheduler's thread - a good reason to be sure that actions and transforms do not block and do require excessive computation time.  What constitutes "excessive" is, of course, a function of the program using the FSM.
+
+== Event Transformation
+
+
+== FSM Validation
+This package _validates_ the FSM's definition (the states, events, and transition definitions) before it will start up.  If the validation fails, the FSM will not be created.  The validation process checks for the following:
+
+* *Duplicates*: No two transaction definitions may have the same transaction ID.
+* *Stuck states*: States that cannot be left, because no transaction definitions includes them as `FROM_STATE`.
+* *Isolated states*: States that cannot be entered, because no transaction definition includes them as `TO_STATE`.
+* *Unused events*: Events that don't appear as `EVENT` in a transition definition, and also don't appear as an `EVENT` in an event transformation definition.
+
+
+== How does it work?
+
+....
+    config.scenarios = makeMap( {
+        interiorOverheatingScenario: {
+            tempTest: makeEnabler( "Delay", { "_delay_": 5000, "value": 95.4 })
+        }
+    });
+....
+
+
+== A bit about test enablers...
+In that pesky real world, tests need to be a bit more flexible than just "on" or "off".  The entire idea of test enablers is to provide that flexibility.  Here are the built-in test enablers, but you can also make your own:
+
+.Table Built-in Test Enablers
+|===
+|Name|Description
+|CountedTestEnabler
+|Is enabled for a configurable number of `isEnabled()` invocations, then disabled -- or vice versa.
+|DelayTestEnabler
+|Is enabled for a configurable time after `init()` is invoked (generally on program startup or enabling of a scenario), then disabled -- or vice versa.
+|FalseTestEnabler
+|Is always disabled.
+|JavaScriptTestEnabler
+|Is enabled or disabled according to a JavaScript script that you supply.  That script may use any properties you configure.  You could, for example, make a test enabler that was enabled only during a full moon.
+|PeriodicTestEnabler
+|Is enabled for a configurable interval after `init()` is invoked (generally on program startup or enabling of a scenario), disabled for a different configurable interval, and then repeats the cycle -- or vice versa.
+|RandomTestEnabler
+|Is enabled for a configurable fraction of the invocations of `isEnabled()`.  For instance, if configured with 0.1, then (on long-term average) 10% of the invocations of `isEnabled()` will return true, while 90% will return false.
+|CompositeTestEnabler
+|We saved the best, but most complicated, test enabler for last.  This test enabler is configured with an ordered list of _other_ test enablers.  When `isEnabled()` on the composite test enabler is called, then `isEnabled()` on each of the configured test enablers is called in sequence, and `isEnabled()` on the composite test enabler will only return true if _all_ the configured test enablers' `isEnabled()` also returned true.
+
+An example will illustrate this.  Suppose you defined a composite test enabler with a delay test enabler, configured to be enabled after 5 seconds, and a counted test enabler (configured to be enabled just once).  The composite test enabler will always report disabled except for the first invocation of `isEnabled()` after 5 seconds of program operation.  The test code would therefore only run once, sometime after 5 seconds post `init()` invocation (generally on program startup or enabling of a scenario).
+|===
+
+
+== Learning more details...
+You can learn about the various kinds of enablers that are included with the framework at https://github.com/SlightlyLoony/Util/tree/master/src/main/Java/com/dilatush/util/test[the GitHub repository].  You can also make your own test enablers, including JavaScript-scripted test enablers see https://github.com/SlightlyLoony/Util/blob/master/src/main/Java/com/dilatush/util/test/JavaScriptTestEnabler.java[JavaScriptTestEnabler].

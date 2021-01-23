@@ -21,6 +21,7 @@ It's very hard to give a general description of these, as there are a wide varie
 |Provides a simple, flexible mechanism to write configuration files in JavaScript, via the _Nashorn_ JavaScript engine (and yes, I know it's deprecated).  See the class _AConfig_ for details.  The https://github.com/SlightlyLoony/ShedSolar[_ShedSolar_] project in my repository has a realistic example of its use.  Much more in the https://github.com/SlightlyLoony/Util/blob/master/JavaScript%20Configuration.adoc[JavaScript Configuration] document.
 |Command Line Argument Interpreter
 |Provides everything needed for a Java command line application (or server daemon) to have Unix-style arguments.  Optional arguments can have any number of long and short names.  Passwords (and other arguments) can be entered interactively.  Parses and validates argument parameters.  Provides summary and detailed help. Much more in the https://github.com/SlightlyLoony/Util/blob/master/CommandLine.adoc[Command Line document].
+|Finite State Machine|Provides everything you need to build a finite state machine (FSM).  While FSMs _can_ be very complex, they can also be quite simple - and this FSM can provide the whole range.  A simple FSM can be built in a single class, as you can see with the example FSM included in the package.  This FSM package can also provide the guts of a very complex FSM, even those with nested FSMs.  Much more in the https://github.com/SlightlyLoony/Util/blob/master/FSM.adoc[FSM document].
 |===
 
 === Some particular mentions...
