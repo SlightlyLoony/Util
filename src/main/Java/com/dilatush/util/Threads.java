@@ -1,6 +1,8 @@
 package com.dilatush.util;
 
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadFactory;
 
 /**
  * Static container class for utility functions related to Java threads.
@@ -216,6 +218,37 @@ public class Threads {
     @SuppressWarnings( "unused" )
     public static Thread startUserThread( final Runnable _runnable, final String _name ) {
         return startThread( _runnable, _name, false );
+    }
+
+
+    /**
+     * Simple thread factory that creates a named daemon thread.  This is quite useful in constructors for {@link ExecutorService}.
+     */
+    public static class DaemonThreadFactory implements ThreadFactory {
+
+        private final String name;
+
+
+        /**
+         * Creates a new instance of this class that will create daemon threads with the given name.
+         *
+         * @param _name The name for the threads this factory creates.
+         */
+        public DaemonThreadFactory( final String _name ) {
+            name = _name;
+        }
+
+
+        /**
+         * Constructs a new {@code Thread}.  Implementations may also initialize priority, name, daemon status, {@code ThreadGroup}, etc.
+         *
+         * @param _runnable a runnable to be executed by new thread instance
+         * @return constructed thread, or {@code null} if the request to create a thread is rejected
+         */
+        @Override
+        public Thread newThread( final Runnable _runnable ) {
+            return getThread( _runnable, name, true );
+        }
     }
 
 
