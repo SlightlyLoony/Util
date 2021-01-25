@@ -13,7 +13,7 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
 
     /*package-private*/ S                                                             initialState;
     /*package-private*/ FSMStateContext[]                                             stateContexts;
-    /*package-private*/ Map<FSMTransitionID<S,E>, FSMTransition<FSMAction<S,E>,S,E>> transitions;
+    /*package-private*/ Map<FSMTransitionID<S,E>, FSMTransition<FSMAction<S,E>,S,E>>  transitions;
     /*package-private*/ Map<E,FSMEventTransform<S,E>>                                 transforms;
     /*package-private*/ Object                                                        context;
     /*package-private*/ boolean                                                       eventScheduling;
@@ -53,6 +53,11 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
     }
 
 
+    public void setFSMContext( final Object _fsmContext ) {
+        context = _fsmContext;
+    }
+
+
     public void enableEventScheduling() {
         eventScheduling = true;
     }
@@ -68,7 +73,7 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
     }
 
 
-    public void addStateContext( final S _state, final FSMStateContext _context ) {
+    public void setStateContext( final S _state, final FSMStateContext _context ) {
         stateContexts[_state.ordinal()] = _context;
     }
 
@@ -112,6 +117,9 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
         Set<E> usedEvents = new HashSet<>( events );
         for( FSMTransitionID<S,E> def : transitions.keySet() ) {
             usedEvents.remove( def.event );
+        }
+        for( E event : transforms.keySet() ) {
+            usedEvents.remove( event );
         }
         for( E event : usedEvents ) {
             valid = false;

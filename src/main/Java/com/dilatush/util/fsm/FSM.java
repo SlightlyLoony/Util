@@ -72,7 +72,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
         // if we're buffering events, set up our dispatch thread...
         if( bufferedEvents ) {
             eventsBuffer = new LinkedBlockingDeque<>( _spec.maxBufferedEvents );
-            eventDispatcher = Threads.startDaemonThread( new EventDispatcher(), "FSMEventDispatcher" );
+            eventDispatcher = Threads.startDaemonThread( this::dispatch, "FSMEventDispatcher" );
         }
 
         // otherwise, null the fields to make the compiler happy...
@@ -95,6 +95,9 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      * <p>This method is the heart of the FSM - it handles state transitions and event transformations, all triggered by receiving an event.  There
      * are several things that can happen, depending on what state the FSM is currently in and what event is received:</p>
      * <ul>
+     *     <li>If the event is an instance of {@link FSMCancellableEvent} and the event has been cancelled, then this method does nothing at all.
+     *     This mechanism eliminates race conditions that might otherwise arise because the scheduled events are posted in a different thread from
+     *     the one actions are run in.</li>
      *     <li>If the current state and the received event (the transition ID) match a defined transition, then the FSM transitions from its
      *     current state to the TO_STATE defined in the transition definition.  There are three steps to that process:
      *     <ol>
@@ -123,6 +126,13 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      */
     private void onEventImpl( final FSMEvent<E> _event ) {
 
+        // if our event is a cancellable event that has been cancelled, ignore it...
+        if( _event instanceof FSMCancellableEvent ) {
+            FSMCancellableEvent<E> cancellableEvent = (FSMCancellableEvent<E>) _event;
+            if( cancellableEvent.isCancelled() )
+                return;
+        }
+
         // if we don't have a transition mapped for the current state and this event, then let's see if we have a transform...
         FSMTransition<FSMAction<S,E>,S,E> transition = transitions.get( new FSMTransitionID<>( state, _event.event ) );
         if( transition == null ) {
@@ -145,14 +155,13 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
 
         LOGGER.finest( () -> "Transition from " + state + " on event " + _event );
 
-        // mark the time we're making this transition...
-        Instant transitionTime = Instant.now();
-
         // update the context of the state we're leaving: exit time and time in state...
         FSMStateContext fromContext = stateContexts[state.ordinal()];
-        fromContext.setLastLeft( Instant.now() );
-        Duration thisTime = Duration.between( fromContext.getLastEntered(), fromContext.getLastLeft() );
-        fromContext.setTimeInState( fromContext.getTimeInState().plus( thisTime ) );
+        if( state != transition.toState ) {
+            fromContext.setLastLeft( Instant.now() );
+            Duration thisTime = Duration.between( fromContext.getLastEntered(), fromContext.getLastLeft() );
+            fromContext.setTimeInState( fromContext.getTimeInState().plus( thisTime ) );
+        }
 
         // get the context for the state we're going to...
         FSMStateContext toContext = stateContexts[transition.toState.ordinal()];
@@ -178,20 +187,28 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
         }
 
         // update the context of the state we're going to: entry time and number of entries...
-        toContext.setLastEntered( Instant.now() );
-        toContext.setEntries( toContext.getEntries() + 1 );
+        if( state != transition.toState ) {
+            toContext.setLastEntered( Instant.now() );
+            toContext.setEntries( toContext.getEntries() + 1 );
 
-        // set the new state...
-        state = transition.toState;
+            // set the new state...
+            state = transition.toState;
+        }
 
         LOGGER.finest( () -> "Transitioned to state " + state );
     }
 
 
     /**
-     * <p>This method is at the heart of the FSM - it handles state transitions and event transformations, all triggered by receiving an event.  There
-     * are several things that can happen, depending on what state the FSM is currently in and what event is received:</p>
+     * <p>This method is at the heart of the FSM - it handles state transitions and event transformations, all triggered by receiving an event.  If
+     * this FSM instance is configured for event buffering, this method queues the given event in the event buffer, and another thread does the actual
+     * event handling.  If this FSM instance is not configured for event buffering, then this method is synchronized (on the FSM instance) and then
+     * handles the event directly.  Once the event is being handled, there are several things that can happen, depending on what state the FSM is
+     * currently in and what event is received:</p>
      * <ul>
+     *     <li>If the event is an instance of {@link FSMCancellableEvent} and the event has been cancelled, then this method does nothing at all.
+     *     This mechanism eliminates race conditions that might otherwise arise because the scheduled events are posted in a different thread from
+     *     the one actions are run in.</li>
      *     <li>If the current state and the received event (the transition ID) match a defined transition, then the FSM transitions from its
      *     current state to the TO_STATE defined in the transition definition.  There are several steps to that process:
      *     <ol>
@@ -215,7 +232,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      *     <li>If the current state and the received event (the transition ID) <i>do not</i> match a defined transition, and the received event
      *     does not have a configured event transform, then this method does nothing at all.</li>
      * </ul>
-     * <p>Note that this method is threadsafe whether or not event buffering is enabled.  </p>
+     * <p>This method is threadsafe whether or not event buffering is enabled.</p>
      *
      * @param _event The event to be handled.
      */
@@ -244,6 +261,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      * @param _event The event enum for the event to be handled.
      * @param _eventData The event data object for the event to be handled.
      */
+    @SuppressWarnings( "unused" )
     public void onEvent( final E _event, final Object _eventData ) {
         onEvent( new FSMEvent<>( _event, _eventData ) );
     }
@@ -269,9 +287,9 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      *
      * @param _event The {@link FSMEvent} to be scheduled.
      * @param _delay The {@link Duration} delay until it is to be handled.
-     * @return The {@link ScheduledFuture} that can be used to cancel this scheduled event.
+     * @return The {@link FSMCancellableEvent} that can be used to cancel this scheduled event.
      */
-    public ScheduledFuture<?> scheduleEvent( final FSMEvent<E> _event, final Duration _delay ) {
+    public FSMCancellableEvent<E> scheduleEvent( final FSMEvent<E> _event, final Duration _delay ) {
 
         // if we don't have event scheduling enabled, complain loudly...
         if( !eventScheduling )
@@ -282,12 +300,15 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
 
         LOGGER.finest( () -> "Scheduled " + _event + " for " + _delay.toString().substring( 2 ) );
 
-        // schedule the event and return the ScheduledFuture...
-        return eventScheduler.schedule(
-                new EventSender( _event ),   // the Runnable with our event ready to post...
-                _delay.toNanos(),            // the delay in nanoseconds...
-                TimeUnit.NANOSECONDS         // tell the scheduler that it's in nanoseconds...
+        // schedule the event and return the cancellable event...
+        FSMCancellableEvent<E> cancellableEvent = new FSMCancellableEvent<>( _event );
+        ScheduledFuture<?> scheduledFuture = eventScheduler.schedule(
+                new EventSender( cancellableEvent ),   // the Runnable with our event ready to post...
+                _delay.toNanos(),                      // the delay in nanoseconds...
+                TimeUnit.NANOSECONDS                   // tell the scheduler that it's in nanoseconds...
         );
+        cancellableEvent.setFuture( scheduledFuture ); // stuff the scheduled future into our cancellable event...
+        return cancellableEvent;
     }
 
 
@@ -299,20 +320,23 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      * @param _event The event enum for the event to be scheduled.
      * @param _eventData The event data object for the event to be scheduled.
      * @param _delay The delay until it is to be handled.
+     * @return The {@link FSMCancellableEvent} that can be used to cancel this scheduled event.
      */
-    public ScheduledFuture<?> scheduleEvent( final E _event, final Object _eventData, final Duration _delay ) {
+    @SuppressWarnings( "unused" )
+    public FSMCancellableEvent<E> scheduleEvent( final E _event, final Object _eventData, final Duration _delay ) {
         return scheduleEvent( new FSMEvent<>( _event, _eventData ), _delay );
     }
 
 
     /**
-     * This is a convenience method that simply wraps the given event {@link Enum} and a {@code null} for theevent data {@link Object} in an instance
+     * This is a convenience method that simply wraps the given event {@link Enum} and a {@code null} for the event data {@link Object} in an instance
      * of {@link FSMEvent} and calls {@link #scheduleEvent(FSMEvent, Duration)}.
      *
      * @param _event The event enum for the event to be scheduled.
      * @param _delay The delay until it is to be handled.
+     * @return The {@link FSMCancellableEvent} that can be used to cancel this scheduled event.
      */
-    public ScheduledFuture<?> scheduleEvent( final E _event, final Duration _delay ) {
+    public FSMCancellableEvent<E> scheduleEvent( final E _event, final Duration _delay ) {
         return scheduleEvent( new FSMEvent<>( _event, null ), _delay );
     }
 
@@ -348,31 +372,22 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
 
 
     /**
-     * A simple {@link Runnable} implementation used to dispatch queued events to the event handler when event buffering is enabled.
+     * Runnable that pulls events from the event buffer and dispatches them to the event handler.
      */
-    private class EventDispatcher implements Runnable {
+    private void dispatch() {
 
-        /**
-         * This method should never exit; it's just a loop that retrieves events from the event queue and dispatches them to the event handler.
-         */
-        @Override
-        public void run() {
+        try {
+            // the compiler is confused by the branch in the constructor that sets these up...
+            assert eventsBuffer != null;
+            assert eventDispatcher != null;
 
-            try {
-                // the compiler is confused by the branch in the constructor that sets these up...
-                assert eventsBuffer != null;
-                assert eventDispatcher != null;
-
-                while( !eventDispatcher.isInterrupted() ) {
-                    FSMEvent<E> event = eventsBuffer.takeFirst();
-                    onEventImpl( event );
-                }
-            }
-            catch( InterruptedException _e ) {
-                // naught to do here; our thread will simply terminate...
+            while( !eventDispatcher.isInterrupted() ) {
+                FSMEvent<E> event = eventsBuffer.takeFirst();
+                onEventImpl( event );
             }
         }
+        catch( InterruptedException _e ) {
+            // naught to do here; our thread will simply terminate...
+        }
     }
-
-
 }

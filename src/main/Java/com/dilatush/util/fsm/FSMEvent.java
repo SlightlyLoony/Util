@@ -24,6 +24,11 @@ public class FSMEvent<E extends Enum<E>> {
     }
 
 
+    public FSMEvent( final E _event ) {
+        this( _event, null );
+    }
+
+
     @Override
     public String toString() {
         return (data == null) ? event.toString() : event.toString() + " " + data.toString();

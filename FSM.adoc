@@ -31,6 +31,8 @@ The FSM can be configured to buffer events, though this is not required.  Let's 
 
 The FSM can also be configured to provide a simple event scheduling service.  If event scheduling is enabled, another thread (named `FSMEventScheduler`) is created and used by a single-threaded instance of `ScheduledExecutorService` that is internal to the FSM.  If event buffering is also enabled, then this thread does nothing but post events to the event queue.  However, if event buffering is _not_ enabled, then the scheduled events will be handled in the scheduler's thread - a good reason to be sure that actions and transforms do not block and do require excessive computation time.  What constitutes "excessive" is, of course, a function of the program using the FSM.
 
+Ordinarily when using a scheduled executor service, cancelling scheduled tasks (in our case, posting events) is a potentially problematic exericise.  In particular, there is normally a "race condition", wherein one thread (such as the thread executing FSM actions) tries to cancel a scheduled task that has already executed.  In our case this circumstance is curable because FSM transitions occur, and FSM actions all execute, sequentially in a single thread (a necessity for the integrity of the FSM's state).  Our cure is to make the scheduled event itself cancellable (in addition to cancelling the scheduled task, if possible).  Thus the `scheduleEvent()` methods of the FSM return instances of a subclass of `FSMEvent` called `FSMCancellableEvent`.  The `onEventImpl()` method will simply ignore any cancelled events.  The result is that scheduled events can be cancelled without the usual risk of a race condition.
+
 == Event Transformation
 
 
