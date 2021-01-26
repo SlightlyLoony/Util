@@ -17,6 +17,12 @@ public class FSMTransitionID<S extends Enum<S>, E extends Enum<E>> {
 
 
     @Override
+    public String toString() {
+        return "(" + fromState.toString() + "/" + event.toString() + ")";
+    }
+
+
+    @Override
     public boolean equals( final Object _o ) {
         if( this == _o ) return true;
         if( _o == null || getClass() != _o.getClass() ) return false;

@@ -56,30 +56,9 @@ This package _validates_ the FSM's definition (the states, events, and transitio
 ....
 
 
-== A bit about test enablers...
-In that pesky real world, tests need to be a bit more flexible than just "on" or "off".  The entire idea of test enablers is to provide that flexibility.  Here are the built-in test enablers, but you can also make your own:
-
-.Table Built-in Test Enablers
-|===
-|Name|Description
-|CountedTestEnabler
-|Is enabled for a configurable number of `isEnabled()` invocations, then disabled -- or vice versa.
-|DelayTestEnabler
-|Is enabled for a configurable time after `init()` is invoked (generally on program startup or enabling of a scenario), then disabled -- or vice versa.
-|FalseTestEnabler
-|Is always disabled.
-|JavaScriptTestEnabler
-|Is enabled or disabled according to a JavaScript script that you supply.  That script may use any properties you configure.  You could, for example, make a test enabler that was enabled only during a full moon.
-|PeriodicTestEnabler
-|Is enabled for a configurable interval after `init()` is invoked (generally on program startup or enabling of a scenario), disabled for a different configurable interval, and then repeats the cycle -- or vice versa.
-|RandomTestEnabler
-|Is enabled for a configurable fraction of the invocations of `isEnabled()`.  For instance, if configured with 0.1, then (on long-term average) 10% of the invocations of `isEnabled()` will return true, while 90% will return false.
-|CompositeTestEnabler
-|We saved the best, but most complicated, test enabler for last.  This test enabler is configured with an ordered list of _other_ test enablers.  When `isEnabled()` on the composite test enabler is called, then `isEnabled()` on each of the configured test enablers is called in sequence, and `isEnabled()` on the composite test enabler will only return true if _all_ the configured test enablers' `isEnabled()` also returned true.
-
-An example will illustrate this.  Suppose you defined a composite test enabler with a delay test enabler, configured to be enabled after 5 seconds, and a counted test enabler (configured to be enabled just once).  The composite test enabler will always report disabled except for the first invocation of `isEnabled()` after 5 seconds of program operation.  The test code would therefore only run once, sometime after 5 seconds post `init()` invocation (generally on program startup or enabling of a scenario).
-|===
+== Example program
+Nothing works better for building understanding than an https://github.com/SlightlyLoony/Util/tree/master/src/main/Java/com/dilatush/util/fsm/example[example].  This example program uses two FSMs to implement the controls for a backup generator - the kind you install at your home to provide power if the grid power goes down.  A relatively simple FSM controls the generator overall
 
 
-== Learning more details...
-You can learn about the various kinds of enablers that are included with the framework at https://github.com/SlightlyLoony/Util/tree/master/src/main/Java/com/dilatush/util/test[the GitHub repository].  You can also make your own test enablers, including JavaScript-scripted test enablers see https://github.com/SlightlyLoony/Util/blob/master/src/main/Java/com/dilatush/util/test/JavaScriptTestEnabler.java[JavaScriptTestEnabler].
+== Learning more...
+The code for the FSM implementation can be found https://github.com/SlightlyLoony/Util/tree/master/src/main/Java/com/dilatush/util/fsm[here], and the example code https://github.com/SlightlyLoony/Util/tree/master/src/main/Java/com/dilatush/util/fsm/example[here].

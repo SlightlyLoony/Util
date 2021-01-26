@@ -13,6 +13,7 @@ import java.util.function.DoubleUnaryOperator;
 import static com.dilatush.util.fsm.example.Engine.Mode.OFF;
 import static com.dilatush.util.fsm.example.Engine.Mode.ON;
 
+
 /**
  * Simulated engine for testing.
  *
@@ -67,7 +68,7 @@ public class EngineSim implements Engine {
             runtime = 0;
 
         if( (ticker & 3) == 0 )
-            out( "Engine: RPM " + rpm );
+            out( rpm );
     }
 
 
@@ -86,7 +87,7 @@ public class EngineSim implements Engine {
                     state = State.STARTING;
                     ticker = 0;
                     scenario = startingScenarios[2/*random.nextInt( startingScenarios.length )*/];
-                    out( "Engine: starting" );
+                    out( "starting" );
                 }
                 break;
 
@@ -97,7 +98,7 @@ public class EngineSim implements Engine {
                     state = State.IDLE;
                     ticker = 0;
                     scenario = this::stopRPM;
-                    out( "Engine: stopping" );
+                    out( "stopping" );
                 }
 
                 // if the RPMs are 1000 or over, we're running...
@@ -105,7 +106,7 @@ public class EngineSim implements Engine {
                     state = State.RUNNING;
                     ticker = 0;
                     scenario = runningScenarios[2/*random.nextInt( runningScenarios.length )*/];
-                    out( "Engine: running" );
+                    out( "running" );
                 }
                 break;
 
@@ -113,9 +114,10 @@ public class EngineSim implements Engine {
 
                 // if the power is off, the fuel is off, or the RPMs are under 50, we're stopping and switching to idle...
                 if( (power == OFF) || (fuel == OFF) || (rpm < 50) ) {
+                    state = State.IDLE;
                     ticker = 0;
                     scenario = this::stopRPM;
-                    out( "Engine: stopping" );
+                    out( "stopping" );
                 }
 
                 break;
@@ -129,7 +131,7 @@ public class EngineSim implements Engine {
      */
     @Override
     public void power( final Mode _mode ) {
-        out( "Engine: power " + _mode );
+        out( "power " + _mode );
         power = _mode;
         stateCheck();
     }
@@ -142,7 +144,7 @@ public class EngineSim implements Engine {
      */
     @Override
     public void fuel( final Mode _mode ) {
-        out( "Engine: fuel " + _mode );
+        out( "fuel " + _mode );
         fuel = _mode;
         stateCheck();
     }
@@ -156,7 +158,7 @@ public class EngineSim implements Engine {
      */
     @Override
     public void starter( final Mode _mode ) {
-        out( "Engine: starter " + _mode );
+        out( "starter " + _mode );
         starter = _mode;
         stateCheck();
     }
@@ -177,46 +179,48 @@ public class EngineSim implements Engine {
     DoubleUnaryOperator[] startingScenarios = { this::startRamp, this::startFail, this::startExp };
 
 
-    // linear ramp up with a little random variation...
+    // exponential ramp...
     private double startRamp( final double _rpm ) {
-        return Math.min( 1000, _rpm + (50 + random.nextInt( 200 ) ) );
+        double r = Math.max( _rpm, 50 );
+        return r + (1100 - r) / 12;
     }
 
 
-    // failed start; varies 50 to 100 rpm...
+    // failed start...
     private double startFail( final double _rpm ) {
-        return 50 + random.nextDouble() * 50;
+        double r = Math.max( _rpm, 50 );
+        return r + (300 - r) / 12;
     }
 
 
     // exponential ramp with a little random variation...
     private double startExp( final double _rpm ) {
         double r = Math.max( _rpm, 50 );
-        return Math.min( 1000, r * (1.05 + .1 * random.nextDouble() ) );
+        return r + (1100 - r) / 12 + random.nextDouble() * (1000 - r) / 25;
     }
 
 
     DoubleUnaryOperator[] runningScenarios = { this::runLinear, this::runFail, this::runShoot };
 
 
-    // linear ramp with a little random variation...
+    // exponential ramp...
     private double runLinear( final double _rpm ) {
-        return Math.min( 1800, _rpm + (30 + 50 * random.nextDouble()) );
+        return _rpm + (1800 - _rpm) / 12;
     }
 
 
     // linear ramp than never makes it to 1800 RPM...
     private double runFail( final double _rpm ) {
-        return Math.min( 1700, _rpm + 50 );
+        return _rpm + (1700 - _rpm) / 12;
     }
 
 
     // linear with overshoot, undershoot, overshoot, and then on target...
     private double runShoot( final double _rpm ) {
 
-        // compute error coefficient...
-        double error = 1 + Math.sin( ticker * Math.PI / 10 ) / (5 * ticker);
-        return error * 1800;
+        // compute our target coefficient...
+        double target = 1800 + 6000 * Math.sin( ticker * Math.PI / 10 ) / (5 * ticker);
+        return _rpm + (target - _rpm) / 10;
     }
 
 
@@ -229,6 +233,11 @@ public class EngineSim implements Engine {
     private final DateTimeFormatter ldtf = DateTimeFormatter.ofPattern( "HH:mm:ss.SSS " );
 
     private void out( final String _msg ) {
-        System.out.println( ldtf.format( ZonedDateTime.now() ) + _msg );
+        System.out.println( ldtf.format( ZonedDateTime.now() )  + "      Engine: " + _msg );
+    }
+
+
+    private void out( final double _rpm ) {
+        System.out.println( ldtf.format( ZonedDateTime.now() )  + "         RPM " + Math.round( _rpm ) );
     }
 }

@@ -143,7 +143,8 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
                 return;
 
             // ah, we DID get a transform - so run it...
-            FSMEvent<E> result = transform.transform( _event, this, fsmContext, stateContexts[state.ordinal()] );
+            FSMEventTransformContext<S,E> etContext = new FSMEventTransformContext<>( this, fsmContext, stateContexts[state.ordinal()] );
+            FSMEvent<E> result = transform.transform( _event, etContext );
 
             // if we got a new event, handle it immediately...
             if( result != null )

@@ -88,18 +88,20 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
         // iterate over all the transition definitions to map all our transitions, and collecting a concrete event...
         for( FSMTransitionDef<S,E> def : defs ) {
             FSMTransitionID<S,E> index = new FSMTransitionID<>( def.fromState, def.onEvent );
+            Object checker = transitions.get( index );
+            if( checker != null ) {
+                errorMessages.add( "   Duplicate transition ID: " + index.toString() );
+                continue;
+            }
             transitions.put( index, new FSMTransition<FSMAction<S,E>,S,E>(def.action, def.toState) );
         }
 
-        boolean valid = true;
-// TODO: we need to check for duplicates...
         // see what states we have no transitions from...
         Set<S> fromStates = new HashSet<>( states );
         for( FSMTransitionID<S,E> def : transitions.keySet() ) {
             fromStates.remove( def.fromState );
         }
         for( S state : fromStates ) {
-            valid = false;
             errorMessages.add( "   No transition from state: " + state.toString() );
         }
 
@@ -109,7 +111,6 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
             toStates.remove( transition.toState );
         }
         for( S state : toStates ) {
-            valid = false;
             errorMessages.add( "   No transition to state: " + state.toString() );
         }
 
@@ -122,11 +123,10 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
             usedEvents.remove( event );
         }
         for( E event : usedEvents ) {
-            valid = false;
             errorMessages.add( "   Event never used: " + event.toString() );
         }
 
-        return valid;
+        return errorMessages.size() == 0;
     }
 
 

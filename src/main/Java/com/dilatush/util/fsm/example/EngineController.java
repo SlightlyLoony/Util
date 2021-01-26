@@ -26,7 +26,7 @@ public class EngineController {
     private static final long   MAX_STARTER_TIME_MS     = 15_000;
     private static final long   MAX_STABILIZING_TIME_MS = 30_000;
     private static final long   STARTER_COOLING_TIME_MS = 15_000;
-    private static final long   MIN_STABLE_TIME_MS      = 5_000;
+    private static final long   MIN_STABLE_TIME_MS      = 10_000;
     private static final int    MAX_START_ATTEMPTS      = 3;
     private static final double RPM_TOLERANCE_PERCENT   = 0.5;  // RPM must be +/- this percentage to generate
     private static final double MIN_GEN_RPM             = 1800 - RPM_TOLERANCE_PERCENT / 100 * 1800;
@@ -51,19 +51,19 @@ public class EngineController {
 
     public void start() {
         fsm.onEvent( Event.START );
-        out( "Controller: START command" );
+        out( "START command" );
     }
 
 
     public void stop() {
         fsm.onEvent( Event.STOP );
-        out( "Controller: STOP command" );
+        out( "STOP command" );
     }
 
 
     public void fixed() {
         fsm.onEvent( Event.FIXED );
-        out( "Controller: FIXED command" );
+        out( "FIXED command" );
     }
 
 
@@ -108,6 +108,26 @@ public class EngineController {
         STOPPED
     }
 
+    private static class StartingContext extends FSMStateContext {
+        private int attempts;                        // how many attempts we've made to start the engine
+        private FSMCancellableEvent<Event> timeout;  // so we don't exceed 15 seconds of cranking
+    }
+
+
+    private static class StoppingContext extends FSMStateContext {
+        private FSMCancellableEvent<Event> timeout;   // in case the engine takes too long to stop
+    }
+
+
+    private static class CoolingContext extends FSMStateContext {
+    }
+
+
+    private static class StabilizingContext extends FSMStateContext {
+        private FSMCancellableEvent<Event> timeout;      // so we don't wait too long to stabilize
+        private FSMCancellableEvent<Event> stableTime;   // keep track of how long we've been stable
+    }
+
 
     /**
      * Create the engine controller FSM.
@@ -116,7 +136,7 @@ public class EngineController {
      */
     private FSM<State,Event> createFSM() {
 
-        FSMSpec<State,Event> spec = new FSMSpec<>( State.STOPPED, Event.STOP );
+        FSMSpec<State, Event> spec = new FSMSpec<>( State.STOPPED, Event.STOP );
 
         spec.enableBufferedEvents();
         spec.enableEventScheduling();
@@ -127,7 +147,6 @@ public class EngineController {
         spec.setStateContext( State.STABILIZING, new StabilizingContext()  );
 
         spec.addTransition( State.STOPPED,        Event.START,               this::actionStart,      State.STARTING    );
-        spec.addTransition( State.STARTING,       Event.STOP,                this::actionStop,       State.STOPPING    );
         spec.addTransition( State.STARTING,       Event.STOP,                this::actionStop,       State.STOPPING    );
         spec.addTransition( State.STARTING,       Event.MAX_STARTER_TIME,    this::actionCool,       State.COOLING     );
         spec.addTransition( State.STARTING,       Event.RPM_OUT_OF_RANGE,    this::actionStabilize,  State.STABILIZING );
@@ -151,30 +170,9 @@ public class EngineController {
     }
 
 
-    private static class StartingContext extends FSMStateContext {
-        private int attempts;                        // how many attempts we've made to start the engine
-        private FSMCancellableEvent<Event> timeout;  // so we don't exceed 15 seconds of cranking
-    }
-
-
-    private static class StoppingContext extends FSMStateContext {
-        private FSMCancellableEvent<Event> timeout;   // in case the engine takes too long to stop
-    }
-
-
-    private static class CoolingContext extends FSMStateContext {
-    }
-
-
-    private static class StabilizingContext extends FSMStateContext {
-        private FSMCancellableEvent<Event> timeout;      // so we don't wait too long to stabilize
-        private FSMCancellableEvent<Event> stableTime;   // keep track of how long we've been stable
-    }
-
 
     // analyze the raw tachometer reading and emit the appropriate state machine event
-    private FSMEvent<Event> rawRPM( final FSMEvent<Event> _event, final FSM<State, Event> _fsm,
-                                    final Object _fsmContext, final FSMStateContext _stateContext  ) {
+    private FSMEvent<Event> rawRPM( final FSMEvent<Event> _event, final FSMEventTransformContext<State, Event> _context  ) {
 
         double rpm = (double) _event.data;
 
@@ -190,6 +188,8 @@ public class EngineController {
 
     private void actionStart( final FSMActionContext<State,Event> _context ) {
 
+        out( "engine starting" );
+
         // clear our attempts counter and start our cranking timer...
         StartingContext context = (StartingContext) _context.toStateContext;
         context.attempts = 0;
@@ -199,12 +199,12 @@ public class EngineController {
         engine.power( ON );
         engine.fuel( ON );
         engine.starter( ON );
-
-        out( "Controller: engine starting" );
     }
 
 
     private void actionCooled( final FSMActionContext<State,Event> _context ) {
+
+        out( "starter cooled" );
 
         // start our cranking timer...
         StartingContext context = (StartingContext) _context.toStateContext;
@@ -212,64 +212,62 @@ public class EngineController {
 
         // turn the starter on...
         engine.starter( ON );
-
-        out( "Controller: starter cooled" );
     }
 
 
     private void actionStop( final FSMActionContext<State,Event> _context ) {
+
+        out( "engine stopping" );
 
         engineOff();
 
         // start our stopping timeout...
         StoppingContext context = (StoppingContext) _context.toStateContext;
         context.timeout = fsm.scheduleEvent( Event.STOPPING_TIMEOUT, Duration.ofMillis( MAX_STOPPING_TIME_MS ) );
-
-        out( "Controller: engine stopping" );
     }
 
 
     private void actionStopped( final FSMActionContext<State,Event> _context ) {
+        out( "engine stopped" );
 
         // cancel our stopping timeout...
-        StoppingContext context = (StoppingContext) _context.toStateContext;
+        StoppingContext context = (StoppingContext) _context.fromStateContext;
         context.timeout.cancel();
 
         reportConsumer.accept( Report.STOPPED );
-        out( "Controller: engine stopped" );
     }
 
 
     private void actionFailed( final FSMActionContext<State,Event> _context ) {
-        reportConsumer.accept( Report.FAILED );
 
-        out( "Controller: engine failed" );
+        out( "engine failed" );
+        reportConsumer.accept( Report.FAILED );
     }
 
 
     private void actionOverload( final FSMActionContext<State,Event> _context ) {
+
+        out( "engine overloaded" );
         actionStop( _context );
         reportConsumer.accept( Report.OVERLOADED );
-
-        out( "Controller: engine overloaded" );
     }
 
 
     private void actionRunning( final FSMActionContext<State,Event> _context ) {
+
+        out( "engine running" );
 
         // cancel our timeout...
         StabilizingContext context = (StabilizingContext) _context.fromStateContext;
         context.timeout.cancel();
 
         reportConsumer.accept( Report.RUNNING);
-
-        out( "Controller: engine running" );
     }
 
 
     private void actionNoStart( final FSMActionContext<State,Event> _context ) {
 
-        out( "Controller: couldn't start engine" );
+        out( "couldn't start engine" );
         engineOff();
         actionFailed( _context );
     }
@@ -277,7 +275,7 @@ public class EngineController {
 
     private void actionUnstable( final FSMActionContext<State,Event> _context ) {
 
-        out( "Controller: couldn't stabilize engine RPM" );
+        out( "couldn't stabilize engine RPM" );
         engineOff();
         actionFailed( _context );
     }
@@ -292,6 +290,8 @@ public class EngineController {
 
     private void actionStabilize( final FSMActionContext<State,Event> _context ) {
 
+        out( "stabilizing engine RPM" );
+
         // turn off the starter motor...
         engine.starter( OFF );
 
@@ -302,12 +302,11 @@ public class EngineController {
         // start our timeout...
         StabilizingContext toContext = (StabilizingContext) _context.toStateContext;
         toContext.timeout = fsm.scheduleEvent( Event.STABILIZING_TIMEOUT, Duration.ofMillis( MAX_STABILIZING_TIME_MS ) );
-
-        out( "Controller: stabilizing engine RPM" );
     }
 
 
     private void actionInRange( final FSMActionContext<State,Event> _context ) {
+        //out( "RPM in range" );
 
         // start our timer...
         StabilizingContext context = (StabilizingContext) _context.toStateContext;
@@ -316,6 +315,7 @@ public class EngineController {
 
 
     private void actionOutOfRange( final FSMActionContext<State,Event> _context ) {
+        //out( "RPM out of range" );
 
         // cancel our timer...
         StabilizingContext context = (StabilizingContext) _context.toStateContext;
@@ -325,6 +325,8 @@ public class EngineController {
 
 
     private void actionCool( final FSMActionContext<State,Event> _context ) {
+
+        out( "cooling engine starter" );
 
         // tell the engine starter to shut off...
         engine.starter( OFF );
@@ -336,14 +338,12 @@ public class EngineController {
 
         // start our cooling timer to either try again or fail, depending on how many attempts we've made...
         fsm.scheduleEvent( maxed ? Event.CANNOT_START : Event.COOLED, Duration.ofMillis( STARTER_COOLING_TIME_MS ) );
-
-        out( "Controller: cooling engine starter" );
     }
 
 
     private final DateTimeFormatter ldtf = DateTimeFormatter.ofPattern( "HH:mm:ss.SSS " );
 
     private void out( final String _msg ) {
-        System.out.println( ldtf.format( ZonedDateTime.now() ) + _msg );
+        System.out.println( ldtf.format( ZonedDateTime.now() ) + "   Controller: " +  _msg );
     }
 }
