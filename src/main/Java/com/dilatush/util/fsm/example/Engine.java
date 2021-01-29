@@ -43,5 +43,5 @@ public interface Engine {
     double tachometer();
 
 
-    enum Mode { ON,OFF; }
+    enum Mode { ON,OFF }
 }

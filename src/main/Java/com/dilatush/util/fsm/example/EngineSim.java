@@ -4,11 +4,13 @@ import com.dilatush.util.Threads;
 
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.function.DoubleUnaryOperator;
+import java.util.function.Function;
 
 import static com.dilatush.util.fsm.example.Engine.Mode.OFF;
 import static com.dilatush.util.fsm.example.Engine.Mode.ON;
@@ -23,20 +25,39 @@ public class EngineSim implements Engine {
 
     private enum State {IDLE,STARTING,RUNNING,BROKEN}
 
-    private Mode                power    = OFF;
-    private Mode                fuel     = OFF;
-    private Mode                starter  = OFF;
+    private Mode                    power    = OFF;
+    private Mode                    fuel     = OFF;
+    private Mode                    starter  = OFF;
 
-    private State               state    = State.IDLE;
-    private double              rpm      = 0;
-    private DoubleUnaryOperator scenario = null;
-    private int                 ticker   = 0;     // state for scenarios...
-    private int                 runtime  = 0;
+    private State                   state    = State.IDLE;
+    private double                  rpm      = 0;
+    private Function<Double,Double> scenario = null;
+    private int                     ticker   = 0;     // state for scenarios...
+    private double                  target   = 0;     // state for scenarios...
+    private double                  start    = 0;     // state for scenarios...
+    private int                     runtime  = 0;
 
-    private final Random        random   = new Random( System.currentTimeMillis() );
+    List<Function<Double,Double>>   startingScenarios;
+    List<Function<Double,Double>>   runningScenarios;
+
+    private final Random            random   = new Random( System.currentTimeMillis() );
 
 
+    /**
+     * Create a new instance of this class.
+     */
     public EngineSim() {
+
+        startingScenarios = new ArrayList<>();
+        startingScenarios.add( this::startRamp );
+        startingScenarios.add( this::startFail );
+        startingScenarios.add( this::startExp );
+
+        runningScenarios = new ArrayList<>();
+        runningScenarios.add( linearRamp20.andThen( sin5decay40 ) );
+        runningScenarios.add( this::runLinear );
+        runningScenarios.add( this::runFail );
+        runningScenarios.add( this::runShoot );
 
         ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor( new Threads.DaemonThreadFactory( "EngineSim" ) );
         executor.scheduleAtFixedRate( this::tick, 0, 250, TimeUnit.MILLISECONDS );
@@ -53,7 +74,7 @@ public class EngineSim implements Engine {
 
         // update the scenario we're playing...
         if( (state != State.BROKEN) && (scenario != null) ) {
-            rpm = scenario.applyAsDouble( rpm );
+            rpm = scenario.apply( rpm );
         }
 
         // update our starter motor runtime...
@@ -86,17 +107,21 @@ public class EngineSim implements Engine {
                 if( (power == ON) && (fuel == ON) && ((starter == ON) || (rpm >= 50)) ) {
                     state = State.STARTING;
                     ticker = 0;
-                    scenario = startingScenarios[random.nextInt( startingScenarios.length )];
+                    target = 1000;
+                    start = rpm;
+                    scenario = startingScenarios.get( random.nextInt( startingScenarios.size() ) );
                     out( "starting" );
                 }
                 break;
 
             case STARTING:
 
-                // if the power is off, or the fuel is off, or the starter is off and RPMs are under 50 we're stopping and switching to idle...
+                // if the power is off, or the fuel is off, or the starter is off and RPMs are under 1000 we're stopping and switching to idle...
                 if( (power == OFF) || (fuel == OFF) || ((starter == OFF) && (rpm < 1000)) ) {
                     state = State.IDLE;
                     ticker = 0;
+                    target = 0;
+                    start = rpm;
                     scenario = this::stopRPM;
                     out( "stopping" );
                 }
@@ -105,7 +130,9 @@ public class EngineSim implements Engine {
                 else if( rpm >= 1000) {
                     state = State.RUNNING;
                     ticker = 0;
-                    scenario = runningScenarios[random.nextInt( runningScenarios.length )];
+                    target = 1800;
+                    start = rpm;
+                    scenario = runningScenarios.get( random.nextInt( runningScenarios.size() ) );
                     out( "running" );
                 }
                 break;
@@ -116,6 +143,8 @@ public class EngineSim implements Engine {
                 if( (power == OFF) || (fuel == OFF) || (rpm < 50) ) {
                     state = State.IDLE;
                     ticker = 0;
+                    target = 0;
+                    start = rpm;
                     scenario = this::stopRPM;
                     out( "stopping" );
                 }
@@ -176,9 +205,6 @@ public class EngineSim implements Engine {
     }
 
 
-    DoubleUnaryOperator[] startingScenarios = { this::startRamp, this::startFail, this::startExp };
-
-
     // exponential ramp...
     private double startRamp( final double _rpm ) {
         double r = Math.max( _rpm, 50 );
@@ -198,9 +224,6 @@ public class EngineSim implements Engine {
         double r = Math.max( _rpm, 50 );
         return r + (1100 - r) / 12 + random.nextDouble() * (1000 - r) / 25;
     }
-
-
-    DoubleUnaryOperator[] runningScenarios = { this::runLinear, this::runFail, this::runShoot };
 
 
     // exponential ramp...
@@ -230,14 +253,23 @@ public class EngineSim implements Engine {
     }
 
 
-    private final DateTimeFormatter ldtf = DateTimeFormatter.ofPattern( "HH:mm:ss.SSS " );
+    // linear ramp to target in 20 ticks (5 seconds)...
+    Function<Double,Double>  linearRamp20 = (_rpm) -> Math.min(1, ticker/20.0) * (target - start) + start;
+
+
+    // sin delta of 5% decaying to 0.5% in 40 ticks (10 seconds); 10 ticks = 360 degrees...
+    Function<Double,Double> sin5decay40 = ( _rpm ) ->
+            _rpm * (1 + ( Math.sin( ticker * Math.PI / 5 ) * 1.1) * (1 / (5.0 * ticker)));
+
+
+    private final DateTimeFormatter logDateTimeFormatter = DateTimeFormatter.ofPattern( "HH:mm:ss.SSS " );
 
     private void out( final String _msg ) {
-        System.out.println( ldtf.format( ZonedDateTime.now() )  + "      Engine: " + _msg );
+        System.out.println( logDateTimeFormatter.format( ZonedDateTime.now() )  + "      Engine: " + _msg );
     }
 
 
     private void out( final double _rpm ) {
-        System.out.println( ldtf.format( ZonedDateTime.now() )  + "         RPM " + Math.round( _rpm ) );
+        System.out.println( logDateTimeFormatter.format( ZonedDateTime.now() )  + "         RPM " + Math.round( _rpm ) );
     }
 }

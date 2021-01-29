@@ -121,9 +121,9 @@ public class EngineController {
 
 
     /**
-     * An example of a subclassed FSM state context, used here to store a cancellable timeout.
+     * An example of an FSM state context, used here to store a cancellable timeout.
      */
-    private static class StoppingContext extends FSMStateContext {
+    private static class StoppingContext {
         private FSMCancellableEvent<Event> timeout;   // in case the engine takes too long to stop
     }
 
@@ -146,19 +146,22 @@ public class EngineController {
         spec.setFSMContext( new GlobalContext() );
 
         // set an example of an FSM state context...
-        spec.setStateContext( State.STOPPING,    new StoppingContext()     );
+        spec.setStateContext( State.STOPPING, new StoppingContext() );
+
+        // set an example of an on-entry state action...
+        spec.setStateOnEntryAction( State.STOPPING, this::onEntryStopping );
 
         // add all the FSM state transitions for our FSM...
         spec.addTransition( State.STOPPED,        Event.START,               this::actionStart,      State.STARTING    );
-        spec.addTransition( State.STARTING,       Event.STOP,                this::actionStop,       State.STOPPING    );
+        spec.addTransition( State.STARTING,       Event.STOP,                null,                   State.STOPPING    );
         spec.addTransition( State.STARTING,       Event.MAX_STARTER_TIME,    this::actionCool,       State.COOLING     );
         spec.addTransition( State.STARTING,       Event.RPM_OUT_OF_RANGE,    this::actionStabilize,  State.STABILIZING );
-        spec.addTransition( State.COOLING,        Event.STOP,                this::actionStop,       State.STOPPING    );
-        spec.addTransition( State.STABILIZING,    Event.STOP,                this::actionStop,       State.STOPPING    );
+        spec.addTransition( State.COOLING,        Event.STOP,                null,                   State.STOPPING    );
+        spec.addTransition( State.STABILIZING,    Event.STOP,                null,                   State.STOPPING    );
         spec.addTransition( State.STABILIZING,    Event.RPM_IN_RANGE,        this::actionInRange,    State.STABILIZING );
         spec.addTransition( State.STABILIZING,    Event.RPM_OUT_OF_RANGE,    this::actionOutOfRange, State.STABILIZING );
         spec.addTransition( State.STABILIZING,    Event.STABILIZING_TIMEOUT, this::actionUnstable,   State.FAILED      );
-        spec.addTransition( State.RUNNING,        Event.STOP,                this::actionStop,       State.STOPPING    );
+        spec.addTransition( State.RUNNING,        Event.STOP,                null,                   State.STOPPING    );
         spec.addTransition( State.STABILIZING,    Event.STABLE,              this::actionRunning,    State.RUNNING     );
         spec.addTransition( State.RUNNING,        Event.RPM_OUT_OF_RANGE,    this::actionOverload,   State.STOPPING    );
         spec.addTransition( State.COOLING,        Event.CANNOT_START,        this::actionNoStart,    State.FAILED      );
@@ -180,10 +183,10 @@ public class EngineController {
      * a {@code null} when the RPMs are in a range that can't trigger any transitions.
      *
      * @param _event The FSM event being transformed, in this case always an RPM event (with RPMs as the data).
-     * @param _context The FSM event transform context for this transformation.
+     * @param _fsm The FSM associated with this transformation.
      * @return the transformed event, or {@code null} if none
      */
-    private FSMEvent<Event> rawRPM( final FSMEvent<Event> _event, final FSMEventTransformContext<State, Event> _context  ) {
+    private FSMEvent<Event> rawRPM( final FSMEvent<Event> _event, final FSM<State, Event> _fsm  ) {
 
         // we know the data is a double...
         double rpm = (double) _event.data;
@@ -203,10 +206,21 @@ public class EngineController {
     }
 
 
+    // on entry to STOPPING...
+    private void onEntryStopping( final FSMState<State,Event> _state ) {
+        out( "engine stopping" );
+        engineOff();
+        StoppingContext context = (StoppingContext) _state.context;
+        context.timeout = fsm.scheduleEvent( Event.STOPPING_TIMEOUT, Duration.ofMillis( MAX_STOPPING_TIME_MS ) );
+        GlobalContext globalContext = (GlobalContext) _state.fsmContext;
+        globalContext.timeout.cancel();
+    }
+
+
     // on STOPPED, START -> STARTING...
-    private void actionStart( final FSMActionContext<State,Event> _context ) {
+    private void actionStart( final FSMTransition<State,Event> _transition ) {
         out( "engine starting" );
-        GlobalContext context = (GlobalContext) _context.fsmContext;
+        GlobalContext context = (GlobalContext) _transition.fsmContext;
         engineStartAttempts = 0;
         context.timeout = fsm.scheduleEvent( Event.MAX_STARTER_TIME, Duration.ofMillis( MAX_STARTER_TIME_MS ) );
         engine.power( ON );
@@ -216,99 +230,87 @@ public class EngineController {
 
 
     // on COOLING, COOLED -> STARTING...
-    private void actionCooled( final FSMActionContext<State,Event> _context ) {
+    private void actionCooled( final FSMTransition<State,Event> _transition ) {
         out( "starter cooled" );
-        GlobalContext context = (GlobalContext) _context.fsmContext;
+        GlobalContext context = (GlobalContext) _transition.fsmContext;
         context.timeout = fsm.scheduleEvent( Event.MAX_STARTER_TIME, Duration.ofMillis( MAX_STARTER_TIME_MS ) );
         engine.starter( ON );
     }
 
 
-    // on STARTING,    STOP -> STOPPING...
-    // on COOLING,     STOP -> STOPPING...
-    // on STABILIZING, STOP -> STOPPING...
-    // on RUNNING,     STOP -> STOPPING...
-    private void actionStop( final FSMActionContext<State,Event> _context ) {
-        out( "engine stopping" );
-        engineOff();
-        StoppingContext context = (StoppingContext) _context.toStateContext;
-        context.timeout = fsm.scheduleEvent( Event.STOPPING_TIMEOUT, Duration.ofMillis( MAX_STOPPING_TIME_MS ) );
-    }
-
-
     // on STOPPING, RPM_0 -> STOPPED...
-    private void actionStopped( final FSMActionContext<State,Event> _context ) {
+    private void actionStopped( final FSMTransition<State,Event> _transition ) {
         out( "engine stopped" );
-        StoppingContext context = (StoppingContext) _context.fromStateContext;
+        StoppingContext context = (StoppingContext) _transition.fromState.context;
         context.timeout.cancel();
         eventListener.accept( Report.STOPPED );
     }
 
 
     // on STOPPING, STOPPING_TIMEOUT -> FAILED...
-    private void actionFailed( final FSMActionContext<State,Event> _context ) {
+    private void actionFailed( final FSMTransition<State,Event> _transition ) {
         out( "engine failed" );
         eventListener.accept( Report.FAILED );
     }
 
 
     // on RUNNING, RPM_OUT_OF_RANGE -> STOPPING...
-    private void actionOverload( final FSMActionContext<State,Event> _context ) {
+    private void actionOverload( final FSMTransition<State,Event> _transition ) {
         out( "engine overloaded" );
-        actionStop( _context );
+        engineOff();
         eventListener.accept( Report.OVERLOADED );
     }
 
 
     // on STABILIZING, STABLE -> RUNNING...
-    private void actionRunning( final FSMActionContext<State,Event> _context ) {
+    private void actionRunning( final FSMTransition<State,Event> _transition ) {
         out( "engine running" );
         eventListener.accept( Report.RUNNING);
     }
 
 
     // on COOLING, CANNOT_START -> FAILED...
-    private void actionNoStart( final FSMActionContext<State,Event> _context ) {
+    private void actionNoStart( final FSMTransition<State,Event> _transition ) {
         out( "couldn't start engine" );
         engineOff();
-        actionFailed( _context );
+        actionFailed( _transition );
     }
 
 
     // on STABILIZING, STABILIZING_TIMEOUT -> FAILED...
-    private void actionUnstable( final FSMActionContext<State,Event> _context ) {
+    private void actionUnstable( final FSMTransition<State,Event> _transition ) {
         out( "couldn't stabilize engine RPM" );
         engineOff();
-        actionFailed( _context );
+        actionFailed( _transition );
     }
 
 
     // one STARTING, RPM_OUT_OF_RANGE -> STABILIZING...
-    private void actionStabilize( final FSMActionContext<State,Event> _context ) {
+    private void actionStabilize( final FSMTransition<State,Event> _transition ) {
         out( "stabilizing engine RPM" );
         engine.starter( OFF );
-        GlobalContext fmContext = (GlobalContext) _context.fsmContext;
+        GlobalContext fmContext = (GlobalContext) _transition.fsmContext;
         fmContext.timeout.cancel();
-        _context.setTimeout( Event.STABILIZING_TIMEOUT, Duration.ofMillis( MAX_STABILIZING_TIME_MS ) );
+        _transition.setTimeout( Event.STABILIZING_TIMEOUT, Duration.ofMillis( MAX_STABILIZING_TIME_MS ) );
     }
 
 
     // on STABILIZING, RPM_IN_RANGE -> STABILIZING...
-    private void actionInRange( final FSMActionContext<State,Event> _context ) {
-        _context.toStateContext.setProperty( "StableTime", fsm.scheduleEvent( Event.STABLE, Duration.ofMillis( MIN_STABLE_TIME_MS ) ) );
+    private void actionInRange( final FSMTransition<State,Event> _transition ) {
+        _transition.toState.setProperty( "StableTime", fsm.scheduleEvent( Event.STABLE, Duration.ofMillis( MIN_STABLE_TIME_MS ) ) );
     }
 
 
     // on STABILIZING, RPM_OUT_OF_RANGE -> STABILIZING
-    private void actionOutOfRange( final FSMActionContext<State,Event> _context ) {
-        FSMCancellableEvent<?> stableTime = (FSMCancellableEvent<?>) _context.toStateContext.getProperty( "StableTime" );
+    private void actionOutOfRange( final FSMTransition<State,Event> _transition ) {
+        FSMCancellableEvent<?> stableTime = (FSMCancellableEvent<?>) _transition.toState.getProperty( "StableTime" );
         if( stableTime != null)
             stableTime.cancel();
     }
 
 
     // on STARTING, MAX_STARTER_TIME -> COOLING
-    private void actionCool( final FSMActionContext<State,Event> _context ) {
+    private void actionCool( final FSMTransition<State,Event> _transition ) {
         out( "cooling engine starter" );
         engine.starter( OFF );
         engineStartAttempts++;

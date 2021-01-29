@@ -10,12 +10,12 @@ public interface FSMEventTransform<S extends Enum<S>, E extends Enum<E>> {
 
 
     /**
-     * <p>Transform the given event into another event (or no event), using the given FSM event transform context.  The transform occurs as the FSM is
-     * handling the event - if the FSM can't find a state transition for the given event, it then checks to see if there is a matching FSM event
-     * transform.  FSM event transforms can be used to "preprocess" events, typically to transform events reporting quantitative data into more
-     * discrete events.  For example, you might have a {@code TEMPERATURE} event whose data was the measured temperature in degrees C.  However, your
-     * state machine might only care whether the temperature was in a given range, below it, or above it.  In that case, you might have an FSM event
-     * transform that transformed a TEMPERATURE event into the appropriate TEMP_LO, TEMP_HI, TEMP_GOOD FSM event.</p>
+     * <p>Transform the given event into another event (or no event), using any information accessible through the given {@link FSM} instance.  The
+     * transform occurs as the FSM is handling the event - if the FSM can't find a state transition for the given event, it then checks to see if
+     * there is a matching FSM event transform.  FSM event transforms can be used to "preprocess" events, typically to transform events reporting
+     * quantitative data into more discrete events.  For example, you might have a {@code TEMPERATURE} event whose data was the measured temperature
+     * in degrees C.  However, your state machine might only care whether the temperature was in a given range, below it, or above it.  In that case,
+     * you might have an FSM event transform that transformed a TEMPERATURE event into the appropriate TEMP_LO, TEMP_HI, TEMP_GOOD FSM event.</p>
      * <p>FSM event transforms are not limited to cases like the example above; they are free to take any action they'd like.  In particular, they
      * can:</p>
      * <ul>
@@ -30,9 +30,8 @@ public interface FSMEventTransform<S extends Enum<S>, E extends Enum<E>> {
      * application dependent.</p>
      *
      * @param _event The FSM event to be transformed.
-     * @param _context The {@link FSMEventTransformContext} for the event transformation.
+     * @param _fsm The {@link FSM} associated with the event transformation.
      * @return the transformed event, or {@code null} if none
      */
-    FSMEvent<E> transform( final FSMEvent<E> _event, final FSMEventTransformContext<S,E> _context );
-
+    FSMEvent<E> run( final FSMEvent<E> _event, final FSM<S,E> _fsm );
 }

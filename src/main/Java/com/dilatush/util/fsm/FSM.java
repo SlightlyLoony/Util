@@ -4,7 +4,9 @@ import com.dilatush.util.Threads;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
@@ -20,9 +22,11 @@ import static com.dilatush.util.Strings.isEmpty;
  */
 public class FSM<S extends Enum<S>,E extends Enum<E>> {
 
+    // TODO: get rid of "convenience method" javadocs...
+
     final static private Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
 
-    // the current state of the FSM, which is the only mutable field in an instance...
+    // the enum of the current state of the FSM, which is the only mutable field in an FSM instance...
     private       S                                                             state;
 
     // the optional listener for state changes...
@@ -31,14 +35,14 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
     // arbitrary and optional object containing a context for the entire FSM; used primarily in actions and transforms...
     private final Object                                                        fsmContext;
 
-    // FSMStateContext instances per state, by state enum ordinal; may be subclassed and may be different subclasses for each state...
-    private final FSMStateContext[]                                             stateContexts;
+    // FSMState instances per state, by state enum ordinal...
+    private final List<FSMState<S,E>>                                           states;
 
     // arbitrary and optional properties that are available to the entire FSM; used primarily in actions and transforms...
     private final Map<String,Object>                                            fsmProperties;
 
     // map of <transition ID> -> <transition> for every defined transition; transition ID is <STATE,EVENT> tuple...
-    private final Map<FSMTransitionID<S,E>, FSMTransition<FSMAction<S,E>,S,E>>  transitions;
+    private final Map<FSMSpec.FSMTransitionID<S,E>, FSMTransition<S,E>>         transitions;
 
     // map of <event> -> <event transform> for every defined event transform...
     private final Map<E, FSMEventTransform<S,E>>                                transforms;
@@ -71,20 +75,32 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
         if( !_spec.isValid() )
             throw new IllegalArgumentException( "FSMSpec is not valid:\n" + _spec.getErrorMessage() );
 
-        // copy the core bits from the specification...
+        // copy what we can directly from the specification...
         state               = _spec.initialState;
         fsmContext          = _spec.context;
-        transitions         = _spec.transitions;
-        stateContexts       = _spec.stateContexts;
         bufferedEvents      = _spec.bufferedEvents;
         eventScheduling     = _spec.eventScheduling;
         transforms          = _spec.transforms;
         stateChangeListener = _spec.stateChangeListener;
 
-        // set up the initial state's context...
-        FSMStateContext context = stateContexts[ state.ordinal() ];
-        context.setLastEntered( Instant.now() );
-        context.setEntries( 1 );
+        // make our list of states...
+        states = new ArrayList<>();
+        for( FSMSpec.FSMStateSpec<S,E> stateSpec : _spec.stateSpecs ) {
+            states.add( new FSMState<>( stateSpec.onEntry, stateSpec.onExit, stateSpec.state, this, fsmContext, stateSpec.context ) );
+        }
+
+        // build our transition map...
+        transitions = new HashMap<>();
+        _spec.transitions.forEach( ( id, spec ) -> {
+            FSMState<S,E> fromState = states.get( id.fromState.ordinal() );
+            FSMState<S,E> toState   = states.get( spec.toState.ordinal() );
+            transitions.put( id, new FSMTransition<>( this, fsmContext, fromState,id.event, spec.action, toState ) );
+        } );
+
+        // set up the initial state...
+        FSMState<S,E> initialState = states.get( state.ordinal() );
+        initialState.setLastEntered( Instant.now() );
+        initialState.setEntries( 1 );
 
         // set up our properties map...
         fsmProperties    = new HashMap<>();
@@ -118,19 +134,31 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      *     <li>If the event is an instance of {@link FSMCancellableEvent} and the event has been cancelled, then this method does nothing at all.
      *     This mechanism eliminates race conditions that might otherwise arise because the scheduled events are posted in a different thread from
      *     the one actions are run in.</li>
-     *     <li>If the current state and the received event (the transition ID) match a defined transition, then the FSM transitions from its
-     *     current state to the TO_STATE defined in the transition definition.  There are three steps to that process:
+     *     <li>The current state and the received event together uniquely identify a possible FSM transition.  If that combination matches a defined
+     *     transition, then that transition will be processed.  Note that the transition may not actually involve a change in the FSM's state (that
+     *     is, the "from" state and the "to" state may be the same), in which case processing the transaction means at most the running of the
+     *     transaction action (if there is one).  There are several steps to that process:
      *     <ol>
-     *         <li>Set the time that we left the current FSM state.</li>
-     *         <li>Update the total time spent in the current FSM state.</li>
-     *         <li>If there is an {@link FSMAction} associated with this transaction, execute it.</li>
-     *         <li>Set the time we entered the next FSM state.  Note that if there was an action, and if that action took some time, then this might
-     *         be different than the time we left the last state.</li>
-     *         <li>Update the number of entries to the next state.</li>
-     *         <li>Set the FSM's state to the next state.</li>
+     *         <li>If the state we're transitioning from is different than the state we're transitioning to:
+     *             <ol style="list-style-type:lower-alpha">
+     *                 <li>Set the time that we left the current FSM state.</li>
+     *                 <li>Update the total time spent in the current FSM state.</li>
+     *                 <li>If there is an on-exit {@link FSMStateAction} associated with the state we're transitioning from, run it.</li>
+     *             </ol>
+     *         </li>
+     *         <li>If there is an {@link FSMTransitionAction} associated with this transaction, run it.</li>
+     *         <li>If the state we're transitioning from is different than the state we're transitioning to:
+     *             <ol style="list-style-type:lower-alpha">
+     *                 <li>Set the time we entered the next FSM state.  Note that if there was an action, and if that action took some time, then this might
+     *                 be different than the time we left the last state.</li>
+     *                 <li>Update the number of entries to the next state.</li>
+     *                 <li>If there is an on-entry {@link FSMStateAction} associated with the state we're transitioning to, run it.</li>
+     *                 <li>Set the FSM's state to the next state.</li>
+     *             </ol>
+     *         </li>
      *     </ol></li>
-     *     <li>If the current FSM state and the received event (the transition ID) <i>do not</i> match a defined transition, but the received event
-     *     does have a configured event transform, then execute that transform.  Often these transforms will result in new events, and there are
+     *     <li>If the current FSM state and the received event do <i>not</i> match a defined transition, but the received event
+     *     does have a configured event transform, then that transform is executed.  That transform may result in new events, and there are
      *     two ways to do this:<ul>
      *         <li>The transform may return an event.  If it does so, the returned event will be handled by a recursive call to this method.  That
      *         means it will be handled immediately, whether or not the FSM is configured for event buffering.</li>
@@ -138,7 +166,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      *         buffering, then these events will be queued - possibly <i>behind</i> events queued by other threads.  If the FSM is not configured
      *         for event buffering, then these events will be handled immediately.</li>
      *     </ul></li>
-     *     <li>If the current state and the received event (the transition ID) <i>do not</i> match a defined transition, and the received event
+     *     <li>If the current state and the received event do <i>not</i> match a defined transition, and the received event
      *     does not have a configured event transform, then this method does nothing at all.</li>
      * </ul>
      *
@@ -154,135 +182,159 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
         }
 
         // if we don't have a transition mapped for the current state and this event, then let's see if we have a transform...
-        FSMTransition<FSMAction<S,E>,S,E> transition = transitions.get( new FSMTransitionID<>( state, _event.event ) );
+        FSMTransition<S,E> transition = transitions.get( new FSMSpec.FSMTransitionID<>( state, _event.event ) );
         if( transition == null ) {
-
-            // if we don't have an event transform, just leave, as we've got nothing to do...
-            FSMEventTransform<S,E> transform = transforms.get( _event.event );
-            if( transform == null )
-                return;
-
-            // ah, we DID get a transform - so run it...
-            FSMEventTransformContext<S,E> etContext = new FSMEventTransformContext<>( this, fsmContext, stateContexts[state.ordinal()] );
-            FSMEvent<E> result = transform.transform( _event, etContext );
-
-            // if we got a new event, handle it immediately...
-            if( result != null ) {
-
-                // let's be sure we don't get nasty infinite recursion going here...
-                if( result.event == _event.event )
-                    throw new IllegalStateException( "Event transform returned the same event type: " + result.event.toString() );
-
-                // otherwise, we handle it right now, recursively...
-                onEventImpl( result );
-            }
-
-            // and we're done...
+            runEventTransform( _event );
             return;
         }
 
-        LOGGER.finest( () -> "Transition from " + state + " on event " + _event );
-
-        // get the contexts of the state we're leaving and going to...
-        FSMStateContext fromContext = stateContexts[state.ordinal()];
-        FSMStateContext toContext = stateContexts[transition.toState.ordinal()];
+        // get the the states we're leaving and going to...
+        FSMState<S,E> fromState = states.get( transition.fromState.state.ordinal() );
+        FSMState<S,E> toState   = states.get( transition.toState.state.ordinal()   );
 
         // if we're actually changing states, we've got some things to do...
-        if( state != transition.toState ) {
+        if( fromState.state != toState.state ) {
+
+            LOGGER.finest( () -> "Transitioning from " + fromState.state + " to " + toState.state + " on event " + _event );
 
             // cancel any timeout that we might have had going in the state we're leaving...
-            fromContext.cancelTimeout();
+            fromState.cancelTimeout();
 
-            // update the context of the state we're leaving...
-            fromContext.setLastLeft( Instant.now() );
-            Duration thisTime = Duration.between( fromContext.getLastEntered(), fromContext.getLastLeft() );
-            fromContext.setTimeInState( fromContext.getTimeInState().plus( thisTime ) );
+            // if the state we're leaving has an on-exit state action, run it...
+            fromState.runOnExit();
+
+            // update the state we're leaving...
+            fromState.setLastLeft( Instant.now() );
+            Duration thisTime = Duration.between( fromState.getLastEntered(), fromState.getLastLeft() );
+            fromState.setTimeInState( fromState.getTimeInState().plus( thisTime ) );
+        }
+        else {
+            LOGGER.finest( () -> "Handling event " + _event + " without state change" );
         }
 
         // dispatch the action, if we have one...
         if( transition.action != null ) {
 
-            LOGGER.finest( () -> "Running action" );
-
-            // create the action context for this transition...
-            FSMActionContext<S,E> context = new FSMActionContext<>(
-                    state,
-                    transition.toState,
-                    _event,
-                    fromContext,
-                    toContext,
-                    fsmContext,
-                    this
-            );
+            LOGGER.finest( () -> "Running transition action" );
 
             // run the action...
-            transition.action.action( context );
+            transition.action.run( transition );
         }
 
         // if we're actually changing the state...
-        if( state != transition.toState ) {
+        if(  fromState.state != toState.state  ) {
 
-            // update the context of the state we're going to...
-            toContext.setLastEntered( Instant.now() );
-            toContext.setEntries( toContext.getEntries() + 1 );
+            // update the state we're going to...
+            toState.setLastEntered( Instant.now() );
+            toState.setEntries( toState.getEntries() + 1 );
+
+            // if the state we're entering has an on-entry state action, run it...
+            toState.runOnEntry();
 
             // set the new state...
-            state = transition.toState;
+            state = toState.state;
 
             // if we have a listener, inform them...
             if( stateChangeListener != null )
                 stateChangeListener.accept( state );
         }
-
-        LOGGER.finest( () -> "Transitioned to state " + state );
     }
 
 
     /**
-     * Returns the current state of this FSM.  This method is synchronized and threadsafe, though the caller should be aware that the current state
-     * may change in multiple threads and with arbitrary frequency.
+     * If there is an event transform associated with the given event, run it.
      *
-     * @return the current state of this FSM
+     * @param _event The FSM event to (possibly) run an event transform on.
      */
-    public synchronized S getState() {
+    private void runEventTransform( final FSMEvent<E> _event ) {
+
+        // if we don't have an event transform, just leave, as we've got nothing to do...
+        FSMEventTransform<S,E> transform = transforms.get( _event.event );
+        if( transform == null )
+            return;
+
+        // ah, we DID get a transform - so run it...
+        LOGGER.finest( () -> "Transforming event " + _event );
+        FSMEvent<E> result = transform.run( _event, this );
+
+        // if we got a new event, handle it immediately...
+        if( result != null ) {
+
+            // let's be sure we don't get nasty infinite recursion going here...
+            if( result.event == _event.event )
+                throw new IllegalStateException( "Event transform returned the same event type: " + result.event.toString() );
+
+            // otherwise, we handle it right now, recursively...
+            onEventImpl( result );
+        }
+    }
+
+
+    /**
+     * Returns the enum of the current state of this FSM.  This method is synchronized and threadsafe, though the caller should be aware that the
+     * current state may change in multiple threads and with arbitrary frequency.
+     *
+     * @return the enum of the current state of this FSM
+     */
+    @SuppressWarnings( "unused" )
+    public synchronized S getStateEnum() {
         return state;
     }
 
 
     /**
-     * <p>This method is at the heart of the FSM - it handles state transitions and event transformations, all triggered by receiving an event.  If
-     * this FSM instance is configured for event buffering, this method queues the given event in the event buffer, and another thread does the actual
-     * event handling.  If this FSM instance is not configured for event buffering, then this method is synchronized (on the FSM instance) and then
-     * handles the event directly.  Once the event is being handled, there are several things that can happen, depending on what state the FSM is
-     * currently in and what event is received:</p>
+     * Returns the current state (as an instance of {@link FSMState}) of this FSM.  This method is synchronized and threadsafe, though the caller
+     * should be aware that the current state may change in multiple threads and with arbitrary frequency.
+     *
+     * @return the current state (as an instance of {@link FSMState}) of this FSM
+     */
+    public synchronized FSMState<S,E> getState() {
+        return states.get( state.ordinal() );
+    }
+
+
+    /**
+     * <p>This method is the heart of the FSM - it handles state transitions and event transformations, all triggered by receiving an event.  There
+     * are several things that can happen, depending on what state the FSM is currently in and what event is received:</p>
      * <ul>
      *     <li>If the event is an instance of {@link FSMCancellableEvent} and the event has been cancelled, then this method does nothing at all.
      *     This mechanism eliminates race conditions that might otherwise arise because the scheduled events are posted in a different thread from
      *     the one actions are run in.</li>
-     *     <li>If the current state and the received event (the transition ID) match a defined transition, then the FSM transitions from its
-     *     current state to the TO_STATE defined in the transition definition.  There are several steps to that process:
+     *     <li>The current state and the received event together uniquely identify a possible FSM transition.  If that combination matches a defined
+     *     transition, then that transition will be processed.  Note that the transition may not actually involve a change in the FSM's state (that
+     *     is, the "from" state and the "to" state may be the same), in which case processing the transaction means at most the running of the
+     *     transaction action (if there is one).  There are several steps to that process:
      *     <ol>
-     *         <li>Set the time that we left the current FSM state.</li>
-     *         <li>Update the total time spent in the current FSM state.</li>
-     *         <li>If there is an {@link FSMAction} associated with this transaction, execute it.</li>
-     *         <li>Set the time we entered the next FSM state.  Note that if there was an action, and if that action took some time, then this might
-     *         be different than the time we left the last state.</li>
-     *         <li>Update the number of entries to the next state.</li>
-     *         <li>Set the FSM's state to the next state.</li>
+     *         <li>If the state we're transitioning from is different than the state we're transitioning to:
+     *             <ol style="list-style-type:lower-alpha">
+     *                 <li>Set the time that we left the current FSM state.</li>
+     *                 <li>Update the total time spent in the current FSM state.</li>
+     *                 <li>If there is an on-exit {@link FSMStateAction} associated with the state we're transitioning from, run it.</li>
+     *             </ol>
+     *         </li>
+     *         <li>If there is an {@link FSMTransitionAction} associated with this transaction, run it.</li>
+     *         <li>If the state we're transitioning from is different than the state we're transitioning to:
+     *             <ol style="list-style-type:lower-alpha">
+     *                 <li>Set the time we entered the next FSM state.  Note that if there was an action, and if that action took some time, then this might
+     *                 be different than the time we left the last state.</li>
+     *                 <li>Update the number of entries to the next state.</li>
+     *                 <li>If there is an on-entry {@link FSMStateAction} associated with the state we're transitioning to, run it.</li>
+     *                 <li>Set the FSM's state to the next state.</li>
+     *             </ol>
+     *         </li>
      *     </ol></li>
-     *     <li>If the current FSM state and the received event (the transition ID) <i>do not</i> match a defined transition, but the received event
-     *     does have a configured event transform, then execute that transform.  Often these transforms will result in new events, and there are
+     *     <li>If the current FSM state and the received event do <i>not</i> match a defined transition, but the received event
+     *     does have a configured event transform, then that transform is executed.  That transform may result in new events, and there are
      *     two ways to do this:<ul>
-     *         <li>The transform may return an event.  If it does so, the returned event will be handled immediately, whether or not the FSM is
-     *         configured for event buffering.</li>
-     *         <li>The transform may post one or more events by calling one of the FSM's {@code onEvent()} methods.  If the FSM is configured for
-     *         event buffering, then these events will be queued - possibly <i>behind</i> events queued by other threads.  If the FSM is not
-     *         configured for event buffering, then these events will be handled immediately.</li>
+     *         <li>The transform may return an event.  If it does so, the returned event will be handled by a recursive call to this method.  That
+     *         means it will be handled immediately, whether or not the FSM is configured for event buffering.</li>
+     *         <li>The transform may post one or more events by calling one of the {@code onEvent()} methods.  If the FSM is configured for event
+     *         buffering, then these events will be queued - possibly <i>behind</i> events queued by other threads.  If the FSM is not configured
+     *         for event buffering, then these events will be handled immediately.</li>
      *     </ul></li>
-     *     <li>If the current state and the received event (the transition ID) <i>do not</i> match a defined transition, and the received event
+     *     <li>If the current state and the received event do <i>not</i> match a defined transition, and the received event
      *     does not have a configured event transform, then this method does nothing at all.</li>
      * </ul>
-     * <p>This method is threadsafe whether or not event buffering is enabled.</p>
      *
      * @param _event The event to be handled.
      */
@@ -305,7 +357,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
 
 
     /**
-     * This is a convenience method that simply wraps the given event {@link Enum} and event data {@link Object} in an instance of {@link FSMEvent}
+     * Convenience method that simply wraps the given event {@link Enum} and event data {@link Object} in an instance of {@link FSMEvent}
      * and calls {@link #onEvent(FSMEvent)}.
      *
      * @param _event The event enum for the event to be handled.
@@ -318,7 +370,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
 
 
     /**
-     * This is a convenience method that simply wraps the given event {@link Enum} and a {@code null}  for the event data {@link Object} in an
+     * Convenience method that simply wraps the given event {@link Enum} and a {@code null}  for the event data {@link Object} in an
      * instance of {@link FSMEvent} and calls {@link #onEvent(FSMEvent)}.
      *
      * @param _event The event enum for the event to be handled.
@@ -364,7 +416,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
 
 
     /**
-     * This is a convenience method that simply wraps the given event {@link Enum} and event data {@link Object} in an instance of
+     * Convenience method that simply wraps the given event {@link Enum} and event data {@link Object} in an instance of
      * {@link FSMEvent} and calls {@link #scheduleEvent(FSMEvent, Duration)}.
      *
      * @param _event The event enum for the event to be scheduled.
@@ -379,7 +431,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
 
 
     /**
-     * This is a convenience method that simply wraps the given event {@link Enum} and a {@code null} for the event data {@link Object} in an instance
+     * Convenience method that simply wraps the given event {@link Enum} and a {@code null} for the event data {@link Object} in an instance
      * of {@link FSMEvent} and calls {@link #scheduleEvent(FSMEvent, Duration)}.
      *
      * @param _event The event enum for the event to be scheduled.
@@ -440,22 +492,23 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
         if( isEmpty( _name ) )
             throw new IllegalArgumentException( "No property name" );
 
-        // get the state context for the given state...
-        FSMStateContext context = stateContexts[ _state.ordinal() ];
+        // get the given state...
+        FSMState<S,E> givenState = states.get( _state.ordinal() );
 
-        // set the property using the context's setter...
-        context.setProperty( _name, _value );
+        // set the property using the state's setter...
+        givenState.setProperty( _name, _value );
     }
 
 
     /**
-     * Get the FSM state context for the given FSM state.
+     * Get the FSM state context for the given FSM state enum.
      *
-     * @param _state The FSM state to retrieve the context for.
-     * @return the FSM state context for the given FSM state
+     * @param _state The FSM state enum to retrieve the FSM state context for.
+     * @return the FSM state context for the given FSM state enum
      */
-    public FSMStateContext getStateContext( final S _state ) {
-        return stateContexts[ _state.ordinal() ];
+    @SuppressWarnings( "unused" )
+    public Object getStateContext( final S _state ) {
+        return states.get( _state.ordinal() ).context;
     }
 
 
@@ -464,6 +517,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      *
      * @return the FSM global context
      */
+    @SuppressWarnings( "unused" )
     public Object getGlobalContext() {
         return fsmContext;
     }
@@ -473,7 +527,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      * Return the value of the state-specific FSM property with the given name, or {@code null} if there is no state-specific FSM property with the
      * given name.
      *
-     * @param _state The FSM state whose property is to be retrieved.
+     * @param _state The FSM state enum for the FSM state whose property is to be retrieved.
      * @param _name The name of the state-specific FSM property to retrieve.
      * @return the value of the named state-specific FSM property, {@code null} if the named property does not exist
      */
@@ -485,11 +539,11 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
         if( isEmpty( _name ) )
             throw new IllegalArgumentException( "No property name" );
 
-        // get the state context for the given state...
-        FSMStateContext context = stateContexts[ _state.ordinal() ];
+        // get the FSM state for the given state enum...
+        FSMState<S,E> givenState = states.get( _state.ordinal() );
 
-        // get the property using the context's getter...
-        return context.getProperty( _name );
+        // get the property using the state's getter...
+        return givenState.getProperty( _name );
     }
 
 

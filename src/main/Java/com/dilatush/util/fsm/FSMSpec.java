@@ -14,22 +14,22 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
 
     private static final int DEFAULT_MAX_BUFFERED_EVENTS = 100;
 
-    /*package-private*/ S                                                             initialState;
-    /*package-private*/ FSMStateContext[]                                             stateContexts;
-    /*package-private*/ Map<FSMTransitionID<S,E>, FSMTransition<FSMAction<S,E>,S,E>>  transitions;
-    /*package-private*/ Map<E,FSMEventTransform<S,E>>                                 transforms;
-    /*package-private*/ Object                                                        context;
-    /*package-private*/ boolean                                                       eventScheduling;
-    /*package-private*/ boolean                                                       bufferedEvents;
-    /*package-private*/ int                                                           maxBufferedEvents = DEFAULT_MAX_BUFFERED_EVENTS;
-    /*package-private*/ Consumer<S>                                                   stateChangeListener;
+    /*package-private*/ S                                                                           initialState;
+    /*package-private*/ Map<FSMTransitionID<S,E>, FSMTransitionSpec<FSMTransitionAction<S,E>,S,E>>  transitions;
+    /*package-private*/ Map<E,FSMEventTransform<S,E>>                                               transforms;
+    /*package-private*/ Object                                                                      context;
+    /*package-private*/ boolean                                                                     eventScheduling;
+    /*package-private*/ boolean                                                                     bufferedEvents;
+    /*package-private*/ int                                                                         maxBufferedEvents = DEFAULT_MAX_BUFFERED_EVENTS;
+    /*package-private*/ Consumer<S>                                                                 stateChangeListener;
+    /*package-private*/ List<FSMStateSpec<S,E>>                                                     stateSpecs;
+    /*package-private*/ final List<E>                                                               eventEnums;
+    /*package-private*/ final List<S>                                                               stateEnums;
 
 
     private final List<String>                 errorMessages;
     private final List<FSMTransitionDef<S,E>>  defs;
 
-    private final List<E> events;
-    private final List<S> states;
 
 
     /**
@@ -51,14 +51,15 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
         transforms    = new HashMap<>();
         errorMessages = new ArrayList<>();
         defs          = new ArrayList<>();
+        stateSpecs    = new ArrayList<>();
 
-        events = getEventValues( _example );
-        states = getStateValues( _initialState );
+        eventEnums = getEventValues( _example );
+        stateEnums = getStateValues( _initialState );
 
-        // set up the default state contexts...
-        stateContexts = new FSMStateContext[states.size()];
-        for( int i = 0; i < stateContexts.length; i++ )
-            stateContexts[i] = new FSMStateContext();
+        // load up the state specs with their default values...
+        for( S stateEnum : stateEnums ) {
+            stateSpecs.add( new FSMStateSpec<>( stateEnum ) );
+        }
     }
 
 
@@ -70,10 +71,10 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
      *
      * @param _fromState The FSM state being transitioned from.
      * @param _event The FSM event that triggers the transition.
-     * @param _action The optional FSM action ({@link FSMAction} to execute on the transition; this may be {@code null} for no action.
+     * @param _action The optional FSM action ({@link FSMTransitionAction} to execute on the transition; this may be {@code null} for no action.
      * @param _toState The FSM state being transitioned to.
      */
-    public void addTransition( final S _fromState, final E _event, final FSMAction<S,E> _action, final S _toState ) {
+    public void addTransition( final S _fromState, final E _event, final FSMTransitionAction<S,E> _action, final S _toState ) {
 
         FSMTransitionDef<S,E> def = new FSMTransitionDef<>( _fromState, _event, _action, _toState );
         defs.add( def );
@@ -82,16 +83,7 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
 
     /**
      * <p>Set the optional global FSM context, which may be an object of any type.  This global context defaults to {@code null} if it is not set, and
-     * it is not used with {@link FSM} at all, other than to pass it into various contexts.  It exists for the convenience of code using the FSM, for
-     * state or methods that may be widely used with FSM-related code, especially {@link FSMAction}s or {@link FSMEventTransform}s.</p>
-     * <p>In general there are several mechanisms for sharing context within an FSM implementation, and each of them is useful in different
-     * circumstances.  Those mechanisms are:</p>
-     * <ul>
-     *     <li>The standard Java mechanisms, such as the fields of the class incorporating the FSM.</li>
-     *     <li>The properties of the FSM, either global or FSM state-specific.</li>
-     *     <li>The global FSM context.</li>
-     *     <li>The FSM state contexts.</li>
-     * </ul>
+     * it is not used with {@link FSM} at all, other than to make it available to actions, transforms, and any code with access to the FSM.</p>
      *
      * @param _fsmContext The optional global FSM context.
      */
@@ -146,15 +138,40 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
 
 
     /**
-     * Set the initial FSM state context for the given state to the given context.  By default, new instances of {@link FSMStateContext} are
-     * automatically set for each FSM state.  This method need only be called when a subclass of {@link FSMStateContext} is needed for a particular
-     * FSM state.
+     * Set the optional state context object for the given FSM state to the given value.
      *
-     * @param _state The FSM state to set an FSM state context for.
-     * @param _context The FSM state context to set.
+     * @param _state The FSM state to set a state context for.
+     * @param _context The state context object to set.
      */
-    public void setStateContext( final S _state, final FSMStateContext _context ) {
-        stateContexts[_state.ordinal()] = _context;
+    public void setStateContext( final S _state, final Object _context ) {
+        stateSpecs.get( _state.ordinal() ).context = _context;
+    }
+
+
+    /**
+     * Set the optional state on-entry action for the given FSM state to the given {@link FSMStateAction} implementation.  A state on-entry action is
+     * run while an FSM event that causes a transition from one FSM state to another is being handled.  The on-entry action for the state being
+     * entered is run after the on-exit action (if there is one) for the state being left, and after the transition action (if there is one).
+     *
+     * @param _state The FSM state to set a state on-entry action for.
+     * @param _action The FSM state action to set.
+     */
+    public void setStateOnEntryAction( final S _state, final FSMStateAction<S,E> _action ) {
+        stateSpecs.get( _state.ordinal() ).onEntry = _action;
+    }
+
+
+    /**
+     * Set the optional state on-exit action for the given FSM state to the given {@link FSMStateAction} implementation.  A state on-exit action is
+     * run while an FSM event that causes a transition from one FSM state to another is being handled.  The on-exit action for the state being
+     * left is run before the on-entry action (if there is one) for the state being entered, and before the transition action (if there is one).
+     *
+     * @param _state The FSM state to set a state on-entry action for.
+     * @param _action The FSM state action to set.
+     */
+    @SuppressWarnings( "unused" )
+    public void setStateOnExitAction( final S _state, final FSMStateAction<S,E> _action ) {
+        stateSpecs.get( _state.ordinal() ).onExit = _action;
     }
 
 
@@ -176,7 +193,6 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
      *     <li>There are no FSM state transitions defined <i>from</i> a particular FSM state.</li>
      *     <li>There are no FSM state transitions defined <i>to</i> a particular FSM state.</li>
      *     <li>There are FSM events that are not part of any FSM state transition.</li>
-     *     <li>The same FSM state context instance is used for multiple states.</li>
      * </ul>
      *
      * @return {@code true} if this FSM specification is valid.
@@ -194,11 +210,11 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
                 errorMessages.add( "   Duplicate transition ID: " + index.toString() );
                 continue;
             }
-            transitions.put( index, new FSMTransition<>( def.action, def.toState ) );
+            transitions.put( index, new FSMTransitionSpec<>( def.action, def.toState ) );
         }
 
         // see what states we have no transitions from...
-        Set<S> fromStates = new HashSet<>( states );
+        Set<S> fromStates = new HashSet<>( stateEnums );
         for( FSMTransitionID<S,E> def : transitions.keySet() ) {
             fromStates.remove( def.fromState );
         }
@@ -207,8 +223,8 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
         }
 
         // see what states we have no transitions to...
-        Set<S> toStates = new HashSet<>( states );
-        for( FSMTransition<FSMAction<S,E>,S,E> transition : transitions.values() ) {
+        Set<S> toStates = new HashSet<>( stateEnums );
+        for( FSMTransitionSpec<FSMTransitionAction<S,E>,S,E> transition : transitions.values() ) {
             toStates.remove( transition.toState );
         }
         for( S state : toStates ) {
@@ -216,7 +232,7 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
         }
 
         // see what events we don't use...
-        Set<E> usedEvents = new HashSet<>( events );
+        Set<E> usedEvents = new HashSet<>( eventEnums );
         for( FSMTransitionID<S,E> def : transitions.keySet() ) {
             usedEvents.remove( def.event );
         }
@@ -225,15 +241,6 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
         }
         for( E event : usedEvents ) {
             errorMessages.add( "   Event never used: " + event.toString() );
-        }
-
-        // make sure we haven't the same state context in multiple states...
-        for( int i = 0; i < stateContexts.length - 1; i++ ) {
-            for( int j = i + 1; j < stateContexts.length; j++ ) {
-                if( stateContexts[i] == stateContexts[j] ) {
-                    errorMessages.add( "Same state context used for both " + states.get( i ).toString() + " and " + states.get( j ).toString() );
-                }
-            }
         }
 
         return errorMessages.size() == 0;
@@ -285,11 +292,19 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
 
         private final S fromState;
         private final E onEvent;
-        private final FSMAction<S,E> action;
+        private final FSMTransitionAction<S,E> action;
         private final S toState;
 
 
-        private FSMTransitionDef( final S _fromState, final E _onEvent, final FSMAction<S,E> _action, final S _toState ) {
+        /**
+         * Create a new instance of this class with the given values.
+         *
+         * @param _fromState The state being left.
+         * @param _onEvent The triggering event.
+         * @param _action The optional transition action.
+         * @param _toState The state being entered.
+         */
+        private FSMTransitionDef( final S _fromState, final E _onEvent, final FSMTransitionAction<S,E> _action, final S _toState ) {
 
             // fail fast if any required arguments are missing...
             if( isNull( _fromState, _onEvent, _toState ) )
@@ -299,6 +314,115 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
             onEvent = _onEvent;
             action = _action;
             toState = _toState;
+        }
+    }
+
+
+    /**
+     * A simple POJO that allows specification of the optional attributes of an FSM state.
+     */
+    /*package-private*/ static class FSMStateSpec<S extends Enum<S>, E extends Enum<E>> {
+
+        /*package-private*/ S                   state;
+        /*package-private*/ FSMStateAction<S,E> onEntry;
+        /*package-private*/ FSMStateAction<S,E> onExit;
+        /*package-private*/ Object              context;
+
+
+        /**
+         * Create a new instance of this class for the given FSM state.
+         *
+         * @param _state The FSM state for this instance.
+         */
+        public FSMStateSpec( final S _state ) {
+            state = _state;
+        }
+    }
+
+
+    /**
+     * A simple POJO that contains the {@link FSMTransitionAction} and FSM state after the FSM state transition (the "to" state).  It is used
+     * internally by {@link FSM} and {@link FSMSpec}.
+     *
+     * @author Tom Dilatush  tom@dilatush.com
+     */
+    /*package-private*/ static class FSMTransitionSpec<A extends FSMTransitionAction<S,E>, S extends Enum<S>, E extends Enum<E>> {
+
+
+        /*package-private*/ final S toState;
+        /*package-private*/ final A action;
+
+
+        /**
+         * Creates a new instance of this class with the given FSM action and FSM state.
+         *
+         * @param _action The FSM action for this FSM transition.
+         * @param _toState The FSM state for this FSM transition.
+         */
+        /*package-private*/ FSMTransitionSpec( final A _action, final S _toState ) {
+            toState = _toState;
+            action  = _action;
+        }
+    }
+
+    /**
+     * A simple POJO that contains the triggering FSM event and FSM state before the FSM state transition (the "from" state).  It is used internally
+     * by {@link FSM} and {@link FSMSpec}.
+     *
+     * @author Tom Dilatush  tom@dilatush.com
+     */
+    /*package-private*/ static class FSMTransitionID<S extends Enum<S>, E extends Enum<E>> {
+
+        /*package-private*/ final S fromState;
+        /*package-private*/ final E event;
+
+
+        /**
+         * Create a new instance of this class with the given FSM state and FSM event.
+         *
+         * @param _fromState The FSM state for this FSM transition ID.
+         * @param _event The FSM event for this FSM transition ID.
+         */
+        /*package-private*/ FSMTransitionID( final S _fromState, final E _event ) {
+            fromState = _fromState;
+            event = _event;
+        }
+
+
+        /**
+         * Returns a string representation of this instance.
+         *
+         * @return a string representation of this instance
+         */
+        @Override
+        public String toString() {
+            return "(" + fromState.toString() + "/" + event.toString() + ")";
+        }
+
+
+        /**
+         * Returns {@code true} if this instance has the same value as the given object.
+         *
+         * @param _obj The object to compare with this instance.
+         * @return {@code true} if this instance has the same value as the given object
+         */
+        @Override
+        public boolean equals( final Object _obj ) {
+            if( this == _obj ) return true;
+            if( _obj == null || getClass() != _obj.getClass() ) return false;
+            FSMTransitionID<?, ?> defIndex = (FSMTransitionID<?, ?>) _obj;
+            return fromState.equals( defIndex.fromState ) && event.equals( defIndex.event );
+        }
+
+
+        /**
+         * Returns the hash code for this instance.
+         *
+         * @return the hash code for this instance
+         */
+        @Override
+        public int hashCode() {
+            return Objects.hash( fromState, event );
         }
     }
 }

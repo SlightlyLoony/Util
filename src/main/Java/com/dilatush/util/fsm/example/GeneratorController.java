@@ -1,8 +1,8 @@
 package com.dilatush.util.fsm.example;
 
 import com.dilatush.util.fsm.FSM;
-import com.dilatush.util.fsm.FSMActionContext;
 import com.dilatush.util.fsm.FSMSpec;
+import com.dilatush.util.fsm.FSMTransition;
 
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -96,7 +96,7 @@ public class GeneratorController {
 
 
     // on FAIL, FIX -> OFF...
-    private void fixAction( final FSMActionContext<State, Event> _context ) {
+    private void fixAction( final FSMTransition<State, Event> _transition ) {
         out( "fixed" );
         engineController.fixed();
         generator.failureIndicator( Generator.Mode.OFF );
@@ -104,7 +104,7 @@ public class GeneratorController {
 
 
     // on GEN, OVER -> OVER...
-    private void overAction( final FSMActionContext<State, Event> _context ) {
+    private void overAction( final FSMTransition<State, Event> _transition ) {
         out( "overload" );
         engineController.stop();
         generator.ats( Generator.Mode.OFF );
@@ -115,7 +115,7 @@ public class GeneratorController {
 
     // on GEN, UP  -> WAIT...
     // on GEN, OFF -> OFF...
-    private void atsOffAction( final FSMActionContext<State, Event> _context ) {
+    private void atsOffAction( final FSMTransition<State, Event> _transition ) {
         out( "ATS off, engine stop" );
         generator.ats( Generator.Mode.OFF );
         generator.generatingIndicator( Generator.Mode.OFF );
@@ -125,7 +125,7 @@ public class GeneratorController {
 
 
     // on GEN, RUN -> GEN...
-    private void atsOnAction( final FSMActionContext<State, Event> _context ) {
+    private void atsOnAction( final FSMTransition<State, Event> _transition ) {
         out( "ATS on" );
         generator.ats( Generator.Mode.ON );
         generator.generatingIndicator( Generator.Mode.ON );
@@ -133,7 +133,7 @@ public class GeneratorController {
 
 
     // on WAIT, DOWN -> GEN...
-    private void genAction( final FSMActionContext<State, Event> _context ) {
+    private void genAction( final FSMTransition<State, Event> _transition ) {
         out( "grid down" );
         generator.runningIndicator( Generator.Mode.ON );
         engineController.start();
@@ -142,7 +142,7 @@ public class GeneratorController {
 
     // on GEN, FAIL -> FAIL...
     // on RUN, FAIL -> FAIL...
-    private void failAction( final FSMActionContext<State, Event> _context ) {
+    private void failAction( final FSMTransition<State, Event> _transition ) {
         out( "engine fail" );
         engineController.stop();
         generator.runningIndicator( Generator.Mode.OFF );
@@ -153,7 +153,7 @@ public class GeneratorController {
 
 
     // on RUN, OFF -> OFF...
-    private void offAction( final FSMActionContext<State, Event> _context ) {
+    private void offAction( final FSMTransition<State, Event> _transition ) {
         out( "off" );
         generator.runningIndicator( Generator.Mode.OFF );
         engineController.stop();
@@ -162,7 +162,7 @@ public class GeneratorController {
 
     // on OFF,  ON -> RUN...
     // on WAIT, ON -> RUN...
-    private void onAction( final FSMActionContext<State, Event> _context ) {
+    private void onAction( final FSMTransition<State, Event> _transition ) {
         out( "on" );
         generator.runningIndicator( Generator.Mode.ON );
         engineController.start();
@@ -225,9 +225,9 @@ public class GeneratorController {
     }
 
 
-    private final DateTimeFormatter ldtf = DateTimeFormatter.ofPattern( "HH:mm:ss.SSS " );
+    private final DateTimeFormatter logDateTimeFormatter = DateTimeFormatter.ofPattern( "HH:mm:ss.SSS " );
 
     private void out( final String _msg ) {
-        System.out.println( ldtf.format( ZonedDateTime.now() ) + "Generator: " +  _msg );
+        System.out.println( logDateTimeFormatter.format( ZonedDateTime.now() ) + "Generator: " +  _msg );
     }
 }

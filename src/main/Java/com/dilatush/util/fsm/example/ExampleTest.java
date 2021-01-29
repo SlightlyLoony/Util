@@ -9,6 +9,15 @@ import java.io.IOException;
  */
 public class ExampleTest {
 
+
+    /**
+     * The main method for the example program demonstrating FSMs.
+     *
+     * @param _args All command line arguments are ignored.
+     * @throws InterruptedException if interrupted
+     * @throws IOException if I/O is exceptional
+     */
+    @SuppressWarnings( "unused" )
     public static void main( final String[] _args ) throws InterruptedException, IOException {
 
         GeneratorSim        generator  = new GeneratorSim();

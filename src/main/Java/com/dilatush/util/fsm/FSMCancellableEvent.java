@@ -1,6 +1,7 @@
 package com.dilatush.util.fsm;
 
 import java.util.concurrent.ScheduledFuture;
+import java.util.logging.Logger;
 
 /**
  * <p>Instances of this class are created only by an {@link FSM} instance, and they represent FSM events that were scheduled, and which may be cancelled
@@ -13,6 +14,8 @@ import java.util.concurrent.ScheduledFuture;
  * @author Tom Dilatush  tom@dilatush.com
  */
 public class FSMCancellableEvent<E extends Enum<E>> extends FSMEvent<E> {
+
+    final static private Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
 
     // true if this event has been cancelled...
     volatile private boolean cancelled;
@@ -61,6 +64,8 @@ public class FSMCancellableEvent<E extends Enum<E>> extends FSMEvent<E> {
      * <p>This mechanism prevents race conditions which would otherwise allow cancelled events to be handled by the FSM.</p>
      */
     public void cancel() {
+
+        LOGGER.finest( "Cancelling event " + event );
 
         // cancel it in the scheduler, in case it hasn't been dispatched yet...
         future.cancel( /* interruptTask */ false );

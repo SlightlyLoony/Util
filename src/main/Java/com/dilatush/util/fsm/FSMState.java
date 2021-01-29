@@ -8,52 +8,132 @@ import java.util.Map;
 import static com.dilatush.util.Strings.isEmpty;
 
 /**
- * Implements the default context for FSM states, but can be subclassed to provide application-specific state context.  Note that each state in the
- * FSM must have it's own context; instances cannot be shared between states.  The FSM maintains four values in the state context: the total time
- * spent in the state, the number of entries to the state, the last time the state was entered, and the last time the state was exited.  These values
- * are accessible outside the FSM (especially from actions), but mutable only within it.  In addition, this class maintains the state-specific
- * properties (in a map), and stores the cancellable events for timeouts, if they have been set.
+ * Implements an FSM state.  The FSM maintains four statistics values in the state: the total time spent in the state, the number of entries
+ * to the state, the last time the state was entered, and the last time the state was exited.  These values are accessible outside the FSM (especially
+ * from actions), but mutable only within it.  This class maintains the state-specific properties (in a map), the optional state-specific context
+ * objects, and stores the cancellable events for timeouts, if they have been set.  It also holds references to the optional on-entry and on-exit
+ * state actions.
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
-public class FSMStateContext {
+public final class FSMState<S extends Enum<S>,E extends Enum<E>> {
 
-    // these values are set by FSM...
+    // these mutable values are set by FSM...
     private Duration               timeInState = Duration.ZERO;  // the total time spent in this state...
     private Instant                lastEntered = null;           // time this state was most recently entered...
     private Instant                lastLeft    = null;           // time this state was most recently left...
     private long                   entries     = 0;              // the total number of times this state has been entered...
 
-    // these values are maintained by this class...
+    // these mutable values are maintained by this class...
     private Map<String,Object>     properties  = null;           // the state-specific property map, if any properties have been set...
     private FSMCancellableEvent<?> timeout     = null;           // the timeout, if one has been set...
 
+    // these immutable values are set at instantiation...
+    private final FSMStateAction<S,E> onEntry;
+    private final FSMStateAction<S,E> onExit;
 
+    // these immutable values are set at instantiation, but are accessible publicly...
+    public final S        state;
+    public final FSM<S,E> fsm;
+    public final Object   fsmContext;
+    public final Object   context;
+
+
+    /**
+     * Create a new instance of this class with the given values.
+     *
+     * @param _onEntry The optional state on-entry action implementation.
+     * @param _onExit The optional state on-exit action implementation.
+     * @param _state The FSM state enum for this state.
+     * @param _fsm The FSM instance associated with this state.
+     * @param _fsmContext The FSM global context for the FSM associated with this state.
+     * @param _context The optional FSM state context.
+     */
+    /*package-private*/ FSMState( final FSMStateAction<S, E> _onEntry, final FSMStateAction<S, E> _onExit,
+                     final S _state, final FSM<S, E> _fsm, final Object _fsmContext, final Object _context ) {
+
+        onEntry = _onEntry;
+        onExit = _onExit;
+        state = _state;
+        fsm = _fsm;
+        fsmContext = _fsmContext;
+        context = _context;
+    }
+
+
+    /**
+     * Set the time-in-state for this FSM state.
+     *
+     * @param _timeInState The time-in-state for this FSM state.
+     */
     /*package-private*/ void setTimeInState( final Duration _timeInState ) {
         timeInState = _timeInState;
     }
 
 
+    /**
+     * Set the time that this state was last entered.
+     *
+     * @param _lastEntered The time that this state was last entered.
+     */
     /*package-private*/ void setLastEntered( final Instant _lastEntered ) {
         lastEntered = _lastEntered;
     }
 
 
+    /**
+     * Set the time that this state was last left (exited).
+     *
+     * @param _lastLeft The time that this state was last left (exited).
+     */
     /*package-private*/ void setLastLeft( final Instant _lastLeft ) {
         lastLeft = _lastLeft;
     }
 
 
+    /**
+     * Set the number of times this state has been entered.
+     *
+     * @param _entries The number of times this state has been entered.
+     */
     /*package-private*/ void setEntries( final long _entries ) {
         entries = _entries;
     }
 
 
+    /**
+     * Sets the {@link FSMCancellableEvent} representing a timeout for this state.
+     *
+     * @param _timeout The {@link FSMCancellableEvent} representing a timeout for this state.
+     */
     /*package-private*/ void setTimeout( FSMCancellableEvent<?> _timeout ) {
         timeout = _timeout;
     }
 
 
+    /**
+     * Run the on-entry action, if there is one.
+     */
+    /*package-private*/ void runOnEntry() {
+        if( onEntry != null ) {
+            onEntry.run( this );
+        }
+    }
+
+
+    /**
+     * Run the on-exit action, if there is one.
+     */
+    /*package-private*/ void runOnExit() {
+        if( onExit != null ) {
+            onExit.run( this );
+        }
+    }
+
+
+    /**
+     * Cancel the timeout for this state, if there is one.
+     */
     /*package-private*/ void cancelTimeout() {
         if( timeout != null ) {
             timeout.cancel();

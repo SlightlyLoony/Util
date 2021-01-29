@@ -164,9 +164,9 @@ public class GeneratorSim implements Generator {
     }
 
 
-    private final DateTimeFormatter ldtf = DateTimeFormatter.ofPattern( "HH:mm:ss.SSS " );
+    private final DateTimeFormatter logDateTimeFormatter = DateTimeFormatter.ofPattern( "HH:mm:ss.SSS " );
 
     private void outGen( final String _msg ) {
-        System.out.println( ldtf.format( ZonedDateTime.now() ) + "Generator: " +  _msg );
+        System.out.println( logDateTimeFormatter.format( ZonedDateTime.now() ) + "Generator: " +  _msg );
     }
 }
