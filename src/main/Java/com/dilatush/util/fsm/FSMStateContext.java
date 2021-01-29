@@ -2,19 +2,31 @@ package com.dilatush.util.fsm;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
+
+import static com.dilatush.util.Strings.isEmpty;
 
 /**
- * (this may be subclassed)
+ * Implements the default context for FSM states, but can be subclassed to provide application-specific state context.  Note that each state in the
+ * FSM must have it's own context; instances cannot be shared between states.  The FSM maintains four values in the state context: the total time
+ * spent in the state, the number of entries to the state, the last time the state was entered, and the last time the state was exited.  These values
+ * are accessible outside the FSM (especially from actions), but mutable only within it.  In addition, this class maintains the state-specific
+ * properties (in a map), and stores the cancellable events for timeouts, if they have been set.
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
 public class FSMStateContext {
 
     // these values are set by FSM...
-    private Duration timeInState = Duration.ZERO;  // the total time spent in this state...
-    private Instant  lastEntered = Instant.now();  // time this state was most recently entered...
-    private Instant  lastLeft    = Instant.now();  // time this state was most recently left...
-    private long     entries     = 0;              // the total number of times this state has been entered...
+    private Duration               timeInState = Duration.ZERO;  // the total time spent in this state...
+    private Instant                lastEntered = null;           // time this state was most recently entered...
+    private Instant                lastLeft    = null;           // time this state was most recently left...
+    private long                   entries     = 0;              // the total number of times this state has been entered...
+
+    // these values are maintained by this class...
+    private Map<String,Object>     properties  = null;           // the state-specific property map, if any properties have been set...
+    private FSMCancellableEvent<?> timeout     = null;           // the timeout, if one has been set...
 
 
     /*package-private*/ void setTimeInState( final Duration _timeInState ) {
@@ -37,21 +49,114 @@ public class FSMStateContext {
     }
 
 
-    public Duration getTimeInState() {
-        return timeInState;
+    /*package-private*/ void setTimeout( FSMCancellableEvent<?> _timeout ) {
+        timeout = _timeout;
     }
 
 
+    /*package-private*/ void cancelTimeout() {
+        if( timeout != null ) {
+            timeout.cancel();
+            timeout = null;
+        }
+    }
+
+
+    /**
+     * Set the state-specific FSM property with the given name to the given value (which may be {@code null}).
+     *
+     * @param _name The name of the state-specific FSM property to be set.
+     * @param _value The value to set the state-specific FSM property to.
+     */
+    public void setProperty( final String _name, final Object _value ) {
+
+        // fail fast if our name is invalid...
+        if( isEmpty( _name ) )
+            throw new IllegalArgumentException( "No property name" );
+
+        // if this is the first property we've ever set, then we must first instantiate the map...
+        if( properties == null )
+            properties = new HashMap<>();
+
+        // set the property's value...
+        properties.put( _name, _value );
+    }
+
+
+    /**
+     * Return the value of the state-specific FSM property with the given name, or {@code null} if there is no state-specific FSM property with the
+     * given name.
+     *
+     * @param _name The name of the state-specific FSM property to retrieve.
+     * @return the value of the named state-specific FSM property, {@code null} if the named property does not exist
+     */
+    public Object getProperty( final String _name ) {
+
+        // fail fast if our name is invalid...
+        if( isEmpty( _name ) )
+            throw new IllegalArgumentException( "No property name" );
+
+        // if we've never set a property, just return null...
+        if( properties == null )
+            return null;
+
+        // otherwise, return the value we find, or null if there was no such property...
+        return properties.get( _name );
+    }
+
+
+    /**
+     * Returns the total time (as a {@link Duration} instance) that the FSM has been in this state.
+     *
+     * @return the total time that the FSM has been in this state
+     */
+    public Duration getTimeInState() {
+
+        // if we've never entered this state, then zero is the answer...
+        if( lastEntered == null )
+            return Duration.ZERO;
+
+        // if we've never left this state, then the answer is from entry time to now...
+        if( lastLeft == null )
+            return Duration.between( lastEntered, Instant.now() );
+
+        // if lastLeft is after lastEntered, then we're currently in some other state, and the stored duration is correct...
+        if( lastLeft.isAfter( lastEntered ) )
+            return timeInState;
+
+        // otherwise, we're currently in this state, and we have to add the stored duration to the current time in state to get the right answer...
+        // if we're currently in this state, we have to add the time since the last entry to the sum we've stored...
+        return timeInState.plus( Duration.between( lastEntered, Instant.now() ) );
+    }
+
+
+    /**
+     * Returns the time (as an {@link Instant} instance) that this state was last entered, or {@code null} if the FSM has never entered this state.
+     *
+     * @return the time this state was last entered
+     */
     public Instant getLastEntered() {
         return lastEntered;
     }
 
 
+    /**
+     * Returns the time (as an {@link Instant} instance) that this state was last left, or {@code null} if the FSM has never left this state.  Note
+     * that if the FSM is currently <i>in</i> this state, then the time left will be from the previous occasion that the FSM was in this state, which
+     * would be before the time it last entered this state. Read this three times so you can be <i>really</i> confused!
+     *
+     * @return the time this state was last left
+     */
     public Instant getLastLeft() {
         return lastLeft;
     }
 
 
+    /**
+     * Returns the number of times the FSM has entered this state.
+     *
+     * @return the number of times the FSM has entered this state
+     */
     public long getEntries() {
         return entries;
     }

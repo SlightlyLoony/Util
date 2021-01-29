@@ -19,8 +19,13 @@ public class GeneratorController {
     private final FSM<State,Event> fsm;
 
 
+    /**
+     * Create a new instance of this class with the given generator and engine.
+     *
+     * @param _generator The generator to be controlled.
+     * @param _engine The engine to be controlled.
+     */
     public GeneratorController( final Generator _generator, final Engine _engine ) {
-
 
         engineController = new EngineController( _engine, this::engineListener );
         generator = _generator;
@@ -29,6 +34,9 @@ public class GeneratorController {
     }
 
 
+    /**
+     * The FSM states for the FSM used in this class.
+     */
     private enum State {
         OFF,    // generator is off; will not back up the grid
         RUN,    // generator engine is running, but will not back up the grid (exercise)
@@ -39,6 +47,9 @@ public class GeneratorController {
     }
 
 
+    /**
+     * The FSM events for the FSM used in this class.
+     */
     private enum Event {
         ON,    // user pressed on button
         OFF,   // user pressed off button
@@ -52,6 +63,12 @@ public class GeneratorController {
     }
 
 
+    /**
+     * Create and return the FSM for use in this class.  This FSM is a particularly simple one, with no state in contexts or properties, and no
+     * FSM event transforms - just states and event-triggered state transitions.
+     *
+     * @return the FSM created
+     */
     private FSM<State,Event> createFSM() {
 
         FSMSpec<State,Event> spec = new FSMSpec<>( State.OFF, Event.OFF );
@@ -72,12 +89,21 @@ public class GeneratorController {
         spec.addTransition( State.GEN,     Event.FAIL,   this::failAction,    State.FAIL   );
         spec.addTransition( State.GEN,     Event.OVER,   this::overAction,    State.OVER   );
         spec.addTransition( State.OVER,    Event.OFF,    null,                State.OFF    );
-        spec.addTransition( State.FAIL,    Event.FIX,    null,                State.OFF    );
+        spec.addTransition( State.FAIL,    Event.FIX,    this::fixAction,     State.OFF    );
 
         return new FSM<>( spec );
     }
 
 
+    // on FAIL, FIX -> OFF...
+    private void fixAction( final FSMActionContext<State, Event> _context ) {
+        out( "fixed" );
+        engineController.fixed();
+        generator.failureIndicator( Generator.Mode.OFF );
+    }
+
+
+    // on GEN, OVER -> OVER...
     private void overAction( final FSMActionContext<State, Event> _context ) {
         out( "overload" );
         engineController.stop();
@@ -87,6 +113,8 @@ public class GeneratorController {
     }
 
 
+    // on GEN, UP  -> WAIT...
+    // on GEN, OFF -> OFF...
     private void atsOffAction( final FSMActionContext<State, Event> _context ) {
         out( "ATS off, engine stop" );
         generator.ats( Generator.Mode.OFF );
@@ -96,6 +124,7 @@ public class GeneratorController {
     }
 
 
+    // on GEN, RUN -> GEN...
     private void atsOnAction( final FSMActionContext<State, Event> _context ) {
         out( "ATS on" );
         generator.ats( Generator.Mode.ON );
@@ -103,6 +132,7 @@ public class GeneratorController {
     }
 
 
+    // on WAIT, DOWN -> GEN...
     private void genAction( final FSMActionContext<State, Event> _context ) {
         out( "grid down" );
         generator.runningIndicator( Generator.Mode.ON );
@@ -110,6 +140,8 @@ public class GeneratorController {
     }
 
 
+    // on GEN, FAIL -> FAIL...
+    // on RUN, FAIL -> FAIL...
     private void failAction( final FSMActionContext<State, Event> _context ) {
         out( "engine fail" );
         engineController.stop();
@@ -120,6 +152,7 @@ public class GeneratorController {
     }
 
 
+    // on RUN, OFF -> OFF...
     private void offAction( final FSMActionContext<State, Event> _context ) {
         out( "off" );
         generator.runningIndicator( Generator.Mode.OFF );
@@ -127,6 +160,8 @@ public class GeneratorController {
     }
 
 
+    // on OFF,  ON -> RUN...
+    // on WAIT, ON -> RUN...
     private void onAction( final FSMActionContext<State, Event> _context ) {
         out( "on" );
         generator.runningIndicator( Generator.Mode.ON );
@@ -134,6 +169,7 @@ public class GeneratorController {
     }
 
 
+    // translate events from the generator to internal events...
     private void generatorListener( final Generator.Event _event ) {
 
         switch( _event ) {
@@ -165,6 +201,7 @@ public class GeneratorController {
     }
 
 
+    // translate events from the engine controller to internal events...
     private void engineListener( final EngineController.Report _report ) {
 
         switch( _report ) {

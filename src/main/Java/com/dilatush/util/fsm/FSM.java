@@ -4,9 +4,14 @@ import com.dilatush.util.Threads;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.*;
+import java.util.function.Consumer;
 import java.util.logging.Logger;
+
+import static com.dilatush.util.General.isNull;
+import static com.dilatush.util.Strings.isEmpty;
 
 /**
  * Instances of this class implement event-driven finite state machines.
@@ -20,11 +25,17 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
     // the current state of the FSM, which is the only mutable field in an instance...
     private       S                                                             state;
 
-    // arbitrary and optional object containing a context for the entire FSM; used in actions and transforms...
+    // the optional listener for state changes...
+    private final Consumer<S>                                                   stateChangeListener;
+
+    // arbitrary and optional object containing a context for the entire FSM; used primarily in actions and transforms...
     private final Object                                                        fsmContext;
 
     // FSMStateContext instances per state, by state enum ordinal; may be subclassed and may be different subclasses for each state...
     private final FSMStateContext[]                                             stateContexts;
+
+    // arbitrary and optional properties that are available to the entire FSM; used primarily in actions and transforms...
+    private final Map<String,Object>                                            fsmProperties;
 
     // map of <transition ID> -> <transition> for every defined transition; transition ID is <STATE,EVENT> tuple...
     private final Map<FSMTransitionID<S,E>, FSMTransition<FSMAction<S,E>,S,E>>  transitions;
@@ -61,13 +72,22 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
             throw new IllegalArgumentException( "FSMSpec is not valid:\n" + _spec.getErrorMessage() );
 
         // copy the core bits from the specification...
-        state            = _spec.initialState;
-        fsmContext       = _spec.context;
-        transitions      = _spec.transitions;
-        stateContexts    = _spec.stateContexts;
-        bufferedEvents   = _spec.bufferedEvents;
-        eventScheduling  = _spec.eventScheduling;
-        transforms       = _spec.transforms;
+        state               = _spec.initialState;
+        fsmContext          = _spec.context;
+        transitions         = _spec.transitions;
+        stateContexts       = _spec.stateContexts;
+        bufferedEvents      = _spec.bufferedEvents;
+        eventScheduling     = _spec.eventScheduling;
+        transforms          = _spec.transforms;
+        stateChangeListener = _spec.stateChangeListener;
+
+        // set up the initial state's context...
+        FSMStateContext context = stateContexts[ state.ordinal() ];
+        context.setLastEntered( Instant.now() );
+        context.setEntries( 1 );
+
+        // set up our properties map...
+        fsmProperties    = new HashMap<>();
 
         // if we're buffering events, set up our dispatch thread...
         if( bufferedEvents ) {
@@ -147,8 +167,15 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
             FSMEvent<E> result = transform.transform( _event, etContext );
 
             // if we got a new event, handle it immediately...
-            if( result != null )
+            if( result != null ) {
+
+                // let's be sure we don't get nasty infinite recursion going here...
+                if( result.event == _event.event )
+                    throw new IllegalStateException( "Event transform returned the same event type: " + result.event.toString() );
+
+                // otherwise, we handle it right now, recursively...
                 onEventImpl( result );
+            }
 
             // and we're done...
             return;
@@ -156,16 +183,21 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
 
         LOGGER.finest( () -> "Transition from " + state + " on event " + _event );
 
-        // update the context of the state we're leaving: exit time and time in state...
+        // get the contexts of the state we're leaving and going to...
         FSMStateContext fromContext = stateContexts[state.ordinal()];
+        FSMStateContext toContext = stateContexts[transition.toState.ordinal()];
+
+        // if we're actually changing states, we've got some things to do...
         if( state != transition.toState ) {
+
+            // cancel any timeout that we might have had going in the state we're leaving...
+            fromContext.cancelTimeout();
+
+            // update the context of the state we're leaving...
             fromContext.setLastLeft( Instant.now() );
             Duration thisTime = Duration.between( fromContext.getLastEntered(), fromContext.getLastLeft() );
             fromContext.setTimeInState( fromContext.getTimeInState().plus( thisTime ) );
         }
-
-        // get the context for the state we're going to...
-        FSMStateContext toContext = stateContexts[transition.toState.ordinal()];
 
         // dispatch the action, if we have one...
         if( transition.action != null ) {
@@ -187,16 +219,33 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
             transition.action.action( context );
         }
 
-        // update the context of the state we're going to: entry time and number of entries...
+        // if we're actually changing the state...
         if( state != transition.toState ) {
+
+            // update the context of the state we're going to...
             toContext.setLastEntered( Instant.now() );
             toContext.setEntries( toContext.getEntries() + 1 );
 
             // set the new state...
             state = transition.toState;
+
+            // if we have a listener, inform them...
+            if( stateChangeListener != null )
+                stateChangeListener.accept( state );
         }
 
         LOGGER.finest( () -> "Transitioned to state " + state );
+    }
+
+
+    /**
+     * Returns the current state of this FSM.  This method is synchronized and threadsafe, though the caller should be aware that the current state
+     * may change in multiple threads and with arbitrary frequency.
+     *
+     * @return the current state of this FSM
+     */
+    public synchronized S getState() {
+        return state;
     }
 
 
@@ -339,6 +388,108 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      */
     public FSMCancellableEvent<E> scheduleEvent( final E _event, final Duration _delay ) {
         return scheduleEvent( new FSMEvent<>( _event, null ), _delay );
+    }
+
+
+    /**
+     * Set the global FSM property with the given name to the given value (which may be {@code null}).
+     *
+     * @param _name The name of the global FSM property to be set.
+     * @param _value  The value to set the named global FSM property to.
+     */
+    @SuppressWarnings( "unused" )
+    public synchronized void setProperty( final String _name, final Object _value ) {
+
+        // fail fast if we have an argument problem...
+        if( isEmpty( _name ) )
+            throw new IllegalArgumentException( "No property name" );
+
+        fsmProperties.put( _name, _value );
+    }
+
+
+    /**
+     * Return the value of the global FSM property with the given name, or {@code null} if there is no global FSM property with the given name.
+     *
+     * @param _name The name of the global FSM property to retrieve.
+     * @return the value of the named global FSM property, or {@code null} if the named property does not exist
+     */
+    public synchronized Object getProperty( final String _name ) {
+
+        // fail fast if we have an argument problem...
+        if( isEmpty( _name ) )
+            throw new IllegalArgumentException( "No property name" );
+
+        return fsmProperties.get( _name );
+    }
+
+
+    /**
+     * Set the state-specific FSM property with the given name to the given value (which may be {@code null}).
+     *
+     * @param _state The FSM state whose property is to be set.
+     * @param _name The name of the state-specific FSM property to be set.
+     * @param _value The value to set the state-specific FSM property to.
+     */
+    @SuppressWarnings( "unused" )
+    public synchronized void setProperty( final S _state, final String _name, final Object _value ) {
+
+        // fail fast if we have an argument problem...
+        if( isNull( _state ) )
+            throw new IllegalArgumentException( "No state supplied" );
+        if( isEmpty( _name ) )
+            throw new IllegalArgumentException( "No property name" );
+
+        // get the state context for the given state...
+        FSMStateContext context = stateContexts[ _state.ordinal() ];
+
+        // set the property using the context's setter...
+        context.setProperty( _name, _value );
+    }
+
+
+    /**
+     * Get the FSM state context for the given FSM state.
+     *
+     * @param _state The FSM state to retrieve the context for.
+     * @return the FSM state context for the given FSM state
+     */
+    public FSMStateContext getStateContext( final S _state ) {
+        return stateContexts[ _state.ordinal() ];
+    }
+
+
+    /**
+     * Get the FSM global context.
+     *
+     * @return the FSM global context
+     */
+    public Object getGlobalContext() {
+        return fsmContext;
+    }
+
+
+    /**
+     * Return the value of the state-specific FSM property with the given name, or {@code null} if there is no state-specific FSM property with the
+     * given name.
+     *
+     * @param _state The FSM state whose property is to be retrieved.
+     * @param _name The name of the state-specific FSM property to retrieve.
+     * @return the value of the named state-specific FSM property, {@code null} if the named property does not exist
+     */
+    public synchronized Object getProperty( final S _state, final String _name ) {
+
+        // fail fast if we have an argument problem...
+        if( isNull( _state ) )
+            throw new IllegalArgumentException( "No state supplied" );
+        if( isEmpty( _name ) )
+            throw new IllegalArgumentException( "No property name" );
+
+        // get the state context for the given state...
+        FSMStateContext context = stateContexts[ _state.ordinal() ];
+
+        // get the property using the context's getter...
+        return context.getProperty( _name );
     }
 
 

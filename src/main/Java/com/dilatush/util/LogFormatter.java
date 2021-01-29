@@ -15,11 +15,11 @@ import static com.dilatush.util.Strings.*;
 
 /**
  * Implements a simple log formatter for use with {@link java.util.logging.Logger}.  Three of the column widths are adjustable by logging properties:
- * <li>
- *     <ul>The message column width defaults to 60 characters and can be set with {@code com.dilatush.util.LogFormatter.messageWidth}.</ul>
- *     <ul>The source (class) column width defaults to 30 characters and can be set with {@code com.dilatush.util.LogFormatter.sourceWidth}.</ul>
- *     <ul>The thread ID column width defaults to 30 characters and can be set with {@code com.dilatush.util.LogFormatter.threadIDWidth}.</ul>
- * </li>
+ * <ul>
+ *     <li>The message column width defaults to 60 characters and can be set with {@code com.dilatush.util.LogFormatter.messageWidth}.</li>
+ *     <li>The source (class) column width defaults to 30 characters and can be set with {@code com.dilatush.util.LogFormatter.sourceWidth}.</li>
+ *     <li>The thread ID column width defaults to 30 characters and can be set with {@code com.dilatush.util.LogFormatter.threadIDWidth}.</li>
+ * </ul>
  *
  * @author Tom Dilatush  tom@dilatush.com
  */

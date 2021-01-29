@@ -11,11 +11,14 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+import static com.dilatush.util.General.isNull;
 import static com.dilatush.util.fsm.example.Engine.Mode.OFF;
 import static com.dilatush.util.fsm.example.Engine.Mode.ON;
 
 /**
- * Implements a state-machine controlled controller for the propane engine on a backup generator.
+ * Implements an example usage of the {@link FSM} finite state machine: a state-machine controlled controller for the propane engine on a home backup
+ * generator.  While this isn't a real-world example, it is actually quite close to what you would find on a propane-powered Generac backup
+ * generator.
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
@@ -35,44 +38,38 @@ public class EngineController {
 
     private final Engine           engine;
     private final FSM<State,Event> fsm;
-    private final Consumer<Report> reportConsumer;
+    private final Consumer<Report> eventListener;
+
+    // this is an example of keeping FSM state in a field of the class containing the FSM...
+    private int engineStartAttempts;
 
 
-    public EngineController( final Engine _engine, final Consumer<Report> _reportConsumer ) {
+    /**
+     * Create a new instance of this class with the given {@link Engine} and event listener.
+     *
+     * @param _engine The engine being controlled.
+     * @param _eventListener The listener receiving reports (events) from this controller.
+     */
+    public EngineController( final Engine _engine, final Consumer<Report> _eventListener ) {
+
+        // fail fast if we're missing arguments...
+        if( isNull( _engine, _eventListener ) )
+            throw new IllegalArgumentException( "Missing the engine or event listener" );
 
         engine = _engine;
-        reportConsumer = _reportConsumer;
+        eventListener = _eventListener;
 
         fsm = createFSM();
+
+        // set up a scheduled executor to read the engine RPMs about 3 times a second...
         ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor( new Threads.DaemonThreadFactory( "EngineSim" ) );
         executor.scheduleAtFixedRate( this::readRPM, 0, 331, TimeUnit.MILLISECONDS );
     }
 
 
-    public void start() {
-        fsm.onEvent( Event.START );
-        out( "START command" );
-    }
-
-
-    public void stop() {
-        fsm.onEvent( Event.STOP );
-        out( "STOP command" );
-    }
-
-
-    public void fixed() {
-        fsm.onEvent( Event.FIXED );
-        out( "FIXED command" );
-    }
-
-
-    // read the RPMs on the engine and send it to the FSM...
-    private void readRPM() {
-        fsm.onEvent( new FSMEvent<>( Event.RPM, engine.tachometer() ) );
-    }
-
-
+    /**
+     * The FSM states for this engine controller.
+     */
     private enum State {
         STOPPED,      // engine is stopped
         STARTING,     // engine is starting
@@ -84,6 +81,9 @@ public class EngineController {
     }
 
 
+    /**
+     * The FSM events for this engine controller.
+     */
     private enum Event {
         START,                // command: start the engine
         STOP,                 // command: stop the engine
@@ -101,6 +101,9 @@ public class EngineController {
     }
 
 
+    /**
+     * The reports (events) sent to the event listener.
+     */
     public enum Report {
         RUNNING,
         OVERLOADED,
@@ -108,44 +111,44 @@ public class EngineController {
         STOPPED
     }
 
-    private static class StartingContext extends FSMStateContext {
-        private int attempts;                        // how many attempts we've made to start the engine
+
+    /**
+     * An example of an FSM global context, used here to store a cancellable timeout.
+     */
+    private static class GlobalContext {
         private FSMCancellableEvent<Event> timeout;  // so we don't exceed 15 seconds of cranking
     }
 
 
+    /**
+     * An example of a subclassed FSM state context, used here to store a cancellable timeout.
+     */
     private static class StoppingContext extends FSMStateContext {
         private FSMCancellableEvent<Event> timeout;   // in case the engine takes too long to stop
     }
 
 
-    private static class CoolingContext extends FSMStateContext {
-    }
-
-
-    private static class StabilizingContext extends FSMStateContext {
-        private FSMCancellableEvent<Event> timeout;      // so we don't wait too long to stabilize
-        private FSMCancellableEvent<Event> stableTime;   // keep track of how long we've been stable
-    }
-
-
     /**
-     * Create the engine controller FSM.
+     * Create and return the engine controller FSM.
      *
      * @return the FSM created
      */
     private FSM<State,Event> createFSM() {
 
+        // create our FSM specification with the initial state and an example event...
         FSMSpec<State, Event> spec = new FSMSpec<>( State.STOPPED, Event.STOP );
 
+        // we want all the good and fancy stuff...
         spec.enableBufferedEvents();
         spec.enableEventScheduling();
 
-        spec.setStateContext( State.STARTING,    new StartingContext()     );
-        spec.setStateContext( State.STOPPING,    new StoppingContext()     );
-        spec.setStateContext( State.COOLING,     new CoolingContext()      );
-        spec.setStateContext( State.STABILIZING, new StabilizingContext()  );
+        // set an example of an FSM global context...
+        spec.setFSMContext( new GlobalContext() );
 
+        // set an example of an FSM state context...
+        spec.setStateContext( State.STOPPING,    new StoppingContext()     );
+
+        // add all the FSM state transitions for our FSM...
         spec.addTransition( State.STOPPED,        Event.START,               this::actionStart,      State.STARTING    );
         spec.addTransition( State.STARTING,       Event.STOP,                this::actionStop,       State.STOPPING    );
         spec.addTransition( State.STARTING,       Event.MAX_STARTER_TIME,    this::actionCool,       State.COOLING     );
@@ -164,123 +167,157 @@ public class EngineController {
         spec.addTransition( State.STOPPING,       Event.STOPPING_TIMEOUT,    this::actionFailed,     State.FAILED      );
         spec.addTransition( State.FAILED,         Event.FIXED,               null,                   State.STOPPED     );
 
+        // add an example of an FSM event transform...
         spec.addEventTransform( Event.RPM, this::rawRPM );
 
+        // we're done with the spec, so use it to create the actual FSM and return it...
         return new FSM<>( spec );
     }
 
 
-
-    // analyze the raw tachometer reading and emit the appropriate state machine event
+    /**
+     * This example of an FSM event transform transforms a raw event containing the engine RPM into one of three discrete FSM events, or returns
+     * a {@code null} when the RPMs are in a range that can't trigger any transitions.
+     *
+     * @param _event The FSM event being transformed, in this case always an RPM event (with RPMs as the data).
+     * @param _context The FSM event transform context for this transformation.
+     * @return the transformed event, or {@code null} if none
+     */
     private FSMEvent<Event> rawRPM( final FSMEvent<Event> _event, final FSMEventTransformContext<State, Event> _context  ) {
 
+        // we know the data is a double...
         double rpm = (double) _event.data;
 
+        // if the RPMs are zero, transform to the RPM_0 event...
         if( rpm == 0)
             return new FSMEvent<>( Event.RPM_0 );
+
+        // if the RPMs are less than our "engine started" threshold, just return a null...
         if( rpm < STARTED_THRESHOLD_RPM )
             return null;
-        if( (rpm >= MIN_GEN_RPM) && (rpm <= MAX_GEN_RPM) )
-            return new FSMEvent<>( Event.RPM_IN_RANGE );
-        return new FSMEvent<>( Event.RPM_OUT_OF_RANGE );
+
+        // otherwise, return either RPM_IN_RANGE or RPM_OUT_OF_RANGE events ...
+        return ( (rpm >= MIN_GEN_RPM) && (rpm <= MAX_GEN_RPM) )
+                ? new FSMEvent<>( Event.RPM_IN_RANGE )
+                : new FSMEvent<>( Event.RPM_OUT_OF_RANGE );
     }
 
 
+    // on STOPPED, START -> STARTING...
     private void actionStart( final FSMActionContext<State,Event> _context ) {
-
         out( "engine starting" );
-
-        // clear our attempts counter and start our cranking timer...
-        StartingContext context = (StartingContext) _context.toStateContext;
-        context.attempts = 0;
+        GlobalContext context = (GlobalContext) _context.fsmContext;
+        engineStartAttempts = 0;
         context.timeout = fsm.scheduleEvent( Event.MAX_STARTER_TIME, Duration.ofMillis( MAX_STARTER_TIME_MS ) );
-
-        // tell the engine to get its butt in gear...
         engine.power( ON );
         engine.fuel( ON );
         engine.starter( ON );
     }
 
 
+    // on COOLING, COOLED -> STARTING...
     private void actionCooled( final FSMActionContext<State,Event> _context ) {
-
         out( "starter cooled" );
-
-        // start our cranking timer...
-        StartingContext context = (StartingContext) _context.toStateContext;
+        GlobalContext context = (GlobalContext) _context.fsmContext;
         context.timeout = fsm.scheduleEvent( Event.MAX_STARTER_TIME, Duration.ofMillis( MAX_STARTER_TIME_MS ) );
-
-        // turn the starter on...
         engine.starter( ON );
     }
 
 
+    // on STARTING,    STOP -> STOPPING...
+    // on COOLING,     STOP -> STOPPING...
+    // on STABILIZING, STOP -> STOPPING...
+    // on RUNNING,     STOP -> STOPPING...
     private void actionStop( final FSMActionContext<State,Event> _context ) {
-
         out( "engine stopping" );
-
         engineOff();
-
-        // start our stopping timeout...
         StoppingContext context = (StoppingContext) _context.toStateContext;
         context.timeout = fsm.scheduleEvent( Event.STOPPING_TIMEOUT, Duration.ofMillis( MAX_STOPPING_TIME_MS ) );
     }
 
 
+    // on STOPPING, RPM_0 -> STOPPED...
     private void actionStopped( final FSMActionContext<State,Event> _context ) {
         out( "engine stopped" );
-
-        // cancel our stopping timeout...
         StoppingContext context = (StoppingContext) _context.fromStateContext;
         context.timeout.cancel();
-
-        reportConsumer.accept( Report.STOPPED );
+        eventListener.accept( Report.STOPPED );
     }
 
 
+    // on STOPPING, STOPPING_TIMEOUT -> FAILED...
     private void actionFailed( final FSMActionContext<State,Event> _context ) {
-
         out( "engine failed" );
-        reportConsumer.accept( Report.FAILED );
+        eventListener.accept( Report.FAILED );
     }
 
 
+    // on RUNNING, RPM_OUT_OF_RANGE -> STOPPING...
     private void actionOverload( final FSMActionContext<State,Event> _context ) {
-
         out( "engine overloaded" );
         actionStop( _context );
-        reportConsumer.accept( Report.OVERLOADED );
+        eventListener.accept( Report.OVERLOADED );
     }
 
 
+    // on STABILIZING, STABLE -> RUNNING...
     private void actionRunning( final FSMActionContext<State,Event> _context ) {
-
         out( "engine running" );
-
-        // cancel our timeout...
-        StabilizingContext context = (StabilizingContext) _context.fromStateContext;
-        context.timeout.cancel();
-
-        reportConsumer.accept( Report.RUNNING);
+        eventListener.accept( Report.RUNNING);
     }
 
 
+    // on COOLING, CANNOT_START -> FAILED...
     private void actionNoStart( final FSMActionContext<State,Event> _context ) {
-
         out( "couldn't start engine" );
         engineOff();
         actionFailed( _context );
     }
 
 
+    // on STABILIZING, STABILIZING_TIMEOUT -> FAILED...
     private void actionUnstable( final FSMActionContext<State,Event> _context ) {
-
         out( "couldn't stabilize engine RPM" );
         engineOff();
         actionFailed( _context );
     }
 
 
+    // one STARTING, RPM_OUT_OF_RANGE -> STABILIZING...
+    private void actionStabilize( final FSMActionContext<State,Event> _context ) {
+        out( "stabilizing engine RPM" );
+        engine.starter( OFF );
+        GlobalContext fmContext = (GlobalContext) _context.fsmContext;
+        fmContext.timeout.cancel();
+        _context.setTimeout( Event.STABILIZING_TIMEOUT, Duration.ofMillis( MAX_STABILIZING_TIME_MS ) );
+    }
+
+
+    // on STABILIZING, RPM_IN_RANGE -> STABILIZING...
+    private void actionInRange( final FSMActionContext<State,Event> _context ) {
+        _context.toStateContext.setProperty( "StableTime", fsm.scheduleEvent( Event.STABLE, Duration.ofMillis( MIN_STABLE_TIME_MS ) ) );
+    }
+
+
+    // on STABILIZING, RPM_OUT_OF_RANGE -> STABILIZING
+    private void actionOutOfRange( final FSMActionContext<State,Event> _context ) {
+        FSMCancellableEvent<?> stableTime = (FSMCancellableEvent<?>) _context.toStateContext.getProperty( "StableTime" );
+        if( stableTime != null)
+            stableTime.cancel();
+    }
+
+
+    // on STARTING, MAX_STARTER_TIME -> COOLING
+    private void actionCool( final FSMActionContext<State,Event> _context ) {
+        out( "cooling engine starter" );
+        engine.starter( OFF );
+        engineStartAttempts++;
+        boolean maxed = engineStartAttempts >= MAX_START_ATTEMPTS;
+        fsm.scheduleEvent( maxed ? Event.CANNOT_START : Event.COOLED, Duration.ofMillis( STARTER_COOLING_TIME_MS ) );
+    }
+
+
+    // turn everything in the engine off...
     private void engineOff() {
         engine.starter( OFF );
         engine.fuel( OFF );
@@ -288,62 +325,44 @@ public class EngineController {
     }
 
 
-    private void actionStabilize( final FSMActionContext<State,Event> _context ) {
-
-        out( "stabilizing engine RPM" );
-
-        // turn off the starter motor...
-        engine.starter( OFF );
-
-        // clear the starter timeout...
-        StartingContext fmContext = (StartingContext) _context.fromStateContext;
-        fmContext.timeout.cancel();
-
-        // start our timeout...
-        StabilizingContext toContext = (StabilizingContext) _context.toStateContext;
-        toContext.timeout = fsm.scheduleEvent( Event.STABILIZING_TIMEOUT, Duration.ofMillis( MAX_STABILIZING_TIME_MS ) );
+    /**
+     * Start the engine.
+     */
+    public void start() {
+        fsm.onEvent( Event.START );
+        out( "START command" );
     }
 
 
-    private void actionInRange( final FSMActionContext<State,Event> _context ) {
-        //out( "RPM in range" );
-
-        // start our timer...
-        StabilizingContext context = (StabilizingContext) _context.toStateContext;
-        context.stableTime = fsm.scheduleEvent( Event.STABLE, Duration.ofMillis( MIN_STABLE_TIME_MS ) );
+    /**
+     * Stop the engine.
+     */
+    public void stop() {
+        fsm.onEvent( Event.STOP );
+        out( "STOP command" );
     }
 
 
-    private void actionOutOfRange( final FSMActionContext<State,Event> _context ) {
-        //out( "RPM out of range" );
-
-        // cancel our timer...
-        StabilizingContext context = (StabilizingContext) _context.toStateContext;
-        if( context.stableTime != null)
-            context.stableTime.cancel();
+    /**
+     * Assert that the engine has been fixed (after a failure).
+     */
+    public void fixed() {
+        fsm.onEvent( Event.FIXED );
+        out( "FIXED command" );
     }
 
 
-    private void actionCool( final FSMActionContext<State,Event> _context ) {
-
-        out( "cooling engine starter" );
-
-        // tell the engine starter to shut off...
-        engine.starter( OFF );
-
-        // update the number of attempts we've made...
-        StartingContext fmContext = (StartingContext) _context.fromStateContext;
-        fmContext.attempts++;
-        boolean maxed = fmContext.attempts >= MAX_START_ATTEMPTS;
-
-        // start our cooling timer to either try again or fail, depending on how many attempts we've made...
-        fsm.scheduleEvent( maxed ? Event.CANNOT_START : Event.COOLED, Duration.ofMillis( STARTER_COOLING_TIME_MS ) );
+    /**
+     * Read the RPMs on the engine and send it to the FSM.
+     */
+    private void readRPM() {
+        fsm.onEvent( new FSMEvent<>( Event.RPM, engine.tachometer() ) );
     }
 
 
-    private final DateTimeFormatter ldtf = DateTimeFormatter.ofPattern( "HH:mm:ss.SSS " );
+    private final DateTimeFormatter logStampFormatter = DateTimeFormatter.ofPattern( "HH:mm:ss.SSS " );
 
     private void out( final String _msg ) {
-        System.out.println( ldtf.format( ZonedDateTime.now() ) + "   Controller: " +  _msg );
+        System.out.println( logStampFormatter.format( ZonedDateTime.now() ) + "   Controller: " +  _msg );
     }
 }

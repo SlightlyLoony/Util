@@ -10,6 +10,10 @@ import java.util.function.Consumer;
 import static com.dilatush.util.Strings.isEmpty;
 
 /**
+ * Implements a console simulator for the generator control panel.  Note that if you run this from within an IDE, you will likely lose keystrokes
+ * as the IDE will poll for them.  It still works, but it may take you multiple tries.  When it DOES work, you'll see the feedback from the echo
+ * output.
+ *
  * @author Tom Dilatush  tom@dilatush.com
  */
 public class GeneratorSim implements Generator {
@@ -18,7 +22,10 @@ public class GeneratorSim implements Generator {
     private Consumer<Event> listener;
 
 
-    public void run() throws IOException {
+    /**
+     * Run this generator simulator.
+     */
+    public void run() {
 
         BufferedReader br = new BufferedReader( new InputStreamReader( System.in ) );
 
@@ -27,7 +34,14 @@ public class GeneratorSim implements Generator {
         boolean done = false;
         while( !done ) {
 
-            String line = br.readLine();
+            String line;
+            try {
+                line = br.readLine();
+            }
+            catch( IOException _e ) {
+                line = "q";
+            }
+
             if( isEmpty( line ) )
                 continue;
 
@@ -36,26 +50,37 @@ public class GeneratorSim implements Generator {
 
                 case 'Q':
                     done = true;
+                    outGen( "Quit" );
                     break;
 
                 case 'N':
+                    outGen( "On" );
                     listener.accept( Event.ON );
                     break;
 
                 case 'F':
+                    outGen( "Off" );
                     listener.accept( Event.OFF );
                     break;
 
                 case 'A':
+                    outGen( "Auto" );
                     listener.accept( Event.AUTO );
                     break;
 
                 case 'D':
+                    outGen( "Grid Down" );
                     listener.accept( Event.DOWN );
                     break;
 
                 case 'U':
+                    outGen( "Grid Up" );
                     listener.accept( Event.UP );
+                    break;
+
+                case 'X':
+                    outGen( "Fixed" );
+                    listener.accept( Event.FIXED );
                     break;
 
                 default:
@@ -75,6 +100,7 @@ public class GeneratorSim implements Generator {
         out( "A for generator 'AUTO'" );
         out( "D for grid down" );
         out( "U for grid up" );
+        out( "X for fixed" );
     }
 
 

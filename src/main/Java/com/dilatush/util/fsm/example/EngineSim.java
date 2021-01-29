@@ -86,7 +86,7 @@ public class EngineSim implements Engine {
                 if( (power == ON) && (fuel == ON) && ((starter == ON) || (rpm >= 50)) ) {
                     state = State.STARTING;
                     ticker = 0;
-                    scenario = startingScenarios[2/*random.nextInt( startingScenarios.length )*/];
+                    scenario = startingScenarios[random.nextInt( startingScenarios.length )];
                     out( "starting" );
                 }
                 break;
@@ -105,7 +105,7 @@ public class EngineSim implements Engine {
                 else if( rpm >= 1000) {
                     state = State.RUNNING;
                     ticker = 0;
-                    scenario = runningScenarios[2/*random.nextInt( runningScenarios.length )*/];
+                    scenario = runningScenarios[random.nextInt( runningScenarios.length )];
                     out( "running" );
                 }
                 break;
@@ -219,7 +219,7 @@ public class EngineSim implements Engine {
     private double runShoot( final double _rpm ) {
 
         // compute our target coefficient...
-        double target = 1800 + 6000 * Math.sin( ticker * Math.PI / 10 ) / (5 * ticker);
+        double target = 1800 + 10000 * Math.sin( ticker * Math.PI / 10 ) / (5 * ticker);
         return _rpm + (target - _rpm) / 10;
     }
 

@@ -33,6 +33,26 @@ The FSM can also be configured to provide a simple event scheduling service.  If
 
 Ordinarily when using a scheduled executor service, cancelling scheduled tasks (in our case, posting events) is a potentially problematic exericise.  In particular, there is normally a "race condition", wherein one thread (such as the thread executing FSM actions) tries to cancel a scheduled task that has already executed.  In our case this circumstance is curable because FSM transitions occur, and FSM actions all execute, sequentially in a single thread (a necessity for the integrity of the FSM's state).  Our cure is to make the scheduled event itself cancellable (in addition to cancelling the scheduled task, if possible).  Thus the `scheduleEvent()` methods of the FSM return instances of a subclass of `FSMEvent` called `FSMCancellableEvent`.  The `onEventImpl()` method will simply ignore any cancelled events.  The result is that scheduled events can be cancelled without the usual risk of a race condition.
 
+== FSM State
+Most real-world implementations of an FSM require some state _other_ than the FSM's state.  The example program included in this package has two classes with FSMs, and one of them (in `EngineController`) has quite a few examples of such state.  For example, it needs to keep track of how many times it has tried to start the engine.  In several other places, it stores an `FSMCancellableEvent` in case the event in question needs to be cancelled.  In many real-world examples of FSMs, there will be dozens or even hundreds of pieces of state like this that need to be squirreled away somewhere until they're needed.  The FSM package gives you multiple places to do that.  Each of these places has its pros and cons, some of which may simply be matters of the programmer's taste or conventions.  None of them are required, all of them are freely available for you to use, and most of time it makes zero difference to the functioning of the FSM which one you choose.  Here are the mechanisms available to you:
+
+=== Fields in the class containing the FSM
+This is perhaps the most straightforward method of all, as it's the usual method of storing state in a Java class.  In the example program, the `EngineController` has a field `engineStartAttempts` that uses this method.  That field is used in two different FSM action methods.
+
+=== FSM global context
+The FSM global context is an arbitrary object, specified in the `FSMSpec` used to construct the FSM, that can contain any state you'd like.  The global context is available to any code that has access to the FSM instance (through the `getContext()` method), as well as FSM actions and FSM event transforms.  In the example program, the `EngineController` has an inner class `GlobalContext`, with a field `timeout` that shows this method in use; three different FSM action methods use that field.
+
+=== FSM state context
+The FSM state context is quite similar to the FSM global context, except that the class _must_ be a subclass of `FSMStateContext`, and there is a separate FSM state context for each FSM state.  FSM state contexts are accessible to any code that has access to the FSM instance (through the `getStateContext()` method).  FSM actions have two FSM state contexts available to them: for the FSM state being transitioned _from_, and the FSM state being transitioned _to_.  FSM event transforms have the FSM state context for the current state available to them.  In the example program, the `EngineController` has an inner class `StoppingContext`, with a field `timeout` that shows this method in use; two different FSM action methods use that field.
+
+=== Properties of the FSM instance
+The FSM class contains a `setProperty(name,value)` and `getProperty(name)` that do exactly what they look like they do.  The value of the property can be any object.  You can set and retrieve these properties from any code that has access to the FSM instance.
+
+=== Properties of the FSM state
+Each FSM state context can contain a set of properties.  These properties are accessible through the `setProperty(name,value)` and `getProperty(name)` methods of the `FSMStateContext` object (or its subclasses, of course).  They are also accessible from the FSM instance, via the `setProperty(state,name,value)` and `getProperty(state,name)` methods.  In the example program, the `EngineController` has two uses of this method, in the functions `actionInRange()` and `actionOutOfRange`.
+
+== Scheduled Events and Timeouts
+
 == Event Transformation
 
 
@@ -57,8 +77,19 @@ This package _validates_ the FSM's definition (the states, events, and transitio
 
 
 == Example program
-Nothing works better for building understanding than an https://github.com/SlightlyLoony/Util/tree/master/src/main/Java/com/dilatush/util/fsm/example[example].  This example program uses two FSMs to implement the controls for a backup generator - the kind you install at your home to provide power if the grid power goes down.  A relatively simple FSM controls the generator overall
+Nothing works better for building understanding than an https://github.com/SlightlyLoony/Util/tree/master/src/main/Java/com/dilatush/util/fsm/example[example].  This example program uses two FSMs to implement the controls for a backup generator - the kind you install at your home to provide power if the grid power goes down.  A https://github.com/SlightlyLoony/Util/blob/master/src/main/Java/com/dilatush/util/fsm/example/GeneratorController.java[relatively simple FSM] controls the generator overall, and a https://github.com/SlightlyLoony/Util/blob/master/src/main/Java/com/dilatush/util/fsm/example/EngineController.java[much more complex FSM] controls the propane engine inside the generator.  Most likely you don't have a generator or the requisite electronics lying about to try this out, so we've provided simulators for both the engine and the bits of the generator external to the electronics.  The engine controller FSM contains 7 states with 13 different events, and shows examples of state contexts, timers, and event transforms.  The https://github.com/SlightlyLoony/Util/blob/master/src/main/Java/com/dilatush/util/fsm/example/ExampleTest.java[main class] for the example does very little:
 
+....
+public class ExampleTest {
+    public static void main( final String[] _args ) throws InterruptedException, IOException {
+        GeneratorSim        generator  = new GeneratorSim();
+        Engine              engine     = new EngineSim();
+        GeneratorController controller = new GeneratorController( generator, engine );
+        generator.run();
+    }
+}
+....
+Just run that program, and the simulated generator and engine will start up, ready for you to play around with it.  Do a little debugging in the two classes with state machines, and I suspect you'll learn a bit.  One thing worth noting is that _everything_ in the state machine implementations is little bits of code, typically under 10 lines - very easy to understand and think about.  To this author's mind, that's one of the great advantages of FSMs - they naturally divide complex problems that are very hard to wrap your brain around into a series of small -- even _tiny_ -- problems that are quite understandable.
 
 == Learning more...
 The code for the FSM implementation can be found https://github.com/SlightlyLoony/Util/tree/master/src/main/Java/com/dilatush/util/fsm[here], and the example code https://github.com/SlightlyLoony/Util/tree/master/src/main/Java/com/dilatush/util/fsm/example[here].
