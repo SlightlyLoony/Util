@@ -148,6 +148,10 @@ public class EngineController {
         // set an example of an FSM state context...
         spec.setStateContext( State.STOPPING, new StoppingContext() );
 
+        // set a couple examples of an FSM event action...
+        spec.setEventAction( Event.RPM_IN_RANGE, this::onEvent );
+        spec.setEventAction( Event.RPM_OUT_OF_RANGE, this::onEvent );
+
         // set an example of an on-entry state action...
         spec.setStateOnEntryAction( State.STOPPING, this::onEntryStopping );
 
@@ -175,6 +179,17 @@ public class EngineController {
 
         // we're done with the spec, so use it to create the actual FSM and return it...
         return new FSM<>( spec );
+    }
+
+
+    /**
+     * This example of an event action just prints out the event and state.
+     *
+     * @param _event The FSM event.
+     * @param _state The FSM state that the event occurred in.
+     */
+    private void onEvent( final FSMEvent<Event> _event, final FSMState<State,Event> _state ) {
+        out( "On event " + _event.event + " while in state " + _state.state );
     }
 
 

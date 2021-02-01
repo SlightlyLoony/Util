@@ -22,8 +22,6 @@ import static com.dilatush.util.Strings.isEmpty;
  */
 public class FSM<S extends Enum<S>,E extends Enum<E>> {
 
-    // TODO: get rid of "convenience method" javadocs...
-
     final static private Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
 
     // the enum of the current state of the FSM, which is the only mutable field in an FSM instance...
@@ -41,11 +39,20 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
     // arbitrary and optional properties that are available to the entire FSM; used primarily in actions and transforms...
     private final Map<String,Object>                                            fsmProperties;
 
-    // map of <transition ID> -> <transition> for every defined transition; transition ID is <STATE,EVENT> tuple...
-    private final Map<FSMSpec.FSMTransitionID<S,E>, FSMTransition<S,E>>         transitions;
+    // lookup table for transitions, indexed by state, then event...
+    private final List<List<FSMTransition<S,E>>>                                transitions;
 
-    // map of <event> -> <event transform> for every defined event transform...
-    private final Map<E, FSMEventTransform<S,E>>                                transforms;
+    // lookup table for event transforms...
+    private final List<FSMEventTransform<S,E>>                                  transforms;
+
+    // lookup table for on-entry actions...
+    private final List<FSMStateAction<S,E>>                                     onEntryActions;
+
+    // lookup table for on-exit actions...
+    private final List<FSMStateAction<S,E>>                                     onExitActions;
+
+    // lookup table for event actions...
+    private final List<FSMEventAction<S,E>>                                     eventActions;
 
     // true if event scheduling services are enabled...
     private final boolean                                                       eventScheduling;
@@ -80,22 +87,52 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
         fsmContext          = _spec.context;
         bufferedEvents      = _spec.bufferedEvents;
         eventScheduling     = _spec.eventScheduling;
-        transforms          = _spec.transforms;
         stateChangeListener = _spec.stateChangeListener;
 
         // make our list of states...
         states = new ArrayList<>();
-        for( FSMSpec.FSMStateSpec<S,E> stateSpec : _spec.stateSpecs ) {
-            states.add( new FSMState<>( stateSpec.onEntry, stateSpec.onExit, stateSpec.state, this, fsmContext, stateSpec.context ) );
+        for( FSMSpec.FSMStateSpec<S> stateSpec : _spec.stateSpecs ) {
+            states.add( new FSMState<>( stateSpec.state, this, fsmContext, stateSpec.context ) );
         }
 
-        // build our transition map...
-        transitions = new HashMap<>();
-        _spec.transitions.forEach( ( id, spec ) -> {
-            FSMState<S,E> fromState = states.get( id.fromState.ordinal() );
-            FSMState<S,E> toState   = states.get( spec.toState.ordinal() );
-            transitions.put( id, new FSMTransition<>( this, fsmContext, fromState,id.event, spec.action, toState ) );
-        } );
+        // make our event transform lookup table...
+        transforms = new ArrayList<>( _spec.eventEnums.size() );
+        for( int i = 0; i < _spec.eventEnums.size(); i++ ) transforms.add( null );  // fill the list with nulls for each event...
+        _spec.transforms.forEach( (event, transform) -> transforms.set( event.ordinal(), transform ) );
+
+        // build our transition lookup table...
+        transitions = new ArrayList<>( _spec.stateEnums.size() );                            // the list for the state dimension of our table...
+        for( int i = 0; i < _spec.stateEnums.size(); i++ ) {                                 // for every state...
+            List<FSMTransition<S,E>> byEvents = new ArrayList<>( _spec.eventEnums.size() );  // make the list for the enum dimension of our table...
+            for( int j = 0; j < _spec.eventEnums.size(); j++ ) byEvents.add( null );         // fill the list with nulls for each event...
+            transitions.add( byEvents );                                                     // add the by event list to our by state list...
+        }
+
+        // add the transitions to our lookup table...
+        _spec.transitions.forEach( (id, spec) -> {
+            FSMState<S,E> fromState = states.get( id.fromState.ordinal() );  // get the from state FSMState object...
+            FSMState<S,E> toState   = states.get( spec.toState.ordinal() );  // get the to state FSMState object...
+            transitions.get( id.fromState.ordinal() )
+                    .set(
+                            id.event.ordinal(),
+                            new FSMTransition<>( this, fsmContext, fromState,id.event, spec.action, toState )
+                    );
+        });
+
+        // build our on-entry action lookup table...
+        onEntryActions = new ArrayList<>( _spec.stateEnums.size() );
+        for( int i = 0; i < _spec.stateEnums.size(); i++ ) onEntryActions.add( null );                   // fill the list with nulls for each state...
+        _spec.onEntryActions.forEach( (state, action) -> onEntryActions.set( state.ordinal(), action) ); // set any defined on-entry actions...
+
+        // build our on-exit action lookup table...
+        onExitActions = new ArrayList<>( _spec.stateEnums.size() );
+        for( int i = 0; i < _spec.stateEnums.size(); i++ ) onExitActions.add( null );                    // fill the list with nulls for each state...
+        _spec.onEntryActions.forEach( (state, action) -> onExitActions.set( state.ordinal(), action) );  // set any defined on-exit actions...
+
+        // build our event action lookup table...
+        eventActions = new ArrayList<>( _spec.eventEnums.size() );
+        for( int i = 0; i < _spec.eventEnums.size(); i++ ) eventActions.add( null );                     // fill the list with nulls for each event...
+        _spec.eventActions.forEach( (event, action) -> eventActions.set( event.ordinal(), action ) );    // set any defined event actions...
 
         // set up the initial state...
         FSMState<S,E> initialState = states.get( state.ordinal() );
@@ -134,6 +171,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      *     <li>If the event is an instance of {@link FSMCancellableEvent} and the event has been cancelled, then this method does nothing at all.
      *     This mechanism eliminates race conditions that might otherwise arise because the scheduled events are posted in a different thread from
      *     the one actions are run in.</li>
+     *     <li>If the event has an associated {@link FSMEventAction}, run it.</li>
      *     <li>The current state and the received event together uniquely identify a possible FSM transition.  If that combination matches a defined
      *     transition, then that transition will be processed.  Note that the transition may not actually involve a change in the FSM's state (that
      *     is, the "from" state and the "to" state may be the same), in which case processing the transaction means at most the running of the
@@ -181,8 +219,13 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
                 return;
         }
 
-        // if we don't have a transition mapped for the current state and this event, then let's see if we have a transform...
-        FSMTransition<S,E> transition = transitions.get( new FSMSpec.FSMTransitionID<>( state, _event.event ) );
+        // if our event has an event action associated with it, run it...
+        FSMEventAction<S,E> eventAction = eventActions.get( _event.event.ordinal() );
+        if( eventAction != null )
+            eventAction.run( _event, states.get( state.ordinal() ) );
+
+        // if we don't have a transition for the current state and this event, then let's see if we have a transform...
+        FSMTransition<S,E> transition = transitions.get( state.ordinal() ).get( _event.event.ordinal() );
         if( transition == null ) {
             runEventTransform( _event );
             return;
@@ -201,7 +244,9 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
             fromState.cancelTimeout();
 
             // if the state we're leaving has an on-exit state action, run it...
-            fromState.runOnExit();
+            FSMStateAction<S,E> onExitAction = onExitActions.get( fromState.state.ordinal() );
+            if( onExitAction != null)
+                onExitAction.run( fromState );
 
             // update the state we're leaving...
             fromState.setLastLeft( Instant.now() );
@@ -229,7 +274,9 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
             toState.setEntries( toState.getEntries() + 1 );
 
             // if the state we're entering has an on-entry state action, run it...
-            toState.runOnEntry();
+            FSMStateAction<S,E> onEntryAction = onEntryActions.get( toState.state.ordinal() );
+            if( onEntryAction != null)
+                onEntryAction.run( toState );
 
             // set the new state...
             state = toState.state;
@@ -249,7 +296,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
     private void runEventTransform( final FSMEvent<E> _event ) {
 
         // if we don't have an event transform, just leave, as we've got nothing to do...
-        FSMEventTransform<S,E> transform = transforms.get( _event.event );
+        FSMEventTransform<S,E> transform = transforms.get( _event.event.ordinal() );
         if( transform == null )
             return;
 
@@ -300,6 +347,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      *     <li>If the event is an instance of {@link FSMCancellableEvent} and the event has been cancelled, then this method does nothing at all.
      *     This mechanism eliminates race conditions that might otherwise arise because the scheduled events are posted in a different thread from
      *     the one actions are run in.</li>
+     *     <li>If the event has an associated {@link FSMEventAction}, run it.</li>
      *     <li>The current state and the received event together uniquely identify a possible FSM transition.  If that combination matches a defined
      *     transition, then that transition will be processed.  Note that the transition may not actually involve a change in the FSM's state (that
      *     is, the "from" state and the "to" state may be the same), in which case processing the transaction means at most the running of the
@@ -357,11 +405,51 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
 
 
     /**
-     * Convenience method that simply wraps the given event {@link Enum} and event data {@link Object} in an instance of {@link FSMEvent}
-     * and calls {@link #onEvent(FSMEvent)}.
+     * <p>This method is the heart of the FSM - it handles state transitions and event transformations, all triggered by receiving an event.  There
+     * are several things that can happen, depending on what state the FSM is currently in and what event is received:</p>
+     * <ul>
+     *     <li>If the event is an instance of {@link FSMCancellableEvent} and the event has been cancelled, then this method does nothing at all.
+     *     This mechanism eliminates race conditions that might otherwise arise because the scheduled events are posted in a different thread from
+     *     the one actions are run in.</li>
+     *     <li>If the event has an associated {@link FSMEventAction}, run it.</li>
+     *     <li>The current state and the received event together uniquely identify a possible FSM transition.  If that combination matches a defined
+     *     transition, then that transition will be processed.  Note that the transition may not actually involve a change in the FSM's state (that
+     *     is, the "from" state and the "to" state may be the same), in which case processing the transaction means at most the running of the
+     *     transaction action (if there is one).  There are several steps to that process:
+     *     <ol>
+     *         <li>If the state we're transitioning from is different than the state we're transitioning to:
+     *             <ol style="list-style-type:lower-alpha">
+     *                 <li>Set the time that we left the current FSM state.</li>
+     *                 <li>Update the total time spent in the current FSM state.</li>
+     *                 <li>If there is an on-exit {@link FSMStateAction} associated with the state we're transitioning from, run it.</li>
+     *             </ol>
+     *         </li>
+     *         <li>If there is an {@link FSMTransitionAction} associated with this transaction, run it.</li>
+     *         <li>If the state we're transitioning from is different than the state we're transitioning to:
+     *             <ol style="list-style-type:lower-alpha">
+     *                 <li>Set the time we entered the next FSM state.  Note that if there was an action, and if that action took some time, then this might
+     *                 be different than the time we left the last state.</li>
+     *                 <li>Update the number of entries to the next state.</li>
+     *                 <li>If there is an on-entry {@link FSMStateAction} associated with the state we're transitioning to, run it.</li>
+     *                 <li>Set the FSM's state to the next state.</li>
+     *             </ol>
+     *         </li>
+     *     </ol></li>
+     *     <li>If the current FSM state and the received event do <i>not</i> match a defined transition, but the received event
+     *     does have a configured event transform, then that transform is executed.  That transform may result in new events, and there are
+     *     two ways to do this:<ul>
+     *         <li>The transform may return an event.  If it does so, the returned event will be handled by a recursive call to this method.  That
+     *         means it will be handled immediately, whether or not the FSM is configured for event buffering.</li>
+     *         <li>The transform may post one or more events by calling one of the {@code onEvent()} methods.  If the FSM is configured for event
+     *         buffering, then these events will be queued - possibly <i>behind</i> events queued by other threads.  If the FSM is not configured
+     *         for event buffering, then these events will be handled immediately.</li>
+     *     </ul></li>
+     *     <li>If the current state and the received event do <i>not</i> match a defined transition, and the received event
+     *     does not have a configured event transform, then this method does nothing at all.</li>
+     * </ul>
      *
-     * @param _event The event enum for the event to be handled.
-     * @param _eventData The event data object for the event to be handled.
+     * @param _event The event to be handled.
+     * @param _eventData The data associated with the event.
      */
     @SuppressWarnings( "unused" )
     public void onEvent( final E _event, final Object _eventData ) {
@@ -370,10 +458,50 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
 
 
     /**
-     * Convenience method that simply wraps the given event {@link Enum} and a {@code null}  for the event data {@link Object} in an
-     * instance of {@link FSMEvent} and calls {@link #onEvent(FSMEvent)}.
+     * <p>This method is the heart of the FSM - it handles state transitions and event transformations, all triggered by receiving an event.  There
+     * are several things that can happen, depending on what state the FSM is currently in and what event is received:</p>
+     * <ul>
+     *     <li>If the event is an instance of {@link FSMCancellableEvent} and the event has been cancelled, then this method does nothing at all.
+     *     This mechanism eliminates race conditions that might otherwise arise because the scheduled events are posted in a different thread from
+     *     the one actions are run in.</li>
+     *     <li>If the event has an associated {@link FSMEventAction}, run it.</li>
+     *     <li>The current state and the received event together uniquely identify a possible FSM transition.  If that combination matches a defined
+     *     transition, then that transition will be processed.  Note that the transition may not actually involve a change in the FSM's state (that
+     *     is, the "from" state and the "to" state may be the same), in which case processing the transaction means at most the running of the
+     *     transaction action (if there is one).  There are several steps to that process:
+     *     <ol>
+     *         <li>If the state we're transitioning from is different than the state we're transitioning to:
+     *             <ol style="list-style-type:lower-alpha">
+     *                 <li>Set the time that we left the current FSM state.</li>
+     *                 <li>Update the total time spent in the current FSM state.</li>
+     *                 <li>If there is an on-exit {@link FSMStateAction} associated with the state we're transitioning from, run it.</li>
+     *             </ol>
+     *         </li>
+     *         <li>If there is an {@link FSMTransitionAction} associated with this transaction, run it.</li>
+     *         <li>If the state we're transitioning from is different than the state we're transitioning to:
+     *             <ol style="list-style-type:lower-alpha">
+     *                 <li>Set the time we entered the next FSM state.  Note that if there was an action, and if that action took some time, then this might
+     *                 be different than the time we left the last state.</li>
+     *                 <li>Update the number of entries to the next state.</li>
+     *                 <li>If there is an on-entry {@link FSMStateAction} associated with the state we're transitioning to, run it.</li>
+     *                 <li>Set the FSM's state to the next state.</li>
+     *             </ol>
+     *         </li>
+     *     </ol></li>
+     *     <li>If the current FSM state and the received event do <i>not</i> match a defined transition, but the received event
+     *     does have a configured event transform, then that transform is executed.  That transform may result in new events, and there are
+     *     two ways to do this:<ul>
+     *         <li>The transform may return an event.  If it does so, the returned event will be handled by a recursive call to this method.  That
+     *         means it will be handled immediately, whether or not the FSM is configured for event buffering.</li>
+     *         <li>The transform may post one or more events by calling one of the {@code onEvent()} methods.  If the FSM is configured for event
+     *         buffering, then these events will be queued - possibly <i>behind</i> events queued by other threads.  If the FSM is not configured
+     *         for event buffering, then these events will be handled immediately.</li>
+     *     </ul></li>
+     *     <li>If the current state and the received event do <i>not</i> match a defined transition, and the received event
+     *     does not have a configured event transform, then this method does nothing at all.</li>
+     * </ul>
      *
-     * @param _event The event enum for the event to be handled.
+     * @param _event The event to be handled.
      */
     public void onEvent( final E _event ) {
         onEvent( new FSMEvent<>( _event, null ) );

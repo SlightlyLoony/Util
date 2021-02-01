@@ -12,11 +12,39 @@ import java.time.Duration;
  */
 public final class FSMTransition<S extends Enum<S>,E extends Enum<E>> {
 
+    /**
+     * The {@link FSM} instance associated with this transition.
+     */
     public final FSM<S,E>                 fsm;
+
+
+    /**
+     * The optional FSM global context.
+     */
     public final Object                   fsmContext;
+
+
+    /**
+     * The {@link FSMState} instance for the FSM state we're transitioning away from.
+     */
     public final FSMState<S,E>            fromState;
+
+
+    /**
+     * The enum for the FSM event that triggered this transition.
+     */
     public final E                        event;
+
+
+    /**
+     * The optional {@link FSMTransitionAction} associated with this transition.
+     */
     public final FSMTransitionAction<S,E> action;
+
+
+    /**
+     * The {@link FSMState} instance for the FSM state we're transitioning to.
+     */
     public final FSMState<S,E>            toState;
 
 
@@ -48,7 +76,7 @@ public final class FSMTransition<S extends Enum<S>,E extends Enum<E>> {
      * that the cancellation logic works correctly.  Event scheduling must be enabled in the FSM if timeouts will be used.  If this method is called
      * and event scheduling is <i>not</i> enabled in the FSM, an {@link UnsupportedOperationException} will be thrown.
      *
-     * @param _event The FSM event to occur when the timeout expires.
+     * @param _event The {@link FSMEvent} to occur when the timeout expires.
      * @param _delay The delay (as a {@link Duration} instance) for the timeout.
      */
     public void setTimeout( final FSMEvent<E> _event, final Duration _delay ) {
@@ -60,12 +88,15 @@ public final class FSMTransition<S extends Enum<S>,E extends Enum<E>> {
 
 
     /**
-     * Convenience method that simply wraps the given event {@link Enum} and event data {@link Object} in an instance of
-     * {@link FSMEvent} and calls {@link #setTimeout(FSMEvent, Duration)}.
+     * Sets a timeout on the state being transitioned to (the "to" state).  The timeout is simply an event scheduled for the timeout delay that is
+     * automatically cancelled if a transition <i>from</i>the "to" state occurs before the scheduled time.  By putting this method in the transition,
+     * the FSM can enforce a timeout being set <i>only</i> on the state being transitioned to.  This restriction allows the FSM to ensure
+     * that the cancellation logic works correctly.  Event scheduling must be enabled in the FSM if timeouts will be used.  If this method is called
+     * and event scheduling is <i>not</i> enabled in the FSM, an {@link UnsupportedOperationException} will be thrown.
      *
-     * @param _event The event enum for the event to be scheduled.
-     * @param _eventData The event data object for the event to be scheduled.
-     * @param _delay The delay until it is to be handled.
+     * @param _event The enum for the FSM event to occur when the timeout expires.
+     * @param _eventData The optional (may be {@code null}) data associated with the FSM event.
+     * @param _delay The delay (as a {@link Duration} instance) for the timeout.
      */
     @SuppressWarnings( "unused" )
     public void setTimeout( final E _event, final Object _eventData, final Duration _delay ) {
@@ -75,11 +106,14 @@ public final class FSMTransition<S extends Enum<S>,E extends Enum<E>> {
 
 
     /**
-     * Convenience method that simply wraps the given event {@link Enum} in an instance of
-     * {@link FSMEvent} and calls {@link #setTimeout(FSMEvent, Duration)}.
+     * Sets a timeout on the state being transitioned to (the "to" state).  The timeout is simply an event scheduled for the timeout delay that is
+     * automatically cancelled if a transition <i>from</i>the "to" state occurs before the scheduled time.  By putting this method in the transition,
+     * the FSM can enforce a timeout being set <i>only</i> on the state being transitioned to.  This restriction allows the FSM to ensure
+     * that the cancellation logic works correctly.  Event scheduling must be enabled in the FSM if timeouts will be used.  If this method is called
+     * and event scheduling is <i>not</i> enabled in the FSM, an {@link UnsupportedOperationException} will be thrown.
      *
-     * @param _event The event enum for the event to be scheduled.
-     * @param _delay The delay until it is to be handled.
+     * @param _event The enum for the FSM event to occur when the timeout expires.
+     * @param _delay The delay (as a {@link Duration} instance) for the timeout.
      */
     @SuppressWarnings( "unused" )
     public void setTimeout( final E _event, final Duration _delay ) {

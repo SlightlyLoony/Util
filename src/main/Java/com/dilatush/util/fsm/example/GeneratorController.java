@@ -35,7 +35,7 @@ public class GeneratorController {
 
 
     /**
-     * The FSM states for the FSM used in this class.
+     * The FSM states for the Generator Controller's FSM.
      */
     private enum State {
         OFF,    // generator is off; will not back up the grid
@@ -48,7 +48,7 @@ public class GeneratorController {
 
 
     /**
-     * The FSM events for the FSM used in this class.
+     * The FSM events for the Generator Controller's FSM.
      */
     private enum Event {
         ON,    // user pressed on button
@@ -72,9 +72,6 @@ public class GeneratorController {
     private FSM<State,Event> createFSM() {
 
         FSMSpec<State,Event> spec = new FSMSpec<>( State.OFF, Event.OFF );
-
-        spec.enableBufferedEvents();
-        spec.enableEventScheduling();
 
         spec.addTransition( State.OFF,     Event.ON,     this::onAction,      State.RUN    );
         spec.addTransition( State.OFF,     Event.AUTO,   null,                State.WAIT   );

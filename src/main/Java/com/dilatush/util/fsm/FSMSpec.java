@@ -22,9 +22,12 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
     /*package-private*/ boolean                                                                     bufferedEvents;
     /*package-private*/ int                                                                         maxBufferedEvents = DEFAULT_MAX_BUFFERED_EVENTS;
     /*package-private*/ Consumer<S>                                                                 stateChangeListener;
-    /*package-private*/ List<FSMStateSpec<S,E>>                                                     stateSpecs;
+    /*package-private*/ List<FSMStateSpec<S>>                                                       stateSpecs;
     /*package-private*/ final List<E>                                                               eventEnums;
     /*package-private*/ final List<S>                                                               stateEnums;
+    /*package-private*/ final Map<S,FSMStateAction<S,E>>                                            onEntryActions;
+    /*package-private*/ final Map<S,FSMStateAction<S,E>>                                            onExitActions;
+    /*package-private*/ final Map<E,FSMEventAction<S,E>>                                            eventActions;
 
 
     private final List<String>                 errorMessages;
@@ -46,12 +49,15 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
         if( isNull( _initialState, _example ) )
             throw new IllegalArgumentException( "Missing initial state or example event" );
 
-        initialState  = _initialState;
-        transitions   = new HashMap<>();
-        transforms    = new HashMap<>();
-        errorMessages = new ArrayList<>();
-        defs          = new ArrayList<>();
-        stateSpecs    = new ArrayList<>();
+        initialState   = _initialState;
+        transitions    = new HashMap<>();
+        transforms     = new HashMap<>();
+        onEntryActions = new HashMap<>();
+        onExitActions  = new HashMap<>();
+        eventActions   = new HashMap<>();
+        errorMessages  = new ArrayList<>();
+        defs           = new ArrayList<>();
+        stateSpecs     = new ArrayList<>();
 
         eventEnums = getEventValues( _example );
         stateEnums = getStateValues( _initialState );
@@ -157,7 +163,7 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
      * @param _action The FSM state action to set.
      */
     public void setStateOnEntryAction( final S _state, final FSMStateAction<S,E> _action ) {
-        stateSpecs.get( _state.ordinal() ).onEntry = _action;
+        onEntryActions.put( _state, _action );
     }
 
 
@@ -171,7 +177,20 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
      */
     @SuppressWarnings( "unused" )
     public void setStateOnExitAction( final S _state, final FSMStateAction<S,E> _action ) {
-        stateSpecs.get( _state.ordinal() ).onExit = _action;
+        onExitActions.put( _state, _action );
+    }
+
+
+    /**
+     * Set the optional event action for the given FSM event to the given {@link FSMEventAction} implementation.  An event action is run when a
+     * matching event is handled.
+     *
+     * @param _event The FSM event to set an event action for.
+     * @param _action The FSM event action to set.
+     */
+    @SuppressWarnings( "unused" )
+    public void setEventAction( final E _event, final FSMEventAction<S,E> _action ) {
+        eventActions.put( _event, _action );
     }
 
 
@@ -321,11 +340,9 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
     /**
      * A simple POJO that allows specification of the optional attributes of an FSM state.
      */
-    /*package-private*/ static class FSMStateSpec<S extends Enum<S>, E extends Enum<E>> {
+    /*package-private*/ static class FSMStateSpec<S extends Enum<S>> {
 
         /*package-private*/ S                   state;
-        /*package-private*/ FSMStateAction<S,E> onEntry;
-        /*package-private*/ FSMStateAction<S,E> onExit;
         /*package-private*/ Object              context;
 
 

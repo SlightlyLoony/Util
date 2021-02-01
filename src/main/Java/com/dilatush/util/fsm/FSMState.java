@@ -28,32 +28,43 @@ public final class FSMState<S extends Enum<S>,E extends Enum<E>> {
     private Map<String,Object>     properties  = null;           // the state-specific property map, if any properties have been set...
     private FSMCancellableEvent<?> timeout     = null;           // the timeout, if one has been set...
 
-    // these immutable values are set at instantiation...
-    private final FSMStateAction<S,E> onEntry;
-    private final FSMStateAction<S,E> onExit;
-
     // these immutable values are set at instantiation, but are accessible publicly...
+
+
+    /**
+     * The FSM state enum.
+     */
     public final S        state;
+
+
+    /**
+     * The {@link FSM} instance associated with this transition.
+     */
     public final FSM<S,E> fsm;
+
+
+    /**
+     * The optional FSM global context.
+     */
     public final Object   fsmContext;
+
+
+    /**
+     * The optional FSM state context.
+     */
     public final Object   context;
 
 
     /**
      * Create a new instance of this class with the given values.
      *
-     * @param _onEntry The optional state on-entry action implementation.
-     * @param _onExit The optional state on-exit action implementation.
      * @param _state The FSM state enum for this state.
      * @param _fsm The FSM instance associated with this state.
      * @param _fsmContext The FSM global context for the FSM associated with this state.
      * @param _context The optional FSM state context.
      */
-    /*package-private*/ FSMState( final FSMStateAction<S, E> _onEntry, final FSMStateAction<S, E> _onExit,
-                     final S _state, final FSM<S, E> _fsm, final Object _fsmContext, final Object _context ) {
+    /*package-private*/ FSMState( final S _state, final FSM<S, E> _fsm, final Object _fsmContext, final Object _context ) {
 
-        onEntry = _onEntry;
-        onExit = _onExit;
         state = _state;
         fsm = _fsm;
         fsmContext = _fsmContext;
@@ -108,26 +119,6 @@ public final class FSMState<S extends Enum<S>,E extends Enum<E>> {
      */
     /*package-private*/ void setTimeout( FSMCancellableEvent<?> _timeout ) {
         timeout = _timeout;
-    }
-
-
-    /**
-     * Run the on-entry action, if there is one.
-     */
-    /*package-private*/ void runOnEntry() {
-        if( onEntry != null ) {
-            onEntry.run( this );
-        }
-    }
-
-
-    /**
-     * Run the on-exit action, if there is one.
-     */
-    /*package-private*/ void runOnExit() {
-        if( onExit != null ) {
-            onExit.run( this );
-        }
     }
 
 
