@@ -1,6 +1,8 @@
 package com.dilatush.util.fsm;
 
 import com.dilatush.util.Threads;
+import com.dilatush.util.fsm.events.FSMEvent;
+import com.dilatush.util.fsm.events.FSMEvents;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -66,8 +68,8 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
     // the deque for event buffering, IF event buffering is enabled...
     private final BlockingDeque<FSMEvent<E>>                                    eventsBuffer;
 
-    // the scheduled executor for scheduled events, IF event scheduling is enabled...
-    private final ScheduledExecutorService                                      eventScheduler;
+    // the events source for this FSM...
+    private final FSMEvents<S,E>                                                events;
 
 
     /**
@@ -155,12 +157,16 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
         }
 
         // if we're supporting event scheduling, set up the scheduled executor...
+        ScheduledExecutorService eventScheduler;
         if( eventScheduling )
             eventScheduler = Executors.newSingleThreadScheduledExecutor( new Threads.DaemonThreadFactory( "FSMEventScheduler" ));
 
         // otherwise, null the field to make the compiler happy...
         else
             eventScheduler = null;
+
+        // set up our events source...
+        events = new FSMEvents<>( this, eventScheduler, _spec.eventEnums.get( 0 ) );
     }
 
 
@@ -168,7 +174,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      * <p>This method is the heart of the FSM - it handles state transitions and event transformations, all triggered by receiving an event.  There
      * are several things that can happen, depending on what state the FSM is currently in and what event is received:</p>
      * <ul>
-     *     <li>If the event is an instance of {@link FSMCancellableEvent} and the event has been cancelled, then this method does nothing at all.
+     *     <li>If the event has been cancelled, then this method does nothing at all.
      *     This mechanism eliminates race conditions that might otherwise arise because the scheduled events are posted in a different thread from
      *     the one actions are run in.</li>
      *     <li>If the event has an associated {@link FSMEventAction}, run it.</li>
@@ -213,11 +219,8 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
     private void onEventImpl( final FSMEvent<E> _event ) {
 
         // if our event is a cancellable event that has been cancelled, ignore it...
-        if( _event instanceof FSMCancellableEvent ) {
-            FSMCancellableEvent<E> cancellableEvent = (FSMCancellableEvent<E>) _event;
-            if( cancellableEvent.isCancelled() )
-                return;
-        }
+        if( _event.isCancelled() )
+            return;
 
         // if our event has an event action associated with it, run it...
         FSMEventAction<S,E> eventAction = eventActions.get( _event.event.ordinal() );
@@ -344,7 +347,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      * <p>This method is the heart of the FSM - it handles state transitions and event transformations, all triggered by receiving an event.  There
      * are several things that can happen, depending on what state the FSM is currently in and what event is received:</p>
      * <ul>
-     *     <li>If the event is an instance of {@link FSMCancellableEvent} and the event has been cancelled, then this method does nothing at all.
+     *     <li>If the event has been cancelled, then this method does nothing at all.
      *     This mechanism eliminates race conditions that might otherwise arise because the scheduled events are posted in a different thread from
      *     the one actions are run in.</li>
      *     <li>If the event has an associated {@link FSMEventAction}, run it.</li>
@@ -408,7 +411,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      * <p>This method is the heart of the FSM - it handles state transitions and event transformations, all triggered by receiving an event.  There
      * are several things that can happen, depending on what state the FSM is currently in and what event is received:</p>
      * <ul>
-     *     <li>If the event is an instance of {@link FSMCancellableEvent} and the event has been cancelled, then this method does nothing at all.
+     *     <li>If the event has been cancelled, then this method does nothing at all.
      *     This mechanism eliminates race conditions that might otherwise arise because the scheduled events are posted in a different thread from
      *     the one actions are run in.</li>
      *     <li>If the event has an associated {@link FSMEventAction}, run it.</li>
@@ -453,7 +456,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      */
     @SuppressWarnings( "unused" )
     public void onEvent( final E _event, final Object _eventData ) {
-        onEvent( new FSMEvent<>( _event, _eventData ) );
+        onEvent( events.from( _event, _eventData ) );
     }
 
 
@@ -461,7 +464,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      * <p>This method is the heart of the FSM - it handles state transitions and event transformations, all triggered by receiving an event.  There
      * are several things that can happen, depending on what state the FSM is currently in and what event is received:</p>
      * <ul>
-     *     <li>If the event is an instance of {@link FSMCancellableEvent} and the event has been cancelled, then this method does nothing at all.
+     *     <li>If the event has been cancelled, then this method does nothing at all.
      *     This mechanism eliminates race conditions that might otherwise arise because the scheduled events are posted in a different thread from
      *     the one actions are run in.</li>
      *     <li>If the event has an associated {@link FSMEventAction}, run it.</li>
@@ -504,70 +507,71 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      * @param _event The event to be handled.
      */
     public void onEvent( final E _event ) {
-        onEvent( new FSMEvent<>( _event, null ) );
+        onEvent( events.from( _event ) );
     }
 
 
     /**
-     * <p>Schedule the given {@link FSMEvent} to be handled after the given {@link Duration} delay, and return a {@link ScheduledFuture} instance
-     * that can be used to cancel this schedule any time before it delivers the event.  If event buffering is not enabled on this FSM instance, then
-     * the event handling of these events will be handled (including executing actions and event transforms) in the scheduler's thread. If event
+     * <p>Schedule the given {@link FSMEvent} to be handled after the given {@link Duration} delay, and return a cancellable {@link FSMEvent} instance
+     * that can be used to cancel this scheduled event at any time before the event is actually handled.  If event buffering is not enabled on this
+     * FSM instance, then these events will be handled (including executing actions and event transforms) in the scheduler's thread. If event
      * buffering <i>is</i> enabled on this FSM instance, then the scheduler will simply add these events to the internal event queue.  If event
      * scheduling is not enabled in this instance, an {@link UnsupportedOperationException} will be thrown.</p>
      *
      * @param _event The {@link FSMEvent} to be scheduled.
      * @param _delay The {@link Duration} delay until it is to be handled.
-     * @return The {@link FSMCancellableEvent} that can be used to cancel this scheduled event.
+     * @return The {@link FSMEvent} that can be used to cancel this scheduled event.
      */
-    public FSMCancellableEvent<E> scheduleEvent( final FSMEvent<E> _event, final Duration _delay ) {
+    public FSMEvent<E> scheduleEvent( final FSMEvent<E> _event, final Duration _delay ) {
 
         // if we don't have event scheduling enabled, complain loudly...
         if( !eventScheduling )
             throw new UnsupportedOperationException( "Event scheduling is disabled in this FSM" );
 
-        // the compiler is confused by the branch in the constructor for eventScheduling...
-        assert eventScheduler != null;
-
-        LOGGER.finest( () -> "Scheduled " + _event + " for " + _delay.toString().substring( 2 ) );
-
-        // schedule the event and return the cancellable event...
-        FSMCancellableEvent<E> cancellableEvent = new FSMCancellableEvent<>( _event );
-        ScheduledFuture<?> scheduledFuture = eventScheduler.schedule(
-                new EventSender( cancellableEvent ),   // the Runnable with our event ready to post...
-                _delay.toNanos(),                      // the delay in nanoseconds...
-                TimeUnit.NANOSECONDS                   // tell the scheduler that it's in nanoseconds...
-        );
-        cancellableEvent.setFuture( scheduledFuture ); // stuff the scheduled future into our cancellable event...
-        return cancellableEvent;
+        return events.schedule( _event, _delay );
     }
 
 
-
     /**
-     * Convenience method that simply wraps the given event {@link Enum} and event data {@link Object} in an instance of
-     * {@link FSMEvent} and calls {@link #scheduleEvent(FSMEvent, Duration)}.
+     * <p>Schedule the given {@link FSMEvent} to be handled after the given {@link Duration} delay, and return a cancellable {@link FSMEvent} instance
+     * that can be used to cancel this scheduled event at any time before the event is actually handled.  If event buffering is not enabled on this
+     * FSM instance, then these events will be handled (including executing actions and event transforms) in the scheduler's thread. If event
+     * buffering <i>is</i> enabled on this FSM instance, then the scheduler will simply add these events to the internal event queue.  If event
+     * scheduling is not enabled in this instance, an {@link UnsupportedOperationException} will be thrown.</p>
      *
-     * @param _event The event enum for the event to be scheduled.
-     * @param _eventData The event data object for the event to be scheduled.
-     * @param _delay The delay until it is to be handled.
-     * @return The {@link FSMCancellableEvent} that can be used to cancel this scheduled event.
+     * @param _event The {@link FSMEvent} to be scheduled.
+     * @param _delay The {@link Duration} delay until it is to be handled.
+     * @return The {@link FSMEvent} that can be used to cancel this scheduled event.
      */
     @SuppressWarnings( "unused" )
-    public FSMCancellableEvent<E> scheduleEvent( final E _event, final Object _eventData, final Duration _delay ) {
-        return scheduleEvent( new FSMEvent<>( _event, _eventData ), _delay );
+    public FSMEvent<E> scheduleEvent( final E _event, final Object _eventData, final Duration _delay ) {
+
+        // if we don't have event scheduling enabled, complain loudly...
+        if( !eventScheduling )
+            throw new UnsupportedOperationException( "Event scheduling is disabled in this FSM" );
+
+        return events.schedule( _event, _eventData, _delay );
     }
 
 
     /**
-     * Convenience method that simply wraps the given event {@link Enum} and a {@code null} for the event data {@link Object} in an instance
-     * of {@link FSMEvent} and calls {@link #scheduleEvent(FSMEvent, Duration)}.
+     * <p>Schedule the given {@link FSMEvent} to be handled after the given {@link Duration} delay, and return a cancellable {@link FSMEvent} instance
+     * that can be used to cancel this scheduled event at any time before the event is actually handled.  If event buffering is not enabled on this
+     * FSM instance, then these events will be handled (including executing actions and event transforms) in the scheduler's thread. If event
+     * buffering <i>is</i> enabled on this FSM instance, then the scheduler will simply add these events to the internal event queue.  If event
+     * scheduling is not enabled in this instance, an {@link UnsupportedOperationException} will be thrown.</p>
      *
      * @param _event The event enum for the event to be scheduled.
-     * @param _delay The delay until it is to be handled.
-     * @return The {@link FSMCancellableEvent} that can be used to cancel this scheduled event.
+     * @param _delay The {@link Duration} delay until it is to be handled.
+     * @return The {@link FSMEvent} that can be used to cancel this scheduled event.
      */
-    public FSMCancellableEvent<E> scheduleEvent( final E _event, final Duration _delay ) {
-        return scheduleEvent( new FSMEvent<>( _event, null ), _delay );
+    public FSMEvent<E> scheduleEvent( final E _event, final Duration _delay ) {
+
+        // if we don't have event scheduling enabled, complain loudly...
+        if( !eventScheduling )
+            throw new UnsupportedOperationException( "Event scheduling is disabled in this FSM" );
+
+        return events.schedule( _event, _delay );
     }
 
 
@@ -676,32 +680,24 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
 
 
     /**
-     * A simple {@link Runnable} implementation used to schedule a future posting of an event.
+     * Returns an {@link FSMEvent} instance created from the given event enum.
+     *
+     * @param _event The event enum to create an {@link FSMEvent} instance from.
+     * @return the {@link FSMEvent} instance created
      */
-    private class EventSender implements Runnable {
-
-        // the event to be posted in the future...
-        private final FSMEvent<E> event;
-
-
-        /**
-         * Creates a new instance of this class with the given {@link FSMEvent} to be handled at a future time.
-         *
-         * @param _event The {@link FSMEvent} to be handled at a future time.
-         */
-        private EventSender( final FSMEvent<E> _event ) {
-            event = _event;
-        }
+    public FSMEvent<E> event( final E _event ) {
+        return events.from( _event );
+    }
 
 
-        /**
-         * Post the {@link FSMEvent} contained in this instance.
-         */
-        @Override
-        public void run() {
-            LOGGER.finest( () -> "Handling scheduled event " + event );
-            onEvent( event );
-        }
+    /**
+     * Returns an {@link FSMEvent} instance created from the given event enum and event data (an arbitrary {@link Object} instance.
+     *
+     * @param _event The event enum to create an {@link FSMEvent} instance from.
+     * @return the {@link FSMEvent} instance created
+     */
+    public FSMEvent<E> event( final E _event, final Object _data ) {
+        return events.from( _event, _data );
     }
 
 

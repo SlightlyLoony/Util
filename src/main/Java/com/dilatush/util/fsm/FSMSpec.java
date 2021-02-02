@@ -1,5 +1,7 @@
 package com.dilatush.util.fsm;
 
+import com.dilatush.util.fsm.events.FSMEvent;
+
 import java.util.*;
 import java.util.function.Consumer;
 

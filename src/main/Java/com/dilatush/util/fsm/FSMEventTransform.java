@@ -1,5 +1,7 @@
 package com.dilatush.util.fsm;
 
+import com.dilatush.util.fsm.events.FSMEvent;
+
 /**
  * Implemented by classes or methods that transform FSM events.  Instances of this class must be added to the FSM specification (with
  * {@link FSMSpec#addEventTransform(Enum, FSMEventTransform)}) in order to have effect.

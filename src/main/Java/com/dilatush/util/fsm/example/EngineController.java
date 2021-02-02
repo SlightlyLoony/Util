@@ -2,6 +2,7 @@ package com.dilatush.util.fsm.example;
 
 import com.dilatush.util.Threads;
 import com.dilatush.util.fsm.*;
+import com.dilatush.util.fsm.events.FSMEvent;
 
 import java.time.Duration;
 import java.time.ZonedDateTime;
@@ -116,7 +117,7 @@ public class EngineController {
      * An example of an FSM global context, used here to store a cancellable timeout.
      */
     private static class GlobalContext {
-        private FSMCancellableEvent<Event> timeout;  // so we don't exceed 15 seconds of cranking
+        private FSMEvent<Event> timeout;  // so we don't exceed 15 seconds of cranking
     }
 
 
@@ -124,7 +125,7 @@ public class EngineController {
      * An example of an FSM state context, used here to store a cancellable timeout.
      */
     private static class StoppingContext {
-        private FSMCancellableEvent<Event> timeout;   // in case the engine takes too long to stop
+        private FSMEvent<Event> timeout;   // in case the engine takes too long to stop
     }
 
 
@@ -204,11 +205,11 @@ public class EngineController {
     private FSMEvent<Event> rawRPM( final FSMEvent<Event> _event, final FSM<State, Event> _fsm  ) {
 
         // we know the data is a double...
-        double rpm = (double) _event.data;
+        double rpm = (double) _event.getData();
 
         // if the RPMs are zero, transform to the RPM_0 event...
         if( rpm == 0)
-            return new FSMEvent<>( Event.RPM_0 );
+            return fsm.event( Event.RPM_0 );
 
         // if the RPMs are less than our "engine started" threshold, just return a null...
         if( rpm < STARTED_THRESHOLD_RPM )
@@ -216,8 +217,8 @@ public class EngineController {
 
         // otherwise, return either RPM_IN_RANGE or RPM_OUT_OF_RANGE events ...
         return ( (rpm >= MIN_GEN_RPM) && (rpm <= MAX_GEN_RPM) )
-                ? new FSMEvent<>( Event.RPM_IN_RANGE )
-                : new FSMEvent<>( Event.RPM_OUT_OF_RANGE );
+                ? fsm.event( Event.RPM_IN_RANGE )
+                : fsm.event( Event.RPM_OUT_OF_RANGE );
     }
 
 
@@ -318,7 +319,7 @@ public class EngineController {
 
     // on STABILIZING, RPM_OUT_OF_RANGE -> STABILIZING
     private void actionOutOfRange( final FSMTransition<State,Event> _transition ) {
-        FSMCancellableEvent<?> stableTime = (FSMCancellableEvent<?>) _transition.toState.getProperty( "StableTime" );
+        FSMEvent<?> stableTime = (FSMEvent<?>) _transition.toState.getProperty( "StableTime" );
         if( stableTime != null)
             stableTime.cancel();
     }
@@ -373,7 +374,7 @@ public class EngineController {
      * Read the RPMs on the engine and send it to the FSM.
      */
     private void readRPM() {
-        fsm.onEvent( new FSMEvent<>( Event.RPM, engine.tachometer() ) );
+        fsm.onEvent( Event.RPM, engine.tachometer()  );
     }
 
 

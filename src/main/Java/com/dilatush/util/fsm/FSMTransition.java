@@ -1,5 +1,7 @@
 package com.dilatush.util.fsm;
 
+import com.dilatush.util.fsm.events.FSMEvent;
+
 import java.time.Duration;
 
 /**
@@ -100,7 +102,7 @@ public final class FSMTransition<S extends Enum<S>,E extends Enum<E>> {
      */
     @SuppressWarnings( "unused" )
     public void setTimeout( final E _event, final Object _eventData, final Duration _delay ) {
-        setTimeout( new FSMEvent<>( _event, _eventData ), _delay );
+        toState.setTimeout( fsm.scheduleEvent( _event, _eventData, _delay ) );
     }
 
 
@@ -117,6 +119,6 @@ public final class FSMTransition<S extends Enum<S>,E extends Enum<E>> {
      */
     @SuppressWarnings( "unused" )
     public void setTimeout( final E _event, final Duration _delay ) {
-        setTimeout( new FSMEvent<>( _event ), _delay );
+        toState.setTimeout( fsm.scheduleEvent( _event, _delay ) );
     }
 }

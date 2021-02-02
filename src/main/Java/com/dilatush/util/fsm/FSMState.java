@@ -1,5 +1,7 @@
 package com.dilatush.util.fsm;
 
+import com.dilatush.util.fsm.events.FSMEvent;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -26,7 +28,7 @@ public final class FSMState<S extends Enum<S>,E extends Enum<E>> {
 
     // these mutable values are maintained by this class...
     private Map<String,Object>     properties  = null;           // the state-specific property map, if any properties have been set...
-    private FSMCancellableEvent<?> timeout     = null;           // the timeout, if one has been set...
+    private FSMEvent<?>            timeout     = null;           // the timeout, if one has been set...
 
     // these immutable values are set at instantiation, but are accessible publicly...
 
@@ -113,11 +115,11 @@ public final class FSMState<S extends Enum<S>,E extends Enum<E>> {
 
 
     /**
-     * Sets the {@link FSMCancellableEvent} representing a timeout for this state.
+     * Sets the {@link FSMEvent} representing a timeout for this state.
      *
-     * @param _timeout The {@link FSMCancellableEvent} representing a timeout for this state.
+     * @param _timeout The {@link FSMEvent} representing a timeout for this state.
      */
-    /*package-private*/ void setTimeout( FSMCancellableEvent<?> _timeout ) {
+    /*package-private*/ void setTimeout( FSMEvent<?> _timeout ) {
         timeout = _timeout;
     }
 

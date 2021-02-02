@@ -9,7 +9,7 @@ toc::[]
 Rational people can debate whether Finite State Machines (FSMs) are _ever_ a good idea, but this author doesn't associate with such people - rational or not.  There are _many_ situations where an FSM is a great approach to solving a software challenge.  An FSM would never be the _only_ viable solution, but this author believes that (a) there are many scenarios where an FSM is the best choice, and (b) FSMs are often not used, where they really should be, because too many engineers don't understand them and the tools are lacking.  This package is the author's attempt to address the latter two issues - it's far easier to use this package to build an FSM than it is to roll one on your own, and if it's easy enough to build an FSM, well then maybe more engineers will do so!
 
 == What's an example of a situation where an FSM would be a good solution?
-Glad you asked!  We're going to present an example in detail, and use that example to explain how this package works.
+Glad you asked!  We're going to present an example of such a situation in detail, and use that example to explain how this package works.
 
 === Our example problem: a home backup generator...
 
@@ -220,7 +220,13 @@ At this point, almost all the code in `GeneratorController` should make sense to
 ....
 This function is called by the `EngineController` when it wants to send an event to the `GeneratorController`.  Its events are called "reports" in this code, and look how simple this is: all that switch statement is doing is taking those `EngineController` events and turning them into `GeneratorController` events.  Take the RUNNING event from `EngineController` (which indicates that the engine is running stably at 1800 RPM).  All this code does is to send a RUN event to the FSM in `GeneratorController`.  This code only deals with events coming from `EngineController`, but there's a similar function (`generatorListener`) that does the same thing for events from the control panel, fixed button, and grid sensor.
 
-That's an FSM-based design -- you've been through all the key bits here.  There are more details, though, and we'll discuss them in the next section.
+That's an FSM-based design -- you've been through all the key bits here.  There are more details, though, and we'll discuss them in the next section.  Meanwhile, here's some food for thought.  Consider how you might have built the GC _without_ using an FSM -- and then compare that with what you've just seen in this GC implementation.  Would you agree that with the FSM approach:
+
+* The code is easier to understand?
+* Having the code broken up into very small chunks (the actions) makes it easier to reason and think about?
+* That you could more easily make changes to the design?
+* The design is better documented (with the state diagram) and easier to understand?
+* That you're more confident in the correctness of the code?
 
 === The Engine Controller
 Now that you've got the basics down, we'll jump right into a more complex one: the `EngineController` class, which implements the Engine Controller (EC) we had in the block diagram earlier.  As before, you can refer to the source code to get more details than we talk about here.  First, here are the states and events for the EC:
@@ -263,7 +269,7 @@ This should look very familiar to you now!  Here's the state diagram we came up 
 image::FSM Example/Engine Controller.png[]
 Conceptually this is very similar to the GC's state diagram, and there is no new notation here -- you read it the same way.  There is a new detail in here, though: some of the events are based on time.  This is very common with FSM implementations, and well worth understanding thoroughly.  Familiarize yourself with these states and events before we carry on.
 
-As with the GC, the EC needs to define its FSM.  This time we have some new things in the `FSMSpec`:
+As with the GC, the EC needs to define its FSM.  This time we have some new things in the `FSMSpec` (which we're going to analyze piece-by-piece):
 ....
         // we want all the good and fancy stuff...
         spec.enableBufferedEvents();
@@ -286,7 +292,7 @@ Next is something new that we mentioned in the previous section: the global cont
      * An example of an FSM global context, used here to store a cancellable timeout.
      */
     private static class GlobalContext {
-        private FSMCancellableEvent<Event> timeout;  // so we don't exceed 15 seconds of cranking
+        private FSMEvent<Event> timeout;  // so we don't exceed 15 seconds of cranking
     }
 ....
 Here's where we set it.  The global context is an object of any class you'd like.  While it _can_ have methods, generally it's just a "bag of values" that are available to _every_ action.  If your FSM design has need of such globally available values, an FSM global context is a convenient place to put them.  Note that this global context is completely optional -- just as with our GC implementation, you don't _have_ to have one.  In this EC implementation, we didn't really need it; we just included it to show you how it's used.  Look at the `onEntryStopping()`, `actionStart()`, `actionCooled()`, and `actionStabilize()` methods in `EngineController` to see it in use.
@@ -300,88 +306,165 @@ FSM state contexts are very similar in concept to the FSM global contexts, excep
      * An example of an FSM state context, used here to store a cancellable timeout.
      */
     private static class StoppingContext {
-        private FSMCancellableEvent<Event> timeout;   // in case the engine takes too long to stop
+        private FSMEvent<Event> timeout;   // in case the engine takes too long to stop
     }
 ....
-Here's where we set it.  Just like the global context, these can be any class you'd like, with or without any methods.  Every `FSMState` instance can have it's own context (and every state's context can be a different class).  These contexts are available to any action that has access to the `FSMState` instance.  For instance, in an `FSMTransitionAction`, your code has access to the `FSMState` instance for _both_ the state being transitioned from and the state being transitioned to.  These contexts are a convenient place to put information that is related to a particular state that you want the actions related to that state to have access to.
+Here's where we set it.  Just like the global context, these can be any class you'd like, with or without any methods.  Every `FSMState` instance can have it's own context (and every state's context can be a different class).  These contexts are available to any action that has access to the `FSMState` instance.  For instance, in an `FSMTransitionAction`, your code has access to the `FSMState` instance for _both_ the state being transitioned from and the state being transitioned to.  These contexts are a convenient place to put information that is related to a particular state that you want the actions related to that state to have access to.  Here's how you set the state context:
 ....
         // set an example of an FSM state context...
         spec.setStateContext( State.STOPPING, new StoppingContext() );
 ....
+Now for something completely different: an _event action_.  These are functions that are run when an event is being handled.  Here's the example event action in `EngineController`:
 ....
-        // set an example of an FSM global context...
-        spec.setFSMContext( new GlobalContext() );
-
-        // set an example of an FSM state context...
-        spec.setStateContext( State.STOPPING, new StoppingContext() );
-
+    /**
+     * This example of an event action just prints out the event and state.
+     *
+     * @param _event The FSM event.
+     * @param _state The FSM state that the event occurred in.
+     */
+    private void onEvent( final FSMEvent<Event> _event, final FSMState<State,Event> _state ) {
+        out( "On event " + _event.event + " while in state " + _state.state );
+    }
+....
+This particular event action doesn't do anything terribly exciting; it's mainly here to give you an example.  Note that the action has the event that triggered it as a parameter, as well as an FSMState instance - that's for the current state of the FSM.  Like the other actions you've seen, the code in this one can do most anything you'd like (though you should be careful not to block and not to use excessive CPU time, as that impede handling other events in the FSM).  To specify these event actions, you do this:
+....
         // set a couple examples of an FSM event action...
         spec.setEventAction( Event.RPM_IN_RANGE, this::onEvent );
         spec.setEventAction( Event.RPM_OUT_OF_RANGE, this::onEvent );
+....
+Here we set the same action as the event action on two different events.
 
+Then we've got another new thing: a _state action_.  These are functions that run either on entry to a state, or on exit from that state (you get to choose which when you specify them).  Here's an example from `EngineController`:
+....
+    // on entry to STOPPING...
+    private void onEntryStopping( final FSMState<State,Event> _state ) {
+        out( "engine stopping" );
+        engineOff();
+        StoppingContext context = (StoppingContext) _state.context;
+        context.timeout = fsm.scheduleEvent( Event.STOPPING_TIMEOUT, Duration.ofMillis( MAX_STOPPING_TIME_MS ) );
+        GlobalContext globalContext = (GlobalContext) _state.fsmContext;
+        globalContext.timeout.cancel();
+    }
+....
+As the comment suggests, we've set this up (see below) to run whenever the STOPPING state is entered.  Slightly more formally, it will run when executing any state transition from some state other than STOPPING to STOPPING.  These actions are useful when you have code that needs to run when entering or leaving a state via _any_ transition.  You could do the same thing by including the code in every transition action, but these actions are more concise and certainly less error-prone.
+....
         // set an example of an on-entry state action...
         spec.setStateOnEntryAction( State.STOPPING, this::onEntryStopping );
 ....
+At this point you've been exposed to all four kinds of actions in the FSM (event actions, transition actions, on-entry actions, and on-exit actions), and you've seen some examples.
 
-Next you s
+The `EngineController` has a section that specifies its state transitions.  This part is exactly like what you've already seen in the `GeneratorController`, so we'll skip that here.
 
+Another feature used in `EngineController` that you haven't seen yet is _event transforms_.  These are functions that run when an event has no transition associated with it, and they're aimed at situations where one kind of event being recieved by the FSM needs to be processed and either filtered out (and so ignored) or transformed into some other kind of event.  In the `EngineController` we have an example of sucn an event.  Remeber that the propane engine has a tachometer.  It doesn't make any events by itself; it's just available to read the RPM from.  In `EngineController`, we've designed in a thread that runs an RPM reader every 331 milliseconds, or about 3 times a second.  That code simply reads the RPM and then posts an RPM event with the reading (a double) as its value.
 
+This event has very useful information (the RPM), but it's not in a form that's convenient for the FSM to use.  On analyzing our EC state diagram, we can see there are really three interesting values or ranges of values:
 
+* Zero RPM, which tells us the engine has stopped.
+* RPMs above the starting threshold (1000 RPM), which tells us that the engine has started, but outside the narrow range of acceptable RPMs for generating 60 Hz electricity (that's 1791 to 1809 RPM).
+* RPMs above the starting threshold but inside the acceptable generating range.
 
+So we created an event transform that does that:
+....
+    /**
+     * This example of an FSM event transform transforms a raw event containing the engine RPM into one of three discrete FSM events, or returns
+     * a {@code null} when the RPMs are in a range that can't trigger any transitions.
+     *
+     * @param _event The FSM event being transformed, in this case always an RPM event (with RPMs as the data).
+     * @param _fsm The FSM associated with this transformation.
+     * @return the transformed event, or {@code null} if none
+     */
+    private FSMEvent<Event> rawRPM( final FSMEvent<Event> _event, final FSM<State, Event> _fsm  ) {
 
+        // we know the data is a double...
+        double rpm = (double) _event.getData();
 
-== What is a finite state machine, anyway?
-Finite state machines, or FSMs, are abstract "machines" that at any given moment can be in exactly one of a finite number of states.  There's a very detailed https://en.wikipedia.org/wiki/Finite-state_machine[Wikipedia] article that will likely confuse you if you've never heard of FSMs before, but it's full of good information if you're at all familiar with them.  https://statecharts.github.io/what-is-a-state-machine.html[This article] describes event-driven FSMs, a particular kind of FSM, which is what this package provides.  The key elements:
+        // if the RPMs are zero, transform to the RPM_0 event...
+        if( rpm == 0)
+            return fsm.event( Event.RPM_0 );
 
-=== States
-The FSM has exactly one mutable variable: its current state.  In a completely generalized FSM, this variable could be anything at all.  In this package, the variable is an enum.  If the enum has 'n' values, then the FSM has 'n' possible states.  For instance, suppose you wanted to represent the states of a door opener - you might have OPEN, CLOSED, OPENING, CLOSING as the possible states.  The set of possible states is part of the definition of a given FSM.
+        // if the RPMs are less than our "engine started" threshold, just return a null...
+        if( rpm < STARTED_THRESHOLD_RPM )
+            return null;
 
-=== Events
-An FSM event is the software equivalent of an event in the real world: an event just means that something happened.  In this package, events are the combination of an enum that unambiguously identifies what kind of event we had, and an optional, arbitrary object containing additional information about the event.  In the door opener example above, we might have events REQUEST_OPEN, REQUEST_CLOSE, SENSED_OPEN, SENSED_CLOSE; none of them need any additional data.  In a different FSM you might have an event like ENGINE_RPM, and the data would represent the measurement (how many RPMs).  The set of possible events is part of the definition of a given FSM.
+        // otherwise, return either RPM_IN_RANGE or RPM_OUT_OF_RANGE events ...
+        return ( (rpm >= MIN_GEN_RPM) && (rpm <= MAX_GEN_RPM) )
+                ? fsm.event( Event.RPM_IN_RANGE )
+                : fsm.event( Event.RPM_OUT_OF_RANGE );
+    }
+....
+The event returned (if not null) will be handled as the next event.  If null is returned, then this event is simply ignored.  Note that the code in the event transform could also have posted new events, which _might_ be handled after other events that were queued ahead of it.  Also, note that the event transform has not only the event as an argument, but the FSMState object for the current FSM state; all of its fields are available for the transform to use.  One of those fields is the FSM, which means its methods are also available.
 
-=== Transitions
-An FSM transition is notion of the FSM changing from one state to another.  In this package, a transition is triggered by a specific event occurring while the FSM is in a specific state - so the tuple `<STATE, EVENT>` unambiguously identifies a transition.  Note that there may be at most one transition with any given `<STATE,EVENT>` tuples.  In most state machines, many possible such tuples do not identify a transition, either because they're not possible or because no action is needed.  For example, in our door opener example if the state was CLOSING, and we got a REQUEST_CLOSE event, we can ignore it.  Similarly, if the state was CLOSING we don't have to worry about getting an OPEN event, as it's not possible.
+Specifying an event transform is easy:
+....
+        // add an example of an FSM event transform...
+        spec.addEventTransform( Event.RPM, this::rawRPM );
+....
+Finally, we have a couple of time-related features to tell you about.
 
-An FSM transition in this package is completely defined by four elements:
+The simplest is a _timeout_, which is an event that will be sent to the FSM if a specified state, once entered, is not exited within a specified amount of time. Here's an example in `EngineController`, where we are giving the engine 30 seconds to get stable at 1800 RPM, or we're going to declare an engine failure:
+....
+    // one STARTING, RPM_OUT_OF_RANGE -> STABILIZING...
+    private void actionStabilize( final FSMTransition<State,Event> _transition ) {
+        out( "stabilizing engine RPM" );
+        engine.starter( OFF );
+        GlobalContext fmContext = (GlobalContext) _transition.fsmContext;
+        fmContext.timeout.cancel();
+        _transition.setTimeout( Event.STABILIZING_TIMEOUT, Duration.ofMillis( MAX_STABILIZING_TIME_MS ) );
+    }
+....
+This code is a transition action that runs when we've detected that the engine has started, and we're going to wait for its RPM to stabilize at 1800 RPM.  The last line of code includes `_transition.setTimeout( ... )`.  That sets a timeout on the "to" state (STABILIZING in this case).  That timeout will be cancelled automatically on any transition away from the STABILIZED state.  However, if nothing happens that gets our FSM out of STABILIZING state before the `MAX_STABILIZING_TIME_MS` passes, then the STABILIZING_TIMEOUT event will be sent.  This sort of timeout is a very common need in FSMs that interface with that pesky real world, and the automatic cancellation of this feature makes them very convenient.
 
-.FSM Transition Elements
-|===
-|*Name*|*Description*
-|"from" state|The FSM state to transition from.  This state is part of the `<STATE,EVENT>` tuple that uniquely identifies a transition.
-|event|The FSM event that triggers this transition.  This event is part of the `<STATE,EVENT>` tuple that uniquely identifies a transition.
-|action|An optional function that is called during the transition.  The code in this function has access to the FSM itself, the optional global FSM context, and the states being transitioned from and to.
-|"to" state|The FSM state to transition to.
-|===
+The second time-related feature is _scheduled events_.  These are very similar to timeouts (in fact, scheduled events are used to implement timeouts), but less automatic.  Your code can schedule any event to happen at some future time, and then your code can cancel it at any point before it is actually handled.  Here's an example from `EngineController` of scheduling an event:
+....
+    // on entry to STOPPING...
+    private void onEntryStopping( final FSMState<State,Event> _state ) {
+        out( "engine stopping" );
+        engineOff();
+        StoppingContext context = (StoppingContext) _state.context;
+        context.timeout = fsm.scheduleEvent( Event.STOPPING_TIMEOUT, Duration.ofMillis( MAX_STOPPING_TIME_MS ) );
+        GlobalContext globalContext = (GlobalContext) _state.fsmContext;
+        globalContext.timeout.cancel();
+    }
+....
+This is an on-entry action that runs on any transition to the STOPPING state.  This line:
+....
+        context.timeout = fsm.scheduleEvent( Event.STOPPING_TIMEOUT, Duration.ofMillis( MAX_STOPPING_TIME_MS ) );
+....
+\... sets a scheduled event (STOPPING_TIMEOUT) for MAX_STOPPING_TIME_MS (10 seconds) in the future.  If that scheduled event isn't cancelled before that 10 seconds goes by, the STOPPING_TIMEOUT will be sent and our FSM will transition to the FAILED state.  So how is that scheduled event cancelled?  Like this:
+....
+    // on STOPPING, RPM_0 -> STOPPED...
+    private void actionStopped( final FSMTransition<State,Event> _transition ) {
+        out( "engine stopped" );
+        StoppingContext context = (StoppingContext) _transition.fromState.context;
+        context.timeout.cancel();
+        eventListener.accept( Report.STOPPED );
+    }
+....
+This is a transition action that runs when our FSM is in the STOPPING state and we get an RPM_0 event (meaning we've measured with the tachometer that the engine has stopped).  The second line from the bottom cancels the scheduled event that we set just above.
 
-There is a minor variation on an FSM transition in this package that's worth discussing: you can define an FSM transition that doesn't change the FSM state at all (because the "from" state is the same as the "to" state).  While this may sound like an exercise in transitional futility, it's actually quite useful -- because the transition action is still called.  A transaction defined in this way essentially defines an "on event" action when that event occurs while the FSM is in that state.
+With that, folks, we have concluded our exciting tour of FSM features and usage!
 
-=== Transition Actions
-An FSM transition action is a function that is executed when an FSM transition is processed.  Any particular action can be associated with any number of FSM transitions.  The action's code can do anything at all.  In the door opener example above, we could imagine that when the door transitions from CLOSING to CLOSED, the associated action might turn on a red light to indicate that the door is closed.  Similarly, when the door transitions from OPENING to OPEN, the associated action might turn on a green light to indicate that the door is open.  While the door is in motion, perhaps the actions would turn on an amber light.
+== Some details on actions...
+You've already seen that there are four kinds of actions you can specify to the FSM, but we haven't discussed in detail when those actions are run, what order they're run in, or any conditions.  All actions are triggered by an event.  When such an event is processed, here's how the actions run (in order):
 
-=== State Actions
-In addition to the transition actions discussed above, you can also define "state actions" that are functions called either upon entry into a particular state, or on exit from a particular state.  These actions are very useful when you need an action that applies to _all_ transitions to a state, or _all_ transitions from a state.  Like the transaction actions, the state actions are optional.
+. *Event action*: If the event has a specified event action, it is run.
+. *On-exit action*: If the event triggers a state transition, if the "from" and "to" states of that transition are different, and if the "from" state has a specified on-exit action, it is run.
+. *Transition action*: If the event triggers a state transition, and if the transition has a specified transition action, it is run.
+. *On-entry action*: If the event triggers a state transition, if the "from" and "to" states of that transition are different, and if the "to" state has a specified on-entry action, it is run.
 
-== Some notes on threading...
-The FSM can be configured to buffer events, though this is not required.  Let's consider the two cases separately:
+Your actions (and event transforms) should be careful to avoid any blocking (such as network I/O) or any computation that uses significant CPU time.  The issue is that all other event handling will be held up until your actions (and transforms) finish, and this can lead to FSM behavior that's not what you want.  In any situation where your code _must_ do something that blocks or is CPU-intensive, you should run that activity in another thread and initiate that thread from your action (or transform).
 
-* *Event buffering disabled*: In this case all invocations of an `onEvent()` method are synchronized on the FSM instance.  That guarantees that all the things that happen inside of event handling - including processing actions and event transforms - will happen in the caller's thread, but only in one thread at a time.
-* *Event buffering enabled*: In this case all invocations of an `onEvent()` method are unsynchronized additions to the event queue, which is itself threadsafe.  The event queue is emptied by a single thread that's internal to the FSM, pulling events off the event queue and handling them sequentially, one at a time.
-
-The FSM can also be configured to provide a simple event scheduling service.  If event scheduling is enabled, another thread (named `FSMEventScheduler`) is created and used by a single-threaded instance of `ScheduledExecutorService` that is internal to the FSM.  If event buffering is also enabled, then this thread does nothing but post events to the event queue.  However, if event buffering is _not_ enabled, then the scheduled events will be handled in the scheduler's thread - a good reason to be sure that actions and transforms do not block and do require excessive computation time.  What constitutes "excessive" is, of course, a function of the program using the FSM.
-
-Ordinarily when using a scheduled executor service, cancelling scheduled tasks (in our case, posting events) is a potentially problematic exericise.  In particular, there is normally a "race condition", wherein one thread (such as the thread executing FSM actions) tries to cancel a scheduled task that has already executed.  In our case this circumstance is curable because FSM transitions occur, and FSM actions all execute, sequentially in a single thread (a necessity for the integrity of the FSM's state).  Our cure is to make the scheduled event itself cancellable (in addition to cancelling the scheduled task, if possible).  Thus the `scheduleEvent()` methods of the FSM return instances of a subclass of `FSMEvent` called `FSMCancellableEvent`.  The `onEventImpl()` method will simply ignore any cancelled events.  The result is that scheduled events can be cancelled without the usual risk of a race condition.
-
-== FSM State
-Most real-world implementations of an FSM require some state _other_ than the FSM's state.  The example program included in this package has two classes with FSMs, and one of them (in `EngineController`) has quite a few examples of such state.  For example, it needs to keep track of how many times it has tried to start the engine.  In several other places, it stores an `FSMCancellableEvent` in case the scheduled event in question needs to be cancelled.  In many real-world examples of FSMs, there will be dozens or even hundreds of pieces of state like this that need to be squirreled away somewhere until they're needed.  The FSM package gives you multiple places to do that.  Each of these places has its pros and cons, some of which may simply be matters of the programmer's taste or conventions.  None of them are required, all of them are freely available for you to use, and most of time it makes zero difference to the functioning of the FSM which one you choose.  Here are the mechanisms available to you:
+== On keeping state...
+Most real-world implementations of an FSM require some state _other_ than the FSM's state; in our example program, `EngineController` is an example of such an FSM.  In many real-world examples of FSMs, there will be dozens or even hundreds of pieces of state that need to be squirreled away somewhere until they're needed.  The FSM package gives you multiple places to do that.  Each of these places has its pros and cons, some of which may simply be matters of the programmer's taste or conventions.  None of them are required, all of them are freely available for you to use, and most of the time it makes zero difference to the functioning of the FSM which one you choose.  Here are the mechanisms available to you:
 
 === Fields in the class containing the FSM
 This is perhaps the most straightforward method of all, as it's the usual method of storing state in a Java class.  In the example program, the `EngineController` has a field `engineStartAttempts` that uses this method.  That field is used in two different FSM action methods.
 
 === FSM global context
-The FSM global context is an arbitrary object, specified in the `FSMSpec` used to construct the FSM, that can contain any state you'd like.  The global context is available to any code that has access to the FSM instance (through the `getContext()` method), as well as FSM actions and FSM event transforms.  In the example program, the `EngineController` has an inner class `GlobalContext`, with a field `timeout` that shows this method in use; four different FSM action methods use that field.
+The FSM global context is an arbitrary object, specified in the `FSMSpec` used to construct the FSM, that can contain any state you'd like.  The global context is available to any code that has access to the FSM instance (through the `getContext()` method), as well as FSM actions and FSM event transforms.
 
 === FSM state context
-The FSM state context is quite similar to the FSM global context, except there is a separate FSM state context for each FSM state, and each of these may be a different class (type).  FSM state contexts are accessible to any code that has access to the FSM instance (through the `getStateContext()` method) or the FSM state (through the `context` field).  FSM actions have two FSM state contexts available to them: for the FSM state being transitioned _from_, and the FSM state being transitioned _to_.  FSM event transforms have the FSM state context for the current state available to them.  In the example program, the `EngineController` has an inner class `StoppingContext`, with a field `timeout` that shows this method in use; two different FSM action methods use that field.
+The FSM state context is quite similar to the FSM global context, except there is a separate FSM state context for each FSM state, and each of these may be a different class (or _type_).  FSM state contexts are accessible to any code that has access to the FSM instance (through the `getStateContext()` method) or the FSM state (through the `context` field).  FSM transition actions have two FSM state contexts available to them: for the FSM state being transitioned _from_, and the FSM state being transitioned _to_.  FSM event transforms have the FSM state context for the current state available to them.  State actions (on-entry and on-exit) have access to the context of the state involved, and event actions have access to the context of the current FSM state.
 
 === Properties of the FSM instance
 The FSM class contains a `setProperty(name,value)` and `getProperty(name)` that do exactly what they look like they do.  The value of the property can be any object.  You can set and retrieve these properties from any code that has access to the FSM instance.
@@ -389,53 +472,14 @@ The FSM class contains a `setProperty(name,value)` and `getProperty(name)` that 
 === Properties of the FSM state
 Each FSM state context can also contain a set of properties.  These properties are accessible through the `setProperty(name,value)` and `getProperty(name)` methods of the `FSMState` class.  They are also accessible from the FSM instance, via the `setProperty(state,name,value)` and `getProperty(state,name)` methods.  In the example program, the `EngineController` has two uses of this method, in the functions `actionInRange()` and `actionOutOfRange`.
 
-== Scheduled Events and Timeouts
-_Time_ is very important to many FSMs , especially those used to model things in the real world.  This package provides two closely-related services related to time.  These services are only available if event scheduling is enabled on the FSM instance.
-
-* *Scheduled events*: The `scheduleEvent()` methods of the FSM provide a very simple way to schedule an event to occur at an arbitrary time in the future.  Any FSM event can be scheduled, and any scheduled event may be cancelled at any time prior to it being handled.  Because the FSM guarantees that events are processed one at time, that means that a scheduled event can be cancelled by any transition action or state action with no possibility that the cancellation will "miss".  The cancellation can even happen _after_ the scheduler has queued the event for processing and _still_ you can be certain it was really cancelled.  The `EngineController` in the example program has five different actions where events are scheduled; just look for the `scheduleEvent()` method calls.
-
-* *Timeouts*: These are a particularly common need in many FSM implementations, and this package provides a simple and convenient way to use them.  There are two general scenarios when a timeout is useful.  The first is when you need to limit how long your FSM stays in some particular state.  In our example program, the `EngineController` allows 30 seconds for the engine to stabilize to 1800 RPM - if it takes any longer than that, the controller assumes the engine has failed.  In the transition action `actionStabilize`, the code sets that 30 second timeout by using the `setTimeout()` method on the FSM transition.  That timeout is automagically cancelled by the FSM if the FSM's state changes to _any_ other state.  The `EngineController` code doesn't have to worry about that at all.  The second general scenarios is when you need your FSM to stay in some particular state for a given amount of time.  In our example program, this is true of the `COOLING` state in the `EngineController`, which we need to stay in for 15 seconds, no matter what.  While we didn't use a timeout in that example (because we were showing examples of other FSM features), we _could_ have, and it would have been simpler than the scheduled event the example actually uses.
-
-Under the covers, timeouts are actually implemented with scheduled events.
-
-== Event Transformation
-
-== FSM Spec
 
 == FSM Validation
-This package _validates_ the FSM's definition (the states, events, and transition definitions) before it will start up.  If the validation fails, the FSM will not be created.  The validation process checks for the following:
+This package _validates_ the FSM's specification (`FSMSpec`) before it will start up.  If the validation fails, the FSM will not be created.  The validation process checks for the following:
 
-* *Duplicates*: No two transaction definitions may have the same transaction ID.
-* *Stuck states*: States that cannot be left, because no transaction definitions includes them as `FROM_STATE`.
-* *Isolated states*: States that cannot be entered, because no transaction definition includes them as `TO_STATE`.
-* *Unused events*: Events that don't appear as `EVENT` in a transition definition, and also don't appear as an `EVENT` in an event transformation definition.
-
-
-== How does it work?
-
-....
-    config.scenarios = makeMap( {
-        interiorOverheatingScenario: {
-            tempTest: makeEnabler( "Delay", { "_delay_": 5000, "value": 95.4 })
-        }
-    });
-....
-
-
-== Example program
-Nothing works better for building understanding than an https://github.com/SlightlyLoony/Util/tree/master/src/main/Java/com/dilatush/util/fsm/example[example].  This example program uses two FSMs to implement the controls for a backup generator - the kind you install at your home to provide power if the grid power goes down.  A https://github.com/SlightlyLoony/Util/blob/master/src/main/Java/com/dilatush/util/fsm/example/GeneratorController.java[relatively simple FSM] controls the generator overall, and a https://github.com/SlightlyLoony/Util/blob/master/src/main/Java/com/dilatush/util/fsm/example/EngineController.java[much more complex FSM] controls the propane engine inside the generator.  Most likely you don't have a generator or the requisite electronics lying about to try this out, so we've provided simulators for both the engine and the bits of the generator external to the electronics.  The engine controller FSM contains 7 states with 13 different events, and shows examples of state contexts, timers, and event transforms.  The https://github.com/SlightlyLoony/Util/blob/master/src/main/Java/com/dilatush/util/fsm/example/ExampleTest.java[main class] for the example does very little:
-
-....
-public class ExampleTest {
-    public static void main( final String[] _args ) throws InterruptedException, IOException {
-        GeneratorSim        generator  = new GeneratorSim();
-        Engine              engine     = new EngineSim();
-        GeneratorController controller = new GeneratorController( generator, engine );
-        generator.run();
-    }
-}
-....
-Just run that program, and the simulated generator and engine will start up, ready for you to play around with it.  Do a little debugging in the two classes with state machines, and I suspect you'll learn a bit.  One thing worth noting is that _everything_ in the state machine implementations is little bits of code, typically under 10 lines - very easy to understand and think about.  To this author's mind, that's one of the great advantages of FSMs - they naturally divide complex problems that are very hard to wrap your brain around into a series of small -- even _tiny_ -- problems that are quite understandable.
+* *Duplicates*: No two transaction definitions may have the same "from" state and triggering event.
+* *Stuck states*: States that cannot be left, because no transaction definitions includes them as the "from" state.
+* *Isolated states*: States that cannot be entered, because no transaction definition includes them as the "to" state.
+* *Unused events*: Events that don't appear as the event in a transition definition, and also don't have an event transform specified.
 
 == Learning more...
 The code for the FSM implementation can be found https://github.com/SlightlyLoony/Util/tree/master/src/main/Java/com/dilatush/util/fsm[here], and the example code https://github.com/SlightlyLoony/Util/tree/master/src/main/Java/com/dilatush/util/fsm/example[here].

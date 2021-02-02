@@ -1,5 +1,7 @@
 package com.dilatush.util.fsm;
 
+import com.dilatush.util.fsm.events.FSMEvent;
+
 /**
  * Implemented to provide an action that's associated with an FSM event.
  *
