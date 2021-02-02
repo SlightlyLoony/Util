@@ -540,6 +540,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      * scheduling is not enabled in this instance, an {@link UnsupportedOperationException} will be thrown.</p>
      *
      * @param _event The {@link FSMEvent} to be scheduled.
+     * @param _eventData The data for the event to be scheduled.
      * @param _delay The {@link Duration} delay until it is to be handled.
      * @return The {@link FSMEvent} that can be used to cancel this scheduled event.
      */
@@ -694,6 +695,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      * Returns an {@link FSMEvent} instance created from the given event enum and event data (an arbitrary {@link Object} instance.
      *
      * @param _event The event enum to create an {@link FSMEvent} instance from.
+     * @param _data The data for the event.
      * @return the {@link FSMEvent} instance created
      */
     public FSMEvent<E> event( final E _event, final Object _data ) {

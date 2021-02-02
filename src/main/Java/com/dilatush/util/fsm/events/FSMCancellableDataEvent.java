@@ -31,6 +31,7 @@ public class FSMCancellableDataEvent<E extends Enum<E>> extends FSMDataEvent<E> 
      * Create a new instance of this class with the given FSM event.
      *
      * @param _event The FSM event to be made cancellable.
+     * @param _data The data for the cancellable event.
      */
     /*package-private*/ FSMCancellableDataEvent( final E _event, final Object _data ) {
         super( _event, _data );

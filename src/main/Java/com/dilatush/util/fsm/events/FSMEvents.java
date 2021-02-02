@@ -30,6 +30,14 @@ public class FSMEvents<S extends Enum<S>,E extends Enum<E>> {
     private final FSM<S,E> fsm;
 
 
+    /**
+     * Create a new instance of this class with the given associated {@link FSM}, event scheduler, and sample event (which is used only to generate
+     * a list of all the events).
+     *
+     * @param _fsm The FSM associated with this instance.
+     * @param _eventScheduler The event scheduler for this instance (may be {@code null} if scheduled events are not configured).
+     * @param _event A sample event.
+     */
     public FSMEvents( final FSM<S,E> _fsm, final ScheduledExecutorService _eventScheduler, final E _event ) {
 
         fsm = _fsm;
@@ -42,11 +50,25 @@ public class FSMEvents<S extends Enum<S>,E extends Enum<E>> {
     }
 
 
+    /**
+     * Returns the cached {@link FSMSimpleEvent} for the given event.
+     *
+     * @param _event The event enum to get an {@link FSMEvent} instance for.
+     * @return the {@link FSMSimpleEvent} for the given event enum
+     */
     public FSMEvent<E> from( final E _event ) {
         return simpleEventCache.get( _event.ordinal() );
     }
 
 
+    /**
+     * Returns a new instance of {@link FSMDataEvent} created from the given event and data.  However, if the given data is {@code null}, then
+     * the cached {@link FSMSimpleEvent} for the given event is returned.
+     *
+     * @param _event The event enum to get an {@link FSMEvent} instance for.
+     * @param _data The optional data for the event.
+     * @return the {@link FSMEvent} for the given event enum and data
+     */
     public FSMEvent<E> from( final E _event, final Object _data ) {
         if( _data == null )
             return simpleEventCache.get( _event.ordinal() );
@@ -54,6 +76,13 @@ public class FSMEvents<S extends Enum<S>,E extends Enum<E>> {
     }
 
 
+    /**
+     * Schedule the given event to be sent after the given delay from now.
+     *
+     * @param _event The event to be sent after the given delay.
+     * @param _delay The delay before sending the given event.
+     * @return the cancellable {@link FSMEvent}
+     */
     public FSMEvent<E> schedule( final FSMEvent<E> _event, final Duration _delay ) {
 
         // fail fast...
@@ -64,11 +93,26 @@ public class FSMEvents<S extends Enum<S>,E extends Enum<E>> {
     }
 
 
+    /**
+     * Schedule the event specified by the given event enum to be sent after the given delay from now.
+     *
+     * @param _event The event enum specifying the event to be sent after the given delay.
+     * @param _delay The delay before sending the given event.
+     * @return the cancellable {@link FSMEvent}
+     */
     public FSMEvent<E> schedule( final E _event, final Duration _delay ) {
         return schedule( _event, null, _delay );
     }
 
 
+    /**
+     * Schedule the event specified by the given event enum, with the given event data, to be sent after the given delay from now.
+     *
+     * @param _event The event enum specifying the event to be sent after the given delay.
+     * @param _data The event data.
+     * @param _delay The delay before sending the given event.
+     * @return the cancellable {@link FSMEvent}
+     */
     public FSMEvent<E> schedule( final E _event, final Object _data, final Duration _delay ) {
 
         // fail fast...
