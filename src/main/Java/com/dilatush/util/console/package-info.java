@@ -1,6 +1,19 @@
 /**
  * <p>Provides a simple, reasonably secure embeddable console.  The intent is to provide a remote command-line capability for embedded systems or
- * server daemons.  This implementation uses a simple, fixed protocol (described below) that is encrypted with AES with 128 bit keys in CTR mode with
+ * server daemons.</p>
+ * <p>The general usage:</p>
+ * <ul>
+ *     <li>An embedded process or a daemon process creates, configures, and starts an instance of {@link com.dilatush.util.console.ConsoleServer}.
+ *     </li>
+ *     <li>One or more instances of {@link com.dilatush.util.console.ConsoleProvider} are configured in the {@code ConsoleServer}.  Each of these
+ *     {@code ConsoleProvider}s provides an interface to some aspect of the embedded process or daemon process.  What they do is arbitrary, as is
+ *     the number of them; these choices are more a matter of taste than anything else.</li>
+ *     <li>One or more instances of {@link com.dilatush.util.console.CommandProcessor} is embedded within each {@code ConsoleProvider}.  Each
+ *     {@code CommandProcessor} handles a single named command, which a {@code ConsoleProvider} may have any number of.  For example, one could
+ *     have a {@code ConsoleProvider} that allowed direct control of a motor, and three {@code CommandProcessor}s that (1) turned the motor off, (2)
+ *     set the motor to run at a particular RPM, or (3) to cause the motor to cycle on and off.</li>
+ * </ul>
+ * <p>This implementation uses a simple, fixed protocol (described below) that is encrypted with AES with 128 bit keys in CTR mode with
  * a random 128 bit nonce, in continuous streams (separate streams in each direction).  The AES key is a shared secret, manually distributed, and
  * access to it implicitly provides authentication.</p>
  * <p>The protocol is as follows:</p>

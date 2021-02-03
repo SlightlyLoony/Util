@@ -45,9 +45,6 @@ public class ConsoleServer {
 
         config = _config;
         clients       = new AtomicInteger( 0 );
-
-        // add our echo provider...
-        config.providers.put( "echo", "com.dilatush.util.console.EchoConsoleProvider" );
     }
 
 
@@ -190,7 +187,7 @@ public class ConsoleServer {
                     klassName = provider.getValue();
                     Class<?> klass = Class.forName( klassName );
 
-                    // make sure it implements ConsoleProvider...
+                    // make sure it subclasses ConsoleProvider...
                     if( !ConsoleProvider.class.isAssignableFrom( klass ) )
                         validate( () -> false, _messages, "class " + klassName + " is not a console provider" );
 

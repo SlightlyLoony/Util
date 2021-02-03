@@ -1,13 +1,18 @@
-= Utilities Package
+= Console Server
 Tom Dilatush (tom@dilatush.com) +
 V1.0, 2021-01-03
 :toc:
 :toc-placement!:
 toc::[]
 
-== Java Utilities
-A collection of Java utilities.
+== An Overview...
+The basic idea of the console (server and client together) is to provide a way for an embedded system or daemon process to communicate with a developer or tester via something like a command line terminal.  This is analogous to using SSH to connect to a server -- except that instead of connection to the operating system's shell, you're connecting to an environment provided by code you write.
 
+Here's a simple example to illustrate the utility of a console like this.  Suppose you're writing the code for an embedded system that has behavior that's based on time.  While you're developing and testing, it would be very useful to set the real time clock in your system to arbitrary times.  But it's an embedded system -- how are you going to "talk" to it?  That's the kind of problem this console is intended to solve.  In this example, you'd make a console server that had a command available to set the real time clock -- from the connected client, you'd type something like `setclock 12:35:50` to do it.  You might also have a command to give you the current value of the real time clock -- maybe the command `readclock` would send `12:37:44` back to you.  That's the general idea!  The console server places no restrictions on what you might do with it; it just provides the mechanism to let a console client connect with your embedded console server.  The rest is up to you.
+
+The general structure of the console server (and client) is shown below.  The Console Client is a companion application that you can find https://github.com/SlightlyLoony/ConsoleClient[here].  The Console Server is the subject of this document, and it is an instance of the class `ConsoleServer` that runs in its own thread as a component of either an embedded system or a daemon process.  The Console Server listens on a TCP socket for network connections initiated by the Console Client.  Once the connection has been established, all the data is encrypted with a private key, using AES128 in counter mode.  If you're not familiar with that terminology, that means it's encrypted with a modern standard cipher, using a modest-sized key, and the encryption protocol is a solid one.  Authentication is implicit by the possession of the encryption key -- meaning that the Console Server and the Console Client _both_ have to have the private key, or they won't be able to connect.
+
+image::ConsoleServer/System Block Diagram.png[]
 
 == What are these utilities, anyway?
 It's very hard to give a general description of these, as there are a wide variety of them.  The easiest thing to do is to browse the classes.  There are a few worth mentioning here, however:
@@ -22,7 +27,6 @@ It's very hard to give a general description of these, as there are a wide varie
 |Command Line Argument Interpreter
 |Provides everything needed for a Java command line application (or server daemon) to have Unix-style arguments.  Optional arguments can have any number of long and short names.  Passwords (and other arguments) can be entered interactively.  Parses and validates argument parameters.  Provides summary and detailed help. Much more in the https://github.com/SlightlyLoony/Util/blob/master/CommandLine.adoc[Command Line document].
 |Finite State Machine|Provides everything you need to build a finite state machine (FSM).  While FSMs _can_ be very complex, they can also be quite simple - and this FSM can provide the whole range.  A simple FSM can be built in a single class, as you can see with the example FSM included in the package.  This FSM package can also provide the guts of a very complex FSM, even those with nested FSMs.  Much more in the https://github.com/SlightlyLoony/Util/blob/master/FSM.adoc[FSM document].
-|Console|Allows you to connect from a client computer (such as your development laptop) to a "console server" embedded into an embedded system or daemon process.  It's the same idea as connecting with SSH, except that instead of connecting to the operating system shell (as SSH does), you're connecting into an environment that _you_ provide, embedded right into your application.  The connection is encrypted, and mutual possession of the encryption key is the authentication.  The author needed a way that he could communicate directly with a daemon process, over the network.  This package is the generalized result of that need.  Much more in the https://github.com/SlightlyLoony/Util/blob/master/Console.adoc[Console document].
 |===
 
 === Some particular mentions...

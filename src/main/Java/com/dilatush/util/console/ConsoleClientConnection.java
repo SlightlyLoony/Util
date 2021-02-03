@@ -87,7 +87,7 @@ public class ConsoleClientConnection extends Thread {
                     // get the class object for our console provider...
                     Class<?> klass = Class.forName( consoleClassName );
 
-                    // make sure it implements ConsoleProvider...
+                    // make sure it subclasses ConsoleProvider...
                     if( !ConsoleProvider.class.isAssignableFrom( klass ) )
                         throw new IOException( "Class is not a ConsoleProvider: " + consoleClassName );
 
@@ -104,7 +104,7 @@ public class ConsoleClientConnection extends Thread {
                 }
                 catch( ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InstantiationException
                         | InvocationTargetException _e ) {
-                    throw new IOException( "Problem instantiating console provider: " + _e.getMessage() );
+                    throw new IOException( "Problem instantiating console provider: " + _e.getMessage(), _e );
                 }
             }
             else {
