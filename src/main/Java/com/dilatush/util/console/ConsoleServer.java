@@ -34,35 +34,40 @@ public class ConsoleServer {
     final static private long IO_PROBLEM_WAIT     = 10000;   // ten seconds...
 
     // our configuration...
-    /*package-private*/ final Config        config;
+    /*package-private*/ final Config        config;   // our configuration..
     /*package-private*/ final AtomicInteger clients;  // count of connected clients...
 
-    private ServerSocket         socket;          // the server socket...
+    private ServerSocket                    socket;          // the server socket...
 
 
-
+    /**
+     * Create a new instance of this class using the given configuration.
+     *
+     * @param _config The {@link Config} configuration for this console server.
+     */
     public ConsoleServer( final Config _config ) {
 
-        config = _config;
-        clients       = new AtomicInteger( 0 );
-    }
+        // fail fast if our configuration is missing...
+        if( isNull( _config ) )
+            throw new IllegalArgumentException( "Missing configuration" );
 
+        // setup...
+        config  = _config;
+        clients = new AtomicInteger( 0 );
 
-    public void start() {
-
-        // if we're already running, log a warning and leave...
-        if( socket != null ) {
-            LOGGER.warning( "Tried to start ConsoleServer when it was already running" );
-            return;
-        }
-
-        // start up the listener thread...
+        // start up our server thread...
         new ServerThread();
     }
 
 
+    /**
+     * Implements a simple server socket listener, waiting for TCP connections that are (we hope!) from console clients.
+     */
     private class ServerThread extends Thread {
 
+        /**
+         * Create a new instance of this class.
+         */
         private ServerThread() {
             setName( "Console Listener" );
             setDaemon( true );
@@ -70,6 +75,9 @@ public class ConsoleServer {
         }
 
 
+        /**
+         * Run the server socket listener.  The only exit is from an interrupt.
+         */
         @Override
         public void run() {
 
@@ -140,6 +148,10 @@ public class ConsoleServer {
     }
 
 
+    /**
+     * The configuration class for {@link ConsoleServer}.  This class may be constructed directly, but is designed to be built through a JavaScript
+     * configuration file (see {@link AConfig}.
+     */
     public static class Config extends AConfig {
 
         public int                 maxClients;      // the maximum number of clients allowed simultaneously...
@@ -165,6 +177,12 @@ public class ConsoleServer {
         }
 
 
+        /**
+         * Verifies that the provider map exists, and that each value is the fully qualified class name of a class that extends
+         * {@link ConsoleProvider} that has a public no-args constructor.
+         *
+         * @param _messages The list of error messages; if the provider map is invalid, this method adds error messages to it.
+         */
         private void validateProviders( final List<String> _messages ) {
 
             // if we have no map, we're most definitely invalid...

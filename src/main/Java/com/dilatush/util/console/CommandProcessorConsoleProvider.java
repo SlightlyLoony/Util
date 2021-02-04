@@ -96,7 +96,15 @@ public abstract class CommandProcessorConsoleProvider extends ConsoleProvider {
         // if we got a unique match on the command, then execute it...
         if( match >= 0 ) {
             CommandProcessor processor = commandProcessors.get( match );
-            processor.onCommandLine( _line, words.subList( 1, words.size() ) );
+
+            // catch any exceptions from the command processor, so we don't crash the console for silly reasons...
+            try {
+                processor.onCommandLine( _line, words.subList( 1, words.size() ) );
+            }
+            catch( final Exception _exception ) {
+                write( "Problem with interpreting command: ");
+                writeLine( _exception.getMessage() );
+            }
         }
 
         // otherwise, if we have no idea what the command was, let the user know and print some help...

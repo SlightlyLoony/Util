@@ -7,6 +7,7 @@ import com.dilatush.util.Sockets;
 
 import javax.crypto.CipherInputStream;
 import javax.crypto.CipherOutputStream;
+import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.*;
 import java.lang.reflect.Constructor;
@@ -34,6 +35,12 @@ public class ConsoleClientConnection extends Thread {
     private final ConsoleServer        server;         // the server that provided this connection...
 
 
+    /**
+     * Create a new instance of this class with the given {@link Socket} and {@link ConsoleServer}.
+     *
+     * @param _socket The socket for the client TCP connection to the console server.
+     * @param _server The {@link ConsoleServer} that created this instance.
+     */
     public ConsoleClientConnection( final Socket _socket, final ConsoleServer _server ) {
 
         socket        = _socket;
@@ -45,6 +52,11 @@ public class ConsoleClientConnection extends Thread {
     }
 
 
+    /**
+     * Run this client connection, in its own thread.  This method handles the protocol to establish the encrypted TCP connection, then calls
+     * whatever console provider the console client specified.  This method exits (which terminates the TCP connection) if there is any problem
+     * establishing the connection, instantiating the provider, or when the provider has finished.
+     */
     @Override
     public void run() {
 
@@ -124,12 +136,22 @@ public class ConsoleClientConnection extends Thread {
     }
 
 
+    /**
+     * Return a {@link SecretKey} instance constructed from our configured key.
+     *
+     * @return the {@link SecretKey}
+     */
     private Key getKey() {
         byte[] keyBytes = Base64.decodeBytes( server.config.key );
         return new SecretKeySpec( keyBytes, "AES" );
     }
 
 
+    /**
+     * Get the banner string.
+     *
+     * @return the banner string
+     */
     private byte[] getBanner() {
         return ("Loony Console Server," + ConsoleServer.VERSION + "," + server.config.name + "\n").getBytes( StandardCharsets.UTF_8 );
     }

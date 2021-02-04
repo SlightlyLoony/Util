@@ -30,7 +30,6 @@ public class TestConsoleServer {
             config.providers = new HashMap<>();
             config.providers.put( "test", "com.dilatush.util.console.TestConsoleServer$TestConsole" );
             ConsoleServer server = new ConsoleServer( config );
-            server.start();
 
 
             while( true ) {
@@ -51,17 +50,6 @@ public class TestConsoleServer {
             super(
                     "Test console to see if any of this command line processor stuff actually, like, works."
             );
-        }
-
-
-        /**
-         * Returns the name of this console provider; it must be implemented by concrete subclasses.
-         *
-         * @return the name of this console provider
-         */
-        @Override
-        protected String getName() {
-            return "test";
         }
 
 

@@ -55,7 +55,7 @@ Util is licensed with the quite permissive MIT license: +
 ....
 Created: January 19, 2021
 Author: Tom Dilatush <tom@dilatush.com>
-Github:  https://github.com/SlightlyLoony/ShedSolar
+Github:  https://github.com/SlightlyLoony/Util
 License: MIT
 
 Copyright 2020 Tom Dilatush (aka "SlightlyLoony")

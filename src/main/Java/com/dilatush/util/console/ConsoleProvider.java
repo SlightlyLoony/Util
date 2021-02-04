@@ -72,7 +72,7 @@ public abstract class ConsoleProvider {
      *
      * @param _line The string to send to the console client.
      */
-    protected void writeLine( final String _line ) {
+    protected synchronized void writeLine( final String _line ) {
 
         try {
             writer.write( _line );
@@ -92,7 +92,7 @@ public abstract class ConsoleProvider {
      *
      * @param _line The string to send to the console client.
      */
-    protected void write( final String _line ) {
+    protected synchronized void write( final String _line ) {
 
         try {
             writer.write( _line );
@@ -104,14 +104,6 @@ public abstract class ConsoleProvider {
             close( socket );
         }
     }
-
-
-    /**
-     * Returns the name of this console provider; it must be implemented by concrete subclasses.
-     *
-     * @return the name of this console provider
-     */
-    protected abstract String getName();
 
 
     /**
