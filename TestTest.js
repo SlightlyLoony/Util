@@ -32,6 +32,13 @@ function init( config ) {
                 makeEnabler( "Counted", { "_maxCount_": 2, "_startAs_": true } )
             ] ),
             te2: makeJavaScript( { "p1": 7, "p2": 3, "count": 17 }, 'load( "SampleJavaScriptTestEnablerScript.js" )' )
+        },
+        s2: {
+            te1: makeComposite( { "offset": 4, "scale": 5.55 }, [
+                makeEnabler( "Periodic", { "_phase1_": 4000, "_phase2_": 4000, "_startAs_": true } ),
+                makeEnabler( "Counted", { "_maxCount_": 3, "_startAs_": true } )
+            ] ),
+            te2: makeJavaScript( { "p1": 7, "p2": 3, "count": 17 }, 'load( "SampleJavaScriptTestEnablerScript.js" )' )
         }
     } );
 }

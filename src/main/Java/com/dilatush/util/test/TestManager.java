@@ -2,6 +2,7 @@ package com.dilatush.util.test;
 
 import com.dilatush.util.AConfig;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +12,7 @@ import java.util.logging.Logger;
 import static com.dilatush.util.Checks.notEmpty;
 import static com.dilatush.util.General.isNotNull;
 import static com.dilatush.util.General.isNull;
+import static com.dilatush.util.Strings.isEmpty;
 
 /**
  * Implements a singleton class that manages the test framework.  The singleton instance <i>must</i> be configured prior to retrieving its instance.
@@ -22,13 +24,13 @@ public class TestManager {
     final static private Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
 
     private static TestManager instance;   // the one and only instance of this class
-    private static Config config;          // the one and only configuration for this class
+    private static Config      config;     // the one and only configuration for this class
 
     private final Map<String, ProxyTestEnabler>         enablers;  // registered test enabler name -> proxy test enabler
     private final Map<String, Map<String, TestEnabler>> scenarios; // scenario name -> (test enabler name -> test enabler)
 
     private boolean enabled;
-    private String scenario;
+    private String  scenario;
 
 
     /**
@@ -43,7 +45,6 @@ public class TestManager {
         scenarios = _config.scenarios;
 
         // set up our default state and scenario...
-        enabled   = _config.enabled;
         scenario  = _config.scenario;
 
         // if we had no default scenario, make sure it's not null...
@@ -52,6 +53,10 @@ public class TestManager {
 
         // initialize our registered enablers...
         init();
+
+        // if the configuration says we're enabled, and we have a default scenario, do it...
+        if( _config.enabled && !isEmpty( scenario ) )
+            enable( scenario );
     }
 
 
@@ -189,7 +194,39 @@ public class TestManager {
             }
         }
         init();
+        enabled = true;
         LOGGER.info( "Enabled test scenario: " + _scenario );
+    }
+
+
+    /**
+     * Returns a list of the names of all the known scenarios.
+     *
+     * @return the list of scenarios
+     */
+    public List<String> getScenarios() {
+        return new ArrayList<>( scenarios.keySet() );
+    }
+
+
+    /**
+     * Returns a list of the names of all the registered enablers.
+     *
+     * @return the list of enablers
+     */
+    public List<String> getEnablers() {
+        return new ArrayList<>( enablers.keySet() );
+    }
+
+
+    /**
+     * Return the named enabler, or {@code null} if it doesn't exist.
+     *
+     * @param _name The name of the enabler to get.
+     * @return the named test enabler
+     */
+    /*package-private*/ TestEnabler getEnabler( final String _name ) {
+        return enablers.get( _name ).getTestEnabler();
     }
 
 

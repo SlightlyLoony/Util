@@ -1,6 +1,10 @@
 package com.dilatush.util.test;
 
 import com.dilatush.util.AConfig;
+import com.dilatush.util.console.ConsoleServer;
+
+import java.util.HashMap;
+import java.util.logging.Logger;
 
 import static java.lang.Thread.sleep;
 
@@ -9,8 +13,13 @@ import static java.lang.Thread.sleep;
  */
 public class TestTest {
 
+    private static Logger LOGGER;
 
     public static void main( final String[] _args ) throws InterruptedException {
+
+        // set the configuration file location (must do before any logging actions occur)...
+        System.getProperties().setProperty( "java.util.logging.config.file", "logging.properties" );
+        LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getSimpleName() );
 
         // get test configuration...
         AConfig.InitResult ir = AConfig.init( TestManager.Config.class, "TestTest.js" );
@@ -24,6 +33,28 @@ public class TestTest {
         TestEnabler te2 = mgr.register( "te2" );
 
         System.out.println( "Count: " + te2.getAsLong( "count" ) );
+
+
+        try {
+            ConsoleServer.Config config = new ConsoleServer.Config();
+            config.port = 8217;
+            config.bindTo = null;
+            config.maxClients = 1;
+            config.name = "test";
+            config.key = "abcdefghijklmnopqrstuA";
+            config.providers = new HashMap<>();
+            config.providers.put( "test", "com.dilatush.util.test.TestConsoleProvider" );
+            ConsoleServer server = new ConsoleServer( config );
+
+
+            while( true ) {
+                sleep( 1000 );
+            }
+        }
+        catch( Exception _e ) {
+            System.out.println( _e.getMessage() );
+            _e.printStackTrace();
+        }
 
 
         while( true ) {

@@ -154,11 +154,34 @@ public class ConsoleServer {
      */
     public static class Config extends AConfig {
 
+        /**
+         * The maximum number of clients allowed to be connected simultaneously.
+         */
         public int                 maxClients;      // the maximum number of clients allowed simultaneously...
+
+        /**
+         * The name of this console server.
+         */
         public String              name;            // the name of this console server...
+
+        /**
+         * The base64-encoded shared secret for this console server.  This must be a 16 byte (128 bit) value.
+         */
         public String              key;             // the base64 encoded shared secret for this console server...
+
+        /**
+         * The TCP port to listen on for client connections.
+         */
         public int                 port;            // the port to listen for client connections on...
+
+        /**
+         * The IP address of the network interface to listen on (i.e., to bind to).  If {@code null}, listens on all network interfaces.
+         */
         public InetAddress         bindTo;          // the IP address of the network interface to listen on; default is all interfaces...
+
+        /**
+         * The map of console name to the fully qualified class name for the console provider of that name.
+         */
         public Map<String, String> providers;       // map of console names to the fully qualified class names of the console provider of that name...
 
 
