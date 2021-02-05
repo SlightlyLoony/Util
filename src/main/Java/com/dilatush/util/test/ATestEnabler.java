@@ -21,7 +21,7 @@ import static com.dilatush.util.General.isNull;
      * Remembers the state of this test enabler the last time {@link #isEnabled()} was called on it.  It's used for detecting the true-to-false
      * edge, which causes {@link #init()} to be called on all downstream test enablers in a {@link CompositeTestEnabler} instance.
      */
-    private boolean lastState;
+    volatile private boolean lastState;
 
 
     // the map of this instance's properties...

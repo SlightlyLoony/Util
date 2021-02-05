@@ -5,6 +5,7 @@ import com.dilatush.util.TextFormatter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 import static com.dilatush.util.Strings.*;
 
@@ -90,12 +91,11 @@ public abstract class CommandProcessorConsoleProvider extends ConsoleProvider {
             return;
         }
 
-        // match the first word to a command (or at least TRY to!)...
-        int match = chooseFrom( commands, words.get( 0 ), true );
+        try {
 
-        // if we got a unique match on the command, then execute it...
-        if( match >= 0 ) {
-            CommandProcessor processor = commandProcessors.get( match );
+            // get the matching command and execute it...
+            Choice choice = choose( commands, words.get( 0 ), "command", null );
+            CommandProcessor processor = commandProcessors.get( choice.index );
 
             // catch any exceptions from the command processor, so we don't crash the console for silly reasons...
             try {
@@ -107,16 +107,84 @@ public abstract class CommandProcessorConsoleProvider extends ConsoleProvider {
             }
         }
 
-        // otherwise, if we have no idea what the command was, let the user know and print some help...
-        else if( match == Strings.NO_KEY_MATCH_FOR_CHOOSER ) {
-            writeLine( "We do not understand this command: " + words.get( 0 ) );
+        // if we get this, it means choose() couldn't find a unique match, so we show general help and leave...
+        catch( ConsoleException _e ) {
             showGeneralHelp();
         }
+    }
 
-        // otherwise, if the command could have been one of several, let the user know and print some help...
+
+
+
+    /**
+     * Compares the given match text against the given choices.  If there's a match to the start of exactly one of the choices, then the matching
+     * choice and the index to it are returned in a {@link Choice} instance.  Otherwise, help is printed for the two possible failure cases: no
+     * matches, or more than one match.  The given what is used to construct the help text.  The optional showChoices is a {@link Consumer} that will
+     * (if provided) print a list of the choices.  After the help is printed, a {@link ConsoleException} is thrown.
+     *
+     * @param _choices The list of possible strings to choose from.
+     * @param _match The text that should match one of the choices.
+     * @param _what What kind of choices these are (in other words, what are we choosing from?).
+     * @param _showChoices The optional {@link Consumer} that will print a list of choices.
+     * @return the {@link Choice} results, if exactly one choice was matched
+     * @throws ConsoleException on anything other than exactly one match
+     */
+    protected Choice choose( final List<String> _choices, final String _match, final String _what, final Consumer<List<String>> _showChoices )
+            throws ConsoleException {
+
+        // see if the match text appears in our choices...
+        int match = chooseFrom( _choices, _match, true );
+
+        // if we got a unique match, return it...
+        if( match >= 0 )
+            return new Choice( _choices.get( match ), match );
+
+        // otherwise, if we have no matches at all, print a message and some help...
+        else if( match == Strings.NO_KEY_MATCH_FOR_CHOOSER ) {
+            writeLine( "No " + _what + " matches \"" + _match + "\"" );
+            if( _showChoices != null )
+                _showChoices.accept( _choices );
+            throw new ConsoleException( "Failed to match \"" + _match + "\" to a exactly one " + _what );
+        }
+
+        // otherwise, if the match could have been any of several several choices, let the user know and print some help...
         else if( match == Strings.AMBIGUOUS_KEY_MATCH_FOR_CHOOSER ) {
-            writeLine( "Come on, gimme a break - what you typed COULD mean more than one of these commands: " + words.get( 0 ) );
-            showGeneralHelp();
+            writeLine( "Come on, gimme a break - \"" + _match + "\" matches more than one " + _what + "!" );
+            if( _showChoices != null )
+                _showChoices.accept( _choices );
+            throw new ConsoleException( "Failed to match \"" + _match + "\" to a exactly one " + _what );
+        }
+
+        // it should be impossible to get here...
+        throw new ConsoleException( "chooseFrom() returned a value it should not have" );
+    }
+
+
+    /**
+     * The result of a {@link #choose(List,String,String,Consumer)} call.
+     */
+    public static class Choice {
+
+        /**
+         * The choice that was matched.
+         */
+        final public String match;
+
+        /**
+         * The index of the choice that was matched.
+         */
+        final public int    index;
+
+
+        /**
+         * Create a new instance of this class with the given matched choice and index.
+         *
+         * @param _match The choice that was matched.
+         * @param _index The index of the choice that was matched.
+         */
+        public Choice( final String _match, final int _index ) {
+            match = _match;
+            index = _index;
         }
     }
 

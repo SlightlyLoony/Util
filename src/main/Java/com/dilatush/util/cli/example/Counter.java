@@ -28,8 +28,7 @@ public class Counter {
         CountType countType = (CountType) result.getValue( "countType" );
 
         // get any specified words..
-        // noinspection unchecked
-        List<String> words = (List<String>) result.getValues( "word" );
+        List<?> words = (List<?>) result.getValues( "word" );
         boolean haveWords = result.isPresent( "word" );
 
         // get our case sensitivity...
@@ -61,8 +60,8 @@ public class Counter {
         int counter = 0;
 
         // iterate over all the specified files...
-        // noinspection unchecked
-        for( File file  : (List<File>) result.getValues( "files" ) ) {
+        for( Object fileObj  : (List<?>) result.getValues( "files" ) ) {
+            File file = (File) fileObj;
 
             // get our file's text...
             String text = Files.readToString( file );
@@ -75,7 +74,7 @@ public class Counter {
                     if( !haveWords )
                         counter += text.split( "\\s+" ).length;
                     else
-                        for( String word : words ) { counter += countSpecificWords( word, text, caseSensitive ); }
+                        for( Object wordObj : words ) { counter += countSpecificWords( (String) wordObj, text, caseSensitive ); }
                     break;
 
                 case LINES:
@@ -117,10 +116,11 @@ public class Counter {
     }
 
 
-    private static String wordsToString( final List<String> _words ) {
+    private static String wordsToString( final List<?> _words ) {
         if( _words.size() == 0 ) return "";
-        if( _words.size() == 1 ) return _words.get( 0 );
-        String[] words = _words.toArray( new String[0] );
+        if( _words.size() == 1 ) return (String) _words.get( 0 );
+        Object[] wordsObj = _words.toArray( new Object[0] );
+        String[] words = (String[])wordsObj;
         String joined = String.join( ", ", words );
         int index = joined.lastIndexOf( ", " );
         joined = joined.substring( 0, index ) + ", or " + joined.substring( index + 2 );
