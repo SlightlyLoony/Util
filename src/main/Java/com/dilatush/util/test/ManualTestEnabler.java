@@ -1,6 +1,5 @@
 package com.dilatush.util.test;
 
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -13,7 +12,7 @@ public class ManualTestEnabler extends ATestEnabler {
 
 
     public ManualTestEnabler( final Map<String, Object> _properties ) {
-        super( new HashMap<>() );
+        super( _properties );
         properties.put( "enabled", false );
     }
 

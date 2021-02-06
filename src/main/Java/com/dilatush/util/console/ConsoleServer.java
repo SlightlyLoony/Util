@@ -1,12 +1,13 @@
 package com.dilatush.util.console;
 
 import com.dilatush.util.AConfig;
-import com.dilatush.util.Base64;
+import com.dilatush.util.Base64Fast;
 import com.dilatush.util.Networking;
 
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.net.*;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -157,7 +158,7 @@ public class ConsoleServer {
         /**
          * The maximum number of clients allowed to be connected simultaneously.
          */
-        public int                 maxClients;      // the maximum number of clients allowed simultaneously...
+        public int                 maxClients = 1;      // the maximum number of clients allowed simultaneously...
 
         /**
          * The name of this console server.
@@ -177,12 +178,12 @@ public class ConsoleServer {
         /**
          * The IP address of the network interface to listen on (i.e., to bind to).  If {@code null}, listens on all network interfaces.
          */
-        public InetAddress         bindTo;          // the IP address of the network interface to listen on; default is all interfaces...
+        public InetAddress         bindTo = null;          // the InetAddress of the network interface to listen on; default is all interfaces...
 
         /**
          * The map of console name to the fully qualified class name for the console provider of that name.
          */
-        public Map<String, String> providers;       // map of console names to the fully qualified class names of the console provider of that name...
+        public Map<String, String> providers = new HashMap<>();       // map of console names to the fully qualified class names of the console provider of that name...
 
 
         /**
@@ -258,7 +259,7 @@ public class ConsoleServer {
 
             // see if the string decodes to 16 bytes; if so, we're golden, otherwise, not so much...
             try {
-                byte[] test = Base64.decodeBytes( key );
+                byte[] test = Base64Fast.decodeBytes( key );
                 return test.length == 16;
             }
 

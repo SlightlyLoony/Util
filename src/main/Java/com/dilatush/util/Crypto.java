@@ -236,12 +236,13 @@ public class Crypto {
      * @param _base64KeyBytes The 22 characters of base64-encoded key material.
      * @return  the 128 bit AES {@link Key}
      */
+    @SuppressWarnings( "unused" )
     public static Key getKey_AES_128( final String _base64KeyBytes ) {
 
         // fail fast if our argument is obviously bogus...
         if( isEmpty( _base64KeyBytes ) || (_base64KeyBytes.length() != 22) )
             throw new IllegalArgumentException( "Invalid AES key base64 string: " + _base64KeyBytes );
 
-        return getKey_AES_128( Base64.decodeBytes( _base64KeyBytes ) );
+        return getKey_AES_128( Base64Fast.decodeBytes( _base64KeyBytes ) );
     }
 }

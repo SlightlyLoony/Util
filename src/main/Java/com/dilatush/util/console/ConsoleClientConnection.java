@@ -1,6 +1,6 @@
 package com.dilatush.util.console;
 
-import com.dilatush.util.Base64;
+import com.dilatush.util.Base64Fast;
 import com.dilatush.util.Crypto;
 import com.dilatush.util.Networking;
 import com.dilatush.util.Sockets;
@@ -142,7 +142,7 @@ public class ConsoleClientConnection extends Thread {
      * @return the {@link SecretKey}
      */
     private Key getKey() {
-        byte[] keyBytes = Base64.decodeBytes( server.config.key );
+        byte[] keyBytes = Base64Fast.decodeBytes( server.config.key );
         return new SecretKeySpec( keyBytes, "AES" );
     }
 
