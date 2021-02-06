@@ -186,6 +186,7 @@ public class CommandLine {
         private final Map<String, ParsedArg> argumentResults = new HashMap<>();    // maps argument reference names to argument results
 
         private boolean warn = false;  // if true, parse errors are treated as warnings (used with absent and default value resolution)...
+        private boolean positionalAbsent;  // if true, an optional positional parameter was missing
     }
 
 
@@ -529,8 +530,10 @@ public class CommandLine {
             }
 
             // if eatArgs == 0, then we have an optional parameter with no argument, so use the default value...
-            if( eatArgs == 0 )
+            if( eatArgs == 0 ) {
+                _context.positionalAbsent = true;
                 resolveAndAddValue( _context, def, def.defaultValue );
+            }
 
             // otherwise, eat the appropriate number of arguments...
             else {
@@ -541,6 +544,7 @@ public class CommandLine {
                         throw new ParseException( "Missing one or more mandatory positional arguments" );
 
                     // add the next value...
+                    _context.positionalAbsent = false;
                     resolveAndAddValue( _context, def, _context.positionalArgs.get( pai ) );
 
                     // bump our argument index...
@@ -569,7 +573,9 @@ public class CommandLine {
         Object value = resolveParameterValue( _context, _def, _parameter );
 
         // get our updated parse results for this argument...
-        ParsedArg result = _context.argumentResults.get( _def.referenceName ).add( value );
+        ParsedArg result = _context.positionalAbsent
+                ? _context.argumentResults.get( _def.referenceName ).addDefaultPositional( value )
+                : _context.argumentResults.get( _def.referenceName ).add( value );
 
         // if we've gotten too many of this particular argument, barf...
         if( (_def.maxAllowed > 0) && (result.appearances > _def.maxAllowed) )

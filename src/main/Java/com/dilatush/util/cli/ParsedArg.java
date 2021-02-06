@@ -118,6 +118,18 @@ public class ParsedArg {
 
 
     /**
+     * Returns a new instance of {@link ParsedArg} indicating the argument was not present on the command line, but had a default value.  This does
+     * nothing except add the value.
+     *
+     * @param _value The parameter value to add.
+     * @return the new instance of {@link ParsedArg}
+     */
+    public ParsedArg addDefaultPositional( final Object _value ) {
+        return new ParsedArg( false, _value, initValues( _value ), 0, argumentDefinition );
+    }
+
+
+    /**
      * Returns a newly instantiated immutable list containing one element with the given value.
      *
      * @param _value The value to put in the list.
