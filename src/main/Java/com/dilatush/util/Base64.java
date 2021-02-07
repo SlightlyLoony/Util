@@ -73,7 +73,7 @@ public class Base64 {
 
 
     /**
-     * Returns a base 64 string that encodes the given bytes.  Throws an {@link IllegalArgumentException]} if the bytes are missing or are zero-length.
+     * Returns a base 64 string that encodes the given bytes.  Throws an {@link IllegalArgumentException} if the bytes are missing or are zero-length.
      *
      * @param _bytes the bytes to encode to base 64.
      * @return the base 64 encoding of the specified bytes.
