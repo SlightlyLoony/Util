@@ -21,8 +21,8 @@ import java.util.logging.Logger;
  * <p>By "synchronous" we mean that asynchronously published events (from any thread) are dispatched serially on a single thread, simplifying the code
  * in the subscribed event handling functions.  This also, of course, introduces some significant limitations, especially sensitivity to the execution
  * time of subscribed handlers and a complete lack of parallelization in the event handling.  Published events are queued until they are dispatched to
- * event handlers. By default, this queue has a capacity of 100 events.  This capacity can be modified by setting the system property
- * <code>com.dilatush.util.syncevents.max_capacity</code> to the desired capacity <i>before</i> the first call to {@link #getInstance()}.</p>
+ * event handlers. By default, this queue has a capacity of 100 events.  This capacity can be modified by using the {@link #getInstance(int)}
+ * getter for the first usage in the process.</p>
  * <p>We strongly recommend the following "best practices":</p>
  * <ul>
  *     <li>Use immutable instances for events.  Mutable events provide a pathway for cross-thread synchronization issues.</li>
@@ -54,39 +54,23 @@ import java.util.logging.Logger;
  */
 public class SynchronousEvents {
 
+    private static final Logger LOGGER                    = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
+    private static final int    DEFAULT_MAX_QUEUED_EVENTS = 100;
 
-    public static final String MAX_CAPACITY_PROPERTY = "com.dilatush.util.syncevents.max_capacity";
+    private static SynchronousEvents instance       = null;
 
-    private static final Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
-    private static final String DEFAULT_MAX_QUEUED_EVENT_CAPACITY = "100";
-
-    private static SynchronousEvents instance = null;
-
-    private final ArrayBlockingQueue< SynchronousEvent >           events;
-    @SuppressWarnings("rawtypes")  // it's ok here, as we check the type in the only place where entries are added...
-    private final Map< Class, List< SynchronousEventSubscriber > > subscriptions;
+    private final ArrayBlockingQueue< SynchronousEvent >              events;
+    private final Map< Class<?>, List< SynchronousEventSubscriber > > subscriptions;
 
 
     /**
      * Creates a new instance of this class.  This constructor has private access, and is only called once, to create the singleton instance of this
      * class on the first invocation of {@link #getInstance()}.
      */
-    private SynchronousEvents() {
-
-        // figure out whether we're using a specified queue size or the default...
-        String capacityStr = DEFAULT_MAX_QUEUED_EVENT_CAPACITY;
-        if( System.getProperties().contains( MAX_CAPACITY_PROPERTY ) )
-            capacityStr = System.getProperty( MAX_CAPACITY_PROPERTY, DEFAULT_MAX_QUEUED_EVENT_CAPACITY );
-        int capacity;
-        try {
-            capacity = Math.abs( Integer.parseInt( capacityStr ) );
-        }
-        catch( NumberFormatException _e ) {
-            capacity = Integer.parseInt( DEFAULT_MAX_QUEUED_EVENT_CAPACITY );
-        }
+    private SynchronousEvents( final int _maxQueued ) {
 
         // create the simple blocking queue that contains published, unhandled events...
-        events = new ArrayBlockingQueue<>( capacity );
+        events = new ArrayBlockingQueue<>( _maxQueued );
 
         // create the a map from event type to the list of subscribers to that event...
         subscriptions = new HashMap<>();
@@ -172,9 +156,28 @@ public class SynchronousEvents {
     }
 
 
-    public static SynchronousEvents getInstance() {
+    /**
+     * Return the one and only instance of this class.  If this is the first time a {@code getInstance()} method has been called, the class will be
+     * instantiated with the default maximum queue size.
+     *
+     * @return the one and only instance of this class
+     */
+    public static synchronized SynchronousEvents getInstance() {
         if( instance == null )
-            instance = new SynchronousEvents();
+            instance = new SynchronousEvents( DEFAULT_MAX_QUEUED_EVENTS );
+        return instance;
+    }
+
+
+    /**
+     * Return the one and only instance of this class.  If this is the first time a {@code getInstance()} method has been called, the class will be
+     * instantiated with the given maximum queue size.
+     *
+     * @return the one and only instance of this class
+     */
+    public static synchronized SynchronousEvents getInstance( final int _maxQueued ) {
+        if( instance == null )
+            instance = new SynchronousEvents( _maxQueued );
         return instance;
     }
 
@@ -206,8 +209,8 @@ public class SynchronousEvents {
      * @param _handler the handler for the event
      * @param _eventClass the class of event to be subscribed.
      */
-    @SuppressWarnings("rawtypes")
-    public static void subscribeToEvent( final SynchronousEventSubscriber _handler, final Class _eventClass ) {
+    @SuppressWarnings( "unused" )
+    public static void subscribeToEvent( final SynchronousEventSubscriber _handler, final Class<?> _eventClass ) {
         publishEvent( new SubscribeEvent( new SubscriptionDefinition( _handler, _eventClass ) ) );
     }
 
@@ -229,8 +232,8 @@ public class SynchronousEvents {
      * @param _handler the handler for the event
      * @param _eventClass the class of event to be subscribed.
      */
-    @SuppressWarnings("rawtypes")
-    public static void unsubscribeFromEvent( final SynchronousEventSubscriber _handler, final Class _eventClass ) {
+    @SuppressWarnings( "unused" )
+    public static void unsubscribeFromEvent( final SynchronousEventSubscriber _handler, final Class<?> _eventClass ) {
         publishEvent( new UnsubscribeEvent( new SubscriptionDefinition( _handler, _eventClass ) ) );
     }
 
