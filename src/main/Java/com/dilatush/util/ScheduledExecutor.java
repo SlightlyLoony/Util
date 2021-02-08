@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.*;
+import java.util.logging.Logger;
 
 /**
  * This class embeds the Java standard scheduled executor and delegates all the standard {@link ScheduledExecutorService} methods to it.  However,
@@ -15,8 +16,13 @@ import java.util.concurrent.*;
 @SuppressWarnings( "unused" )
 public class ScheduledExecutor implements ScheduledExecutorService {
 
+    final static private Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
+
     // the standard scheduled executor service that we're delegating to...
     private final ScheduledExecutorService service;
+
+    // a counter to let the threads have different names...
+    private int threadNumber = 0;
 
 
     /**
@@ -26,12 +32,24 @@ public class ScheduledExecutor implements ScheduledExecutorService {
      * @param _daemon If {@code true}, the executor threads will be daemon threads; otherwise they will be standard user threads.
      */
     public ScheduledExecutor( final int _threads, final boolean _daemon ) {
+
+        // make a thread factory...
         ThreadFactory threadFactory = (runnable) -> {
             Thread thread = Executors.defaultThreadFactory().newThread( runnable );
             thread.setDaemon( _daemon );
-            thread.setName( "ScheduledExecutor" );
+            thread.setName( "ScheduledExecutor" + threadNumber );
+            threadNumber++;
+
+            // make sure we've got permission to modify this thread...
+            try {
+                thread.checkAccess();
+            }
+            catch( SecurityException _se ) {
+                LOGGER.warning( "Thread can't be modified: add 'modifyThread' RuntimePermission to java.policy file" );
+            }
             return thread;
         };
+
         service = new ScheduledThreadPoolExecutor( _threads, threadFactory );
     }
 
