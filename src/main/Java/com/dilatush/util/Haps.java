@@ -101,20 +101,6 @@ public final class Haps<E extends Enum<E>> {
 
 
     /**
-     * Subscribe to the given Hap with a listener that receives both the Hap and its associated data.  This kind of subscription is mainly useful if
-     * for some reason you have a single listener for multiple kinds of Haps.  We wish you wouldn't subscribe a single listener to multiple kinds of
-     * Haps, but if you really want to, you can.  Yes, we're being judgemental here.
-     *
-     * @param _hapEnum The Hap to subscribe to.
-     * @param _listener The {@code BiConsumer<Hap,Object>} that listens for the given Hap.
-     * @return an opaque object (a handle) that must be used if unsubscribing from this subscription
-     */
-    public Object subscribeToHapAndData( final E _hapEnum, final BiConsumer<E, Object> _listener ) {
-        return subscribeImpl( SubscriptionType.HAPDATA, _hapEnum, _listener );
-    }
-
-
-    /**
      * Subscribe to the given Hap with a listener that receives neither the Hap or its associated data.  This kind of subscription is most useful
      * when you want to take some action on the occurrence of some particular Hap, and that Hap either has no associated data or it makes no
      * difference what that data is.
@@ -129,21 +115,6 @@ public final class Haps<E extends Enum<E>> {
 
 
     /**
-     * Subscribe to the given Hap with a listener that receives just the Hap (and not its associated data).  This kind of subscription is mainly
-     * useful if for some reason you have a single listener for multiple kinds of Haps, and those Haps either have no associated data or it makes
-     * no difference what that data is.  We wish you wouldn't subscribe a single listener to multiple kinds of Haps, but if you really want to, you
-     * can.  Yes, we're being judgemental here.
-     *
-     * @param _hapEnum The Hap to subscribe to.
-     * @param _listener The {@code Consumer<Hap>} that listens for the given Hap.
-     * @return an opaque object (a handle) that must be used if unsubscribing from this subscription
-     */
-    public Object subscribeToHap( final E _hapEnum, final Consumer<E> _listener ) {
-        return subscribeImpl( SubscriptionType.HAP, _hapEnum, _listener );
-    }
-
-
-    /**
      * Subscribe to the given Hap with a listener that receives just the Hap's associated data (and not the Hap itself).  Note that it is possible
      * for the associated data to be {@code null}.  This kind of subscription is most useful for Haps used to publish some kind of information.
      *
@@ -151,8 +122,36 @@ public final class Haps<E extends Enum<E>> {
      * @param _listener The {@code Consumer<Object>} that listens for the given Hap.
      * @return an opaque object (a handle) that must be used if unsubscribing from this subscription
      */
-    public Object subscribeToData( final E _hapEnum, final Consumer<Object> _listener ) {
+    public Object subscribe( final E _hapEnum, final Consumer<Object> _listener ) {
         return subscribeImpl( SubscriptionType.DATA, _hapEnum, _listener );
+    }
+
+
+    /**
+     * <p>Subscribe to the given Hap with a listener that receives just the Hap (and not its associated data).</p>
+     * <p>This kind of subscription is mainly useful if you need a single listener for multiple kinds of Haps, instead of a listener for each
+     * kind.</p>
+     *
+     * @param _hapEnum The Hap to subscribe to.
+     * @param _listener The {@code Consumer<Hap>} that listens for the given Hap.
+     * @return an opaque object (a handle) that must be used if unsubscribing from this subscription
+     */
+    public Object subscribeWithHap( final E _hapEnum, final Consumer<E> _listener ) {
+        return subscribeImpl( SubscriptionType.HAP, _hapEnum, _listener );
+    }
+
+
+    /**
+     * <p>Subscribe to the given Hap with a listener that receives both the Hap and its associated data.</p>
+     * <p>This kind of subscription is mainly useful if you need a single listener for multiple kinds of Haps, instead of a listener for each
+     * kind.</p>
+     *
+     * @param _hapEnum The Hap to subscribe to.
+     * @param _listener The {@code BiConsumer<Hap,Object>} that listens for the given Hap.
+     * @return an opaque object (a handle) that must be used if unsubscribing from this subscription
+     */
+    public Object subscribeWithHap( final E _hapEnum, final BiConsumer<E, Object> _listener ) {
+        return subscribeImpl( SubscriptionType.HAPDATA, _hapEnum, _listener );
     }
 
 
@@ -195,6 +194,11 @@ public final class Haps<E extends Enum<E>> {
     }
 
 
+    /**
+     * The {@link Runnable} functional implementation that runs in this class' {@link ExecutorService}.  It blocks until a {@link Hap} is available
+     * in the queue, then removes that Hap and handles it.  System Haps are detected by their null Hap enum value; they are handled separately.  All
+     * other Haps are dispatched to all their listeners.
+     */
     private void dispatcher() {
 
         try {
@@ -211,7 +215,7 @@ public final class Haps<E extends Enum<E>> {
 
                 // otherwise, dispatch it...
                 else
-                    dispatch( hap );
+                    handleNormalHap( hap );
             }
         }
         catch( InterruptedException _e ) {
@@ -220,8 +224,18 @@ public final class Haps<E extends Enum<E>> {
     }
 
 
+    /**
+     * <p>Handles the dispatching of a normal Hap to its listeners.  This method looks up the list of {@link HapsData} records for the given Hap in the
+     * dispatch table; each of those records describes a subscriber (including the listener).  Each listener on that list is called.  The kind of
+     * listener depends on the type of subscription, which is described by the subscription type field in the HapsData record.  This method does
+     * an unchecked cast of the listener to the correct type, based on that subscription type.  Any changes to this logic must be done with great
+     * care to ensure the integrity of this little "trick".</p>
+     * <p>Any unhandled exceptions thrown by listeners are caught, logged, and otherwise ignored.</p>
+     *
+     * @param hap The normal Hap to handle.
+     */
     @SuppressWarnings( "unchecked" )
-    private void dispatch( final Hap<E> hap ) {
+    private void handleNormalHap( final Hap<E> hap ) {
 
         try {
             // for each of our subscribers...
@@ -237,50 +251,87 @@ public final class Haps<E extends Enum<E>> {
                 }
             } );
         }
+
+        // we catch every exception here, log it, and then keep on going...
         catch( Exception _exception ) {
             LOGGER.log( Level.SEVERE, "Unhandled exception in Hap listener", _exception );
         }
     }
 
 
+    /**
+     * Handle a system Hap, for subscribing or unsubscribing.
+     *
+     * @param _hap The system Hap to handle.
+     */
     private void handleSystemHap( final Hap<E> _hap ) {
 
         // get our system data...
         HapsData<E> data = cast( _hap.data );
 
+        // get the list of HapsData records with the current subscribers to this Hap...
+        List<HapsData<E>> subscribers = dispatch.get( data.hapEnum.ordinal() );
+
         // do whatever we're supposed to do...
         switch( data.action ) {
 
             case SUBSCRIBE:
-                dispatch.get( data.hapEnum.ordinal() ).add( data );
+                subscribers.add( data );     // add our new subscriber...
                 break;
 
             case UNSUBSCRIBE:
-                dispatch.get( data.hapEnum.ordinal() ).remove( data );
+                subscribers.remove( data );  // remove this subscriber...
                 break;
         }
     }
 
 
+    /**
+     * Make an unchecked cast of the data {@link Object} from a system Hap to a {@link HapsData} (which it had better be!).  This is in a method only
+     * so that we can annotate it to suppress the unchecked warning.
+     *
+     * @param _data The data Object to cast.
+     * @return the HapsData instance that needed to be cast
+     */
     @SuppressWarnings( "unchecked" )
     private HapsData<E> cast( Object _data ) {
         return (HapsData<E>) _data;
     }
 
 
+    /**
+     * The kinds of actions that can be described in a {@link HapsData} instance.
+     */
     private enum HapsAction { SUBSCRIBE, UNSUBSCRIBE }
-    
+
+
+    /**
+     * The kinds of subscriptions that can be described in a {@link HapsData} instance.
+     */
     private enum SubscriptionType { DATA, HAP, HAPDATA, ACTION }
 
 
+    /**
+     * A record that describes a subscription and the action being taken (subscribe or unsubscribe).  The {@link #equals(Object)} and
+     * {@link #hashCode()} implementations deliberately exclude the {@link #action} field so that a record describing an unsubscribe will match
+     * the record describing the subscription that is stored in the dispatch table.
+     */
     private static class HapsData<E> {
 
-        private final HapsAction       action;
-        private final SubscriptionType subscriptionType;
-        private final E                hapEnum;
-        private final Object           listener;  // actually either an instance of BiConsumer<E, Object> or of Consumer<E>...
+        private final HapsAction       action;              // subscribe or unsubscribe...
+        private final SubscriptionType subscriptionType;    // the type of subscription, set by the subscribe() methods...
+        private final E                hapEnum;             // the enum defining the type of Hap...
+        private final Object           listener;            // one of four types; is cast to the right one in handleNormalHap()...
 
 
+        /**
+         * Create a new instance of this class with the given values...
+         *
+         * @param _action The action to take (subscribe or unsubscribe).
+         * @param _subscriptionType The type of subscription (to the Hap enum, the associated data, neither, or both).
+         * @param _hapEnum The enum defining the type of Hap.
+         * @param _listener The listener, which may be any of four types depending on the subscription type.
+         */
         private HapsData( final HapsAction _action, final SubscriptionType _subscriptionType, final E _hapEnum, final Object _listener ) {
             action           = _action;
             subscriptionType = _subscriptionType;
@@ -288,11 +339,26 @@ public final class Haps<E extends Enum<E>> {
             listener         = _listener;
         }
 
+
+        /**
+         * Returns a new instance of this class that is the same as this instance, except that the action in the new instance is unsubscribe.
+         *
+         * @return the new {@link HapsData} instance
+         */
         private HapsData<E> toUnsubscribe() {
             return new HapsData<>( HapsAction.UNSUBSCRIBE, subscriptionType, hapEnum, listener );
         }
 
 
+        /**
+         * Returns {@code true} if this instance is equal to the given {@link Object}.  Note that the action field is deliberately ignored.  The
+         * listener field (which is a lambda) <i>is</i> included, when ordinarily lambda objects cannot be compared (as their equals(Object)
+         * methods are not implemented.  It works in this case because we are always comparing the same instance of the lambda, and the default
+         * {@link Object#equals(Object)} method works fine for that.
+         *
+         * @param _o The object to compare to this object.
+         * @return {@code true} if this instance is equal to the given {@link Object}
+         */
         @Override
         public boolean equals( final Object _o ) {
             if( this == _o ) return true;
@@ -302,6 +368,11 @@ public final class Haps<E extends Enum<E>> {
         }
 
 
+        /**
+         * The hash code for this object.
+         *
+         * @return the hash code for this object
+         */
         @Override
         public int hashCode() {
             return Objects.hash( subscriptionType, hapEnum, listener );
@@ -322,11 +393,26 @@ public final class Haps<E extends Enum<E>> {
     }
 
 
+    /**
+     * Return a new instance of a system Hap (meaning a Hap with a null Hap enum) with the given {@link HapsData} instance as its associated data.
+     *
+     * @param _data The HapsData record for this Hap.
+     * @return the new instance of a system Hap
+     */
     private Hap<E> getSystemHap( final HapsData<E> _data ) {
         return new Hap<>( null, _data );
     }
 
 
+    /**
+     * Return an instance of a {@link Hap} with the given Hap enum defining the type of Hap, and the optional associated data (which may be
+     * {@code null}).  If the associated data is not {@code null}, then a new Hap instance is created.  If the associated data <i>is</i> {@code null},
+     * then a cached (and reusable) Hap instance is returned.  The cache of reusable Haps is created in {@link Haps()}.
+     *
+     * @param _hapEnum The enum defining what type of Hap is needed.
+     * @param _data The optional data associated with this Hap.
+     * @return the instance of Hap
+     */
     private Hap<E> getHap( final E _hapEnum, final Object _data ) {
 
         if( _hapEnum == null )
@@ -336,19 +422,34 @@ public final class Haps<E extends Enum<E>> {
     }
 
 
+    /**
+     * Return a cached (and reusable) Hap instance is returned.  The cache of reusable Haps is created in {@link Haps()}.
+     *
+     * @param _hapEnum The enum defining what type of Hap is needed.
+     * @return the instance of Hap
+     */
     private Hap<E> getHap( final E _hapEnum ) {
         return hapCache.get( _hapEnum.ordinal() );
     }
 
 
     /**
+     * Instances of this class define a Hap that can be queued and dispatched.
+     *
      * @author Tom Dilatush  tom@dilatush.com
      */
     private static class Hap<E extends Enum<E>> {
 
-        private final E hap;
-        private final Object data;
+        private final E hap;       // the enum defining what type of Hap this is (null for system Hap)...
+        private final Object data; // the optional data associated with this Hap...
 
+
+        /**
+         * Create a new instance of Hap with the given values.
+         *
+         * @param _hap The enum defining what type of Hap this is (null for system Hap).
+         * @param _data The optional data associated with this Hap.
+         */
         private Hap( final E _hap, final Object _data ) {
             hap = _hap;
             data = _data;
