@@ -26,8 +26,9 @@ public class ExecutorService implements java.util.concurrent.ExecutorService {
 
 
     /**
-     * Creates an executor service with the given minimum and maximum thread pool size, the given keepalive time for idle threads when more than the
-     * {@code _minPoolSize} threads are alive, the given daemon or user thread mode, and the given maximum size of task queue (which may be zero).
+     * Creates a new executor service instance with the given minimum and maximum thread pool size, the given keepalive time for idle threads when
+     * more than the {@code _minPoolSize} threads are alive, the given daemon or user thread mode, and the given maximum size of task queue (which may
+     * be zero).
      *
      * @param _minPoolSize The minimum size of the thread pool.  This many threads will always be running, even if idle.
      * @param _maxPoolSize The maximum size of the thread pool.  If this is greater than the minimum size, then submitted tasks will create
@@ -44,7 +45,14 @@ public class ExecutorService implements java.util.concurrent.ExecutorService {
                             final boolean _daemon, final int _maxQueued, final boolean _callerRuns ) {
 
         // fail fast if we got some bogus arguments...
-
+        if( _minPoolSize < 0 )
+            throw new IllegalArgumentException( "Invalid minimum thread pool size: " + _minPoolSize );
+        if( _maxPoolSize < _minPoolSize )
+            throw new IllegalArgumentException( "Invalid maximum thread pool size: " + _maxPoolSize );
+        if( (_keepAliveTime == null) || _keepAliveTime.isNegative() )
+            throw new IllegalArgumentException( "Keepalive time is missing or negative" );
+        if( _maxQueued < 0 )
+            throw new IllegalArgumentException( "Invalid maximum queue size: " + _maxQueued );
 
         // make a thread factory...
         ThreadFactory threadFactory = (runnable) -> {
@@ -72,6 +80,38 @@ public class ExecutorService implements java.util.concurrent.ExecutorService {
         // now we can build our executor!
         executorService = new ThreadPoolExecutor( _minPoolSize, _maxPoolSize, _keepAliveTime.toMillis(),
                 TimeUnit.MILLISECONDS, blockingQueue, threadFactory, handler );
+    }
+
+
+    /**
+     * Creates a new executor service instance with a fixed single daemon thread that will queue a maximum of 100 tasks and run them in the caller's
+     * thread if the queue becomes full.
+     */
+    public ExecutorService() {
+        this( 1, 1, Duration.ZERO, true, 100, true );
+    }
+
+
+    /**
+     * Creates a new executor service instance with a fixed pool of daemon threads of the given pool size and no queue; if all the threads are busy
+     * then tasks will run in the caller's thread.
+     *
+     * @param _poolSize The size of the thread pool.
+     */
+    public ExecutorService( final int _poolSize ) {
+        this( _poolSize, _poolSize, Duration.ZERO, true, 0, true );
+    }
+
+
+    /**
+     * Creates a new executor service instance with a fixed pool of daemon threads of the given pool size that will queue the given maximum number
+     * of tasks and run them in the caller's thread if the queue becomes full.
+     *
+     * @param _poolSize The size of the thread pool.
+     * @param _maxQueued The maximum number of tasks that may be queued when there are no threads available to run them.
+     */
+    public ExecutorService( final int _poolSize, final int _maxQueued ) {
+        this( _poolSize, _poolSize, Duration.ZERO, true, _maxQueued, true );
     }
 
 
