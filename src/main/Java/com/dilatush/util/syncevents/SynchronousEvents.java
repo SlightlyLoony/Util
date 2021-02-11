@@ -173,6 +173,7 @@ public class SynchronousEvents {
      * Return the one and only instance of this class.  If this is the first time a {@code getInstance()} method has been called, the class will be
      * instantiated with the given maximum queue size.
      *
+     * @param _maxQueued The maximum number of events to queue.
      * @return the one and only instance of this class
      */
     public static synchronized SynchronousEvents getInstance( final int _maxQueued ) {

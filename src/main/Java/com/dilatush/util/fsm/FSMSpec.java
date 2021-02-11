@@ -1,5 +1,6 @@
 package com.dilatush.util.fsm;
 
+import com.dilatush.util.ScheduledExecutor;
 import com.dilatush.util.fsm.events.FSMEvent;
 
 import java.util.*;
@@ -30,6 +31,7 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
     /*package-private*/ final Map<S,FSMStateAction<S,E>>                                            onEntryActions;
     /*package-private*/ final Map<S,FSMStateAction<S,E>>                                            onExitActions;
     /*package-private*/ final Map<E,FSMEventAction<S,E>>                                            eventActions;
+    /*package-private*/ ScheduledExecutor scheduler;
 
 
     private final List<String>                 errorMessages;
@@ -114,11 +116,29 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
 
 
     /**
-     * Enable event scheduling in the FSM, including FSM state timeouts.  Event scheduling is disabled by default.  When event scheduling is enabled,
-     * an additional thread is created to handle the scheduling.
+     * Enable event scheduling in the FSM, including FSM state timeouts.  Event scheduling is disabled by default.  When event scheduling is enabled
+     * with this method, an additional thread is created in the FSM to handle the scheduling.
      */
     public void enableEventScheduling() {
         eventScheduling = true;
+    }
+
+
+    /**
+     * Enable event scheduling in this FSM, including state timeouts, and use the given scheduler to do the scheduling.  Event scheduling is disabled
+     * by default.  If enabled by this method, there will not be an additional thread created in the FSM for scheduling.
+     *
+     * @param _scheduler The {@link ScheduledExecutor} to use for event scheduling.
+     */
+    @SuppressWarnings( "unused" )
+    public void enableEventScheduling( final ScheduledExecutor _scheduler ) {
+
+        // fail fast if we got a null...
+        if( _scheduler == null )
+            throw new IllegalArgumentException( "Missing scheduler" );
+
+        eventScheduling = true;
+        scheduler = _scheduler;
     }
 
 

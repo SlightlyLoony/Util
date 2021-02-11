@@ -1,14 +1,13 @@
 package com.dilatush.util.fsm.events;
 
+import com.dilatush.util.ScheduledExecutor;
 import com.dilatush.util.fsm.FSM;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Instances of this class create {@link FSMEvent} instances from the event's identifying enum and optional associated data, and also schedule
@@ -24,7 +23,7 @@ public class FSMEvents<S extends Enum<S>,E extends Enum<E>> {
     private final List<FSMSimpleEvent<E>> simpleEventCache;
 
     // the scheduled executor for scheduled events, IF event scheduling is enabled...
-    private final ScheduledExecutorService eventScheduler;
+    private final ScheduledExecutor eventScheduler;
 
     // the FSM this instance is associated with...
     private final FSM<S,E> fsm;
@@ -38,7 +37,7 @@ public class FSMEvents<S extends Enum<S>,E extends Enum<E>> {
      * @param _eventScheduler The event scheduler for this instance (may be {@code null} if scheduled events are not configured).
      * @param _event A sample event.
      */
-    public FSMEvents( final FSM<S,E> _fsm, final ScheduledExecutorService _eventScheduler, final E _event ) {
+    public FSMEvents( final FSM<S,E> _fsm, final ScheduledExecutor _eventScheduler, final E _event ) {
 
         fsm = _fsm;
         eventScheduler = _eventScheduler;
@@ -127,8 +126,7 @@ public class FSMEvents<S extends Enum<S>,E extends Enum<E>> {
         FSMEvent<E> cancellableEvent = (_data == null) ? new FSMCancellableEvent<>( _event ) : new FSMCancellableDataEvent<>( _event, _data );
         ScheduledFuture<?> scheduledFuture = eventScheduler.schedule(
                 new EventSender( cancellableEvent ),   // the Runnable with our event ready to post...
-                _delay.toNanos(),                      // the delay in nanoseconds...
-                TimeUnit.NANOSECONDS                   // tell the scheduler that it's in nanoseconds...
+                _delay                                 // the delay...
         );
         cancellableEvent.setFuture( scheduledFuture ); // stuff the scheduled future into our cancellable event...
         return cancellableEvent;

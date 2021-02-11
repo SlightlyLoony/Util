@@ -131,6 +131,7 @@ public class ScheduledExecutor implements ScheduledExecutorService {
     /**
      * Creates and executes a {@link ScheduledFuture} that executes after the given delay.
      *
+     * @param <V> The return value type of the function to execute.
      * @param _callable The function to execute.
      * @param _delay The time from now to delay execution.
      * @return a {@link ScheduledFuture} that can be used to extract result or cancel

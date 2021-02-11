@@ -1,5 +1,6 @@
 package com.dilatush.util.fsm;
 
+import com.dilatush.util.ScheduledExecutor;
 import com.dilatush.util.Threads;
 import com.dilatush.util.fsm.events.FSMEvent;
 import com.dilatush.util.fsm.events.FSMEvents;
@@ -157,13 +158,17 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
         }
 
         // if we're supporting event scheduling, set up the scheduled executor...
-        ScheduledExecutorService eventScheduler;
-        if( eventScheduling )
-            eventScheduler = Executors.newSingleThreadScheduledExecutor( new Threads.DaemonThreadFactory( "FSMEventScheduler" ));
+        ScheduledExecutor eventScheduler = null;
+        if( eventScheduling ) {
 
-        // otherwise, null the field to make the compiler happy...
-        else
-            eventScheduler = null;
+            // if the spec supplied a scheduler, use it...
+            if( _spec.scheduler != null )
+                eventScheduler = _spec.scheduler;
+
+            // otherwise, start up our own scheduler...
+            else
+                eventScheduler = new ScheduledExecutor();
+        }
 
         // set up our events source...
         events = new FSMEvents<>( this, eventScheduler, _spec.eventEnums.get( 0 ) );
