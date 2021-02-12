@@ -1,12 +1,15 @@
 package com.dilatush.util;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ScheduledFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -33,7 +36,7 @@ public final class Haps<E extends Enum<E>> {
     final static private Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
 
     // the dispatch table with lists of subscribers, indexed by enum ordinal...
-    private final List<List<HapsData<E>>>    dispatch;
+    private final List<List<HapsData<E>>>      dispatch;
 
     // the queue of not-yet-dispatched Haps...
     private final ArrayBlockingQueue<Hap<E>>   queue;
@@ -41,18 +44,25 @@ public final class Haps<E extends Enum<E>> {
     // our cache of reusable Haps (those with no data)...
     private final List<Hap<E>>                 hapCache;
 
+    // the scheduler to use for scheduled Haps, if enabled (otherwise null)...
+    private final ScheduledExecutor            scheduler;
+
+    // a list of all the Haps...
+    private final List<E>                      haps;
+
 
     /**
-     * Create a new instance of this class with the given maximum size for the queue of not-yet-dispatched Haps, and the given sample of an enum,
-     * which must be of the same type as that specified for the generic type.  In other words, if the enum class you use to specify the types of
-     * Haps is named {@code MyHaps}, then your Haps instance will have a type of {@code Haps<MyHaps>}, and the sample must be an instance of
-     * {@code MyHaps}.  This sample is required because {@code Haps} needs get the {@code Class} object for the Haps enum class, and it cannot do this
-     * without an actual instance of the enum.
+     * Create a new instance of this class with the given maximum size for the queue of not-yet-dispatched Haps, with scheduled Haps enabled (using
+     * the given scheduler) or disabled (if the given scheduler is {@code null} , and the given sample of an enum, which must be of the same type as
+     * that specified for the generic type.  In other words, if the enum class you use to specify the types of Haps is named {@code MyHaps}, then your
+     * Haps instance will have a type of {@code Haps<MyHaps>}, and the sample must be an instance of {@code MyHaps}.  This sample is required because
+     * {@code Haps} needs get the {@code Class} object for the Haps enum class, and it cannot do this without an actual instance of the enum.
      *
      * @param _maxQueue The maximum size for the queue of not-yet-dispatched Haps.
+     * @param _scheduler The {@link ScheduledExecutor} instance to use for scheduling Haps.
      * @param _sample The sample Hap enum.
      */
-    public Haps( final int _maxQueue, final E _sample ) {
+    public Haps( final int _maxQueue, final ScheduledExecutor _scheduler, final E _sample ) {
 
         // fail fast if we're missing important stuff...
         if( _maxQueue < 10 )
@@ -61,7 +71,7 @@ public final class Haps<E extends Enum<E>> {
             throw new IllegalArgumentException( "Missing sample Hap enum" );
 
         // initialize our dispatch lists...
-        List<E> haps = getHapEnums( _sample );
+        haps = getHapEnums( _sample );
         dispatch = new ArrayList<>( haps.size() );
         haps.forEach( (hapEnum) -> {
             dispatch.add( new ArrayList<>( 25 ) );  // add an array pre-sized for 10 subscribers (almost always plenty, but will resize if needed)...
@@ -74,8 +84,43 @@ public final class Haps<E extends Enum<E>> {
         // set up our Hap queue...
         queue = new ArrayBlockingQueue<>( _maxQueue );
 
+        // set up our scheduler...
+        scheduler = _scheduler;
+
         // start up our executor and get our dispatcher going...
         new ExecutorService( 1 ).submit( this::dispatcher );
+    }
+
+
+    /**
+     * Create a new instance of this class with the given maximum size for the queue of not-yet-dispatched Haps, with scheduled Haps disabled, and the
+     * given sample of an enum, which must be of the same type as that specified for the generic type.  In other words, if the enum class you use to
+     * specify the types of Haps is named {@code MyHaps}, then your Haps instance will have a type of {@code Haps<MyHaps>}, and the sample must be an
+     * instance of {@code MyHaps}.  This sample is required because {@code Haps} needs get the {@code Class} object for the Haps enum class, and it
+     * cannot do this without an actual instance of the enum.
+     *
+     * @param _maxQueue The maximum size for the queue of not-yet-dispatched Haps.
+     * @param _sample The sample Hap enum.
+     */
+    public Haps( final int _maxQueue, final E _sample ) {
+        this( _maxQueue, false, _sample );
+    }
+
+
+    /**
+     * Create a new instance of this class with the given maximum size for the queue of not-yet-dispatched Haps, with the given event scheduling mode,
+     * and the given sample of an enum, which must be of the same type as that specified for the generic type.  In other words, if the enum class you
+     * use to specify the types of Haps is named {@code MyHaps}, then your Haps instance will have a type of {@code Haps<MyHaps>}, and the sample must
+     * be an instance of {@code MyHaps}.  This sample is required because {@code Haps} needs get the {@code Class} object for the Haps enum class, and
+     * it cannot do this without an actual instance of the enum.  If Hap scheduling is enabled, an instance of a single-threaded
+     * {@link ScheduledExecutor} will be created and used to handle the scheduling.
+     *
+     * @param _maxQueue The maximum size for the queue of not-yet-dispatched Haps.
+     * @param _enableScheduling {@code True} to enable Hap scheduling, {@code false} to disable it.
+     * @param _sample The sample Hap enum.
+     */
+    public Haps( final int _maxQueue, final boolean _enableScheduling, final E _sample ) {
+        this( _maxQueue, _enableScheduling ? new ScheduledExecutor() : null, _sample );
     }
 
 
@@ -128,30 +173,58 @@ public final class Haps<E extends Enum<E>> {
 
 
     /**
-     * <p>Subscribe to the given Hap with a listener that receives just the Hap (and not its associated data).</p>
-     * <p>This kind of subscription is mainly useful if you need a single listener for multiple kinds of Haps, instead of a listener for each
-     * kind.</p>
+     * Subscribe to the given Hap with a listener that receives just the Hap (and not its associated data), for any number of different Hap enums.  If
+     * no Hap enums are specified, then <i>all</i> Hap enums are subscribed to.  Note that the Hap enum argument is the <i>last</i> argument, not the
+     * first as on the other {@code subscribe()} methods.  This is both because the varargs argument must be the last one, and because otherwise
+     * the method signature would conflict with the other {@code subscribe()} methods.
      *
-     * @param _hapEnum The Hap to subscribe to.
      * @param _listener The {@code Consumer<Hap>} that listens for the given Hap.
-     * @return an opaque object (a handle) that must be used if unsubscribing from this subscription
+     * @param _hapEnums The Haps to subscribe to, or (if none specified), subscribe to <i>all</i> Haps.
+     * @return a list of the opaque objects (handles) that must be used if unsubscribing from these subscriptions
      */
-    public Object subscribeWithHap( final E _hapEnum, final Consumer<E> _listener ) {
-        return subscribeImpl( SubscriptionType.HAP, _hapEnum, _listener );
+    @SafeVarargs
+    public final List<Object> subscribe( final Consumer<E> _listener, final E... _hapEnums ) {
+
+        // make a list to hold all the handles we generate...
+        List<Object> handles = new ArrayList<>();
+
+        // if subscribing to all, iterate over all the enum constants...
+        if( _hapEnums.length == 0 )
+            haps.forEach( (hap) -> handles.add( subscribeImpl( SubscriptionType.HAP, hap, _listener ) ) );
+
+        // otherwise, iterate over the given enums...
+        else
+            Arrays.asList( _hapEnums ).forEach( (hap) -> handles.add( subscribeImpl( SubscriptionType.HAP, hap, _listener ) ) );
+
+        return handles;
     }
 
 
     /**
-     * <p>Subscribe to the given Hap with a listener that receives both the Hap and its associated data.</p>
-     * <p>This kind of subscription is mainly useful if you need a single listener for multiple kinds of Haps, instead of a listener for each
-     * kind.</p>
+     * Subscribe to the given Hap with a listener that receives the Hap and its associated data, for any number of different Hap enums.  If
+     * no Hap enums are specified, then <i>all</i> Hap enums are subscribed to.  Note that the Hap enum argument is the <i>last</i> argument, not the
+     * first as on the other {@code subscribe()} methods.  This is both because the varargs argument must be the last one, and because otherwise
+     * the method signature would conflict with the other {@code subscribe()} methods.
      *
-     * @param _hapEnum The Hap to subscribe to.
      * @param _listener The {@code BiConsumer<Hap,Object>} that listens for the given Hap.
-     * @return an opaque object (a handle) that must be used if unsubscribing from this subscription
+     * @param _hapEnums The Haps to subscribe to, or (if none specified), subscribe to <i>all</i> Haps.
+     * @return a list of the opaque objects (handles) that must be used if unsubscribing from these subscriptions
      */
-    public Object subscribeWithHap( final E _hapEnum, final BiConsumer<E, Object> _listener ) {
-        return subscribeImpl( SubscriptionType.HAPDATA, _hapEnum, _listener );
+    @SafeVarargs
+    public final List<Object> subscribe( final BiConsumer<E, Object> _listener, final E... _hapEnums ) {
+
+        // make a list to hold all the handles we generate...
+        List<Object> handles = new ArrayList<>();
+
+        // if subscribing to all, iterate over all the enum constants...
+        if( _hapEnums.length == 0 )
+            haps.forEach( (hap) -> handles.add( subscribeImpl( SubscriptionType.HAPDATA, hap, _listener ) ) );
+
+            // otherwise, iterate over the given enums...
+        else
+            Arrays.asList( _hapEnums ).forEach( (hap) -> handles.add( subscribeImpl( SubscriptionType.HAPDATA, hap, _listener ) ) );
+
+        return handles;
     }
 
 
@@ -186,6 +259,10 @@ public final class Haps<E extends Enum<E>> {
      */
     public void unsubscribe( final Object _handle ) {
 
+        // fail fast if we got a null...
+        if( _handle == null )
+            throw new IllegalArgumentException( "Missing handles" );
+
         // get our system data...
         HapsData<E> data = cast( _handle );
 
@@ -195,10 +272,206 @@ public final class Haps<E extends Enum<E>> {
 
 
     /**
-     * The {@link Runnable} functional implementation that runs in this class' {@link ExecutorService}.  It blocks until a {@link Hap} is available
-     * in the queue, then removes that Hap and handles it.  System Haps are detected by their null Hap enum value; they are handled separately.  All
-     * other Haps are dispatched to all their listeners.
+     * Unsubscribe from the subscriptions created with a {@code subscribe} method that returned the given {@code List&lt;Object&gt;}.
+     *
+     * @param _handles The {@link List} returned by the {@code subscribe} method used to create the subscriptions to unsubscribe from.
      */
+    public void unsubscribe( final List<Object> _handles ) {
+
+        // fail fast if we got a null...
+        if( _handles == null )
+            throw new IllegalArgumentException( "Missing handles" );
+
+        _handles.forEach( this::unsubscribe );
+    }
+
+
+    /**
+     * Schedule posting of the Hap with the given Hap enum and associated data after the given delay.
+     *
+     * @param _hapEnum The enum indicating what kind of Hap is to be posted.
+     * @param _data The optional (may be {@code null}) data associated with the Hap.
+     * @param _delay The {@link Duration} specifying the delay from now until when the Hap is to be posted.  This duration must be non-negative.
+     * @return A {@link ScheduledFuture} that allows this scheduled Hap to be cancelled.
+     * @throws IllegalStateException if scheduling is not enabled
+     */
+    public ScheduledFuture<?> schedule( final E _hapEnum, final Object _data, final Duration _delay ) {
+
+        // fail fast if the arguments are bogus...
+        argsCheck( _hapEnum, _delay );
+
+        return scheduler.schedule( () -> post( _hapEnum, _data ), _delay );
+    }
+
+
+    /**
+     * Schedule posting of the Hap with the given Hap enum (with no associated data) after the given delay.
+     *
+     * @param _hapEnum The enum indicating what kind of Hap is to be posted.
+     * @param _delay The {@link Duration} specifying the delay from now until when the Hap is to be posted.  This duration must be non-negative.
+     * @return A {@link ScheduledFuture} that allows this scheduled Hap to be cancelled.
+     * @throws IllegalStateException if scheduling is not enabled
+     */
+    public ScheduledFuture<?> schedule( final E _hapEnum, final Duration _delay ) {
+        return schedule( _hapEnum, null, _delay );
+    }
+
+
+    /**
+     * Schedule posting of the Hap with the given Hap enum and associated data first after the given initial delay, and then on average at the rate
+     * defined by the given period.  Note that if the scheduler's thread(s) become busy and can't keep up with the specified rate, the scheduled
+     * Haps will queue up and execute in a burst once the schedule <i>does</i> have time available.
+     *
+     * @param _hapEnum The enum indicating what kind of Hap is to be posted.
+     * @param _data The optional (may be {@code null}) data associated with the Hap.  Note that this data will be the same on all scheduled Haps.
+     * @param _initialDelay The {@link Duration} delay before the first scheduled Hap is posted.
+     * @param _period The (on average) period between scheduled Hap postings, after the first one.
+     * @return A {@link ScheduledFuture} that allows this scheduled Hap to be cancelled.
+     * @throws IllegalStateException if scheduling is not enabled
+     */
+    public ScheduledFuture<?> scheduleAtFixedRate( final E _hapEnum, final Object _data, final Duration _initialDelay, final Duration _period ) {
+
+        // fail fast if the arguments are bogus...
+        argsCheck( _hapEnum, _initialDelay );
+        if( (_period == null) || (_period.isNegative()) )
+            throw new IllegalArgumentException( "Period is null or invalid" );
+
+        return scheduler.scheduleAtFixedRate( () -> post( _hapEnum, _data ), _initialDelay, _period );
+    }
+
+
+    /**
+     * Check the given arguments for being null or invalid.
+     *
+     * @param _hapEnum The enum indicating what kind of Hap is to be posted.
+     * @param _initialDelay The {@link Duration} delay before the first scheduled Hap is posted.
+     */
+    private void argsCheck( final E _hapEnum, final Duration _initialDelay ) {
+
+        if( scheduler == null )
+            throw new IllegalStateException( "Scheduling Haps is disabled" );
+        if( _hapEnum == null )
+            throw new IllegalArgumentException( "Missing Hap enum" );
+        if( (_initialDelay == null) || (_initialDelay.isNegative()) )
+            throw new IllegalArgumentException( "Initial delay is null or invalid" );
+    }
+
+
+    /**
+     * Schedule posting of the Hap with the given Hap enum and associated data first after the given initial delay, and then on average at the rate
+     * defined by the given period.  The associated data is obtained by calling the given {@link Supplier} when each of the scheduled Haps is posted.
+     * Note that if the scheduler's thread(s) become busy and can't keep up with the specified rate, the scheduled Haps will queue up and execute in a
+     * burst once the schedule <i>does</i> have time available.
+     *
+     * @param _hapEnum The enum indicating what kind of Hap is to be posted.
+     * @param _supplier The {@link Supplier} to be called on each Hap posting to obtain the associated data.
+     * @param _initialDelay The {@link Duration} delay before the first scheduled Hap is posted.
+     * @param _period The (on average) period between scheduled Hap postings, after the first one.
+     * @return A {@link ScheduledFuture} that allows this scheduled Hap to be cancelled.
+     * @throws IllegalStateException if scheduling is not enabled
+     */
+    public ScheduledFuture<?> scheduleAtFixedRateWithSupplier( final E _hapEnum, final Supplier<Object> _supplier,
+                                                   final Duration _initialDelay, final Duration _period ) {
+
+        // fail fast if we got no supplier...
+        if( _supplier == null )
+            throw new IllegalArgumentException( "Missing supplier" );
+
+        return scheduleAtFixedRate( _hapEnum, _supplier.get(), _initialDelay, _period );
+    }
+
+
+    /**
+     * Schedule posting of the Hap with the given Hap enum (with no associated data) first after the given initial delay, and then on average at the
+     * rate defined by the given period.  Note that if the scheduler's thread(s) become busy and can't keep up with the specified rate, the scheduled
+     * Haps will queue up and execute in a burst once the schedule <i>does</i> have time available.
+     *
+     * @param _hapEnum The enum indicating what kind of Hap is to be posted.
+     * @param _initialDelay The {@link Duration} delay before the first scheduled Hap is posted.
+     * @param _period The (on average) period between scheduled Hap postings, after the first one.
+     * @return A {@link ScheduledFuture} that allows this scheduled Hap to be cancelled.
+     * @throws IllegalStateException if scheduling is not enabled
+     */
+    public ScheduledFuture<?> scheduleAtFixedRate( final E _hapEnum, final Duration _initialDelay, final Duration _period ) {
+        return scheduleAtFixedRate( _hapEnum, null, _initialDelay, _period );
+    }
+
+
+    /**
+     * Schedule posting of the Hap with the given Hap enum and associated data first after the given initial delay, and subsequently with the given
+     * delay from the completion of one scheduled posting to the next scheduled posting.  The average rate over time will be somewhat less than the
+     * rate defined by the given delay because of the execution time of each scheduled posting and the delays within the scheduler.  This method will
+     * not cause bursts of postings when the scheduler's thread free up after a busy period.
+     *
+     * @param _hapEnum The enum indicating what kind of Hap is to be posted.
+     * @param _data The optional (may be {@code null}) data associated with the Hap.  Note that this data will be the same on all scheduled Haps.
+     * @param _initialDelay The {@link Duration} delay before the first scheduled Hap is posted.
+     * @param _delay The delay between scheduled Hap postings.
+     * @return A {@link ScheduledFuture} that allows this scheduled Hap to be cancelled.
+     * @throws IllegalStateException if scheduling is not enabled
+     */
+    public ScheduledFuture<?> scheduleWithFixedDelay( final E _hapEnum, final Object _data, final Duration _initialDelay, final Duration _delay ) {
+
+        // fail fast if the arguments are bogus...
+        argsCheck( _hapEnum, _initialDelay );
+        if( (_delay == null) || (_delay.isNegative()) )
+            throw new IllegalArgumentException( "Delay is null or invalid" );
+
+        return scheduler.scheduleWithFixedDelay( () -> post( _hapEnum, _data ), _initialDelay, _delay );
+    }
+
+
+
+    /**
+     * Schedule posting of the Hap with the given Hap enum and associated data first after the given initial delay, and subsequently with the given
+     * delay from the completion of one scheduled posting to the next scheduled posting.  The associated data is obtained by calling the given
+     * {@link Supplier} when each of the scheduled Haps is posted.  The average rate over time will be somewhat less than the rate defined by the
+     * given delay because of the execution time of each scheduled posting and the delays within the scheduler.  This method will not cause bursts of
+     * postings when the scheduler's thread free up after a busy period.
+     *
+     * @param _hapEnum The enum indicating what kind of Hap is to be posted.
+     * @param _supplier The {@link Supplier} to be called on each Hap posting to obtain the associated data.
+     * @param _initialDelay The {@link Duration} delay before the first scheduled Hap is posted.
+     * @param _delay The delay between scheduled Hap postings.
+     * @return A {@link ScheduledFuture} that allows this scheduled Hap to be cancelled.
+     * @throws IllegalStateException if scheduling is not enabled
+     */
+    public ScheduledFuture<?> scheduleWithFixedDelayWithSupplier( final E _hapEnum, final Supplier<Object> _supplier,
+                                                                  final Duration _initialDelay, final Duration _delay ) {
+
+        // fail fast if the arguments are bogus...
+        argsCheck( _hapEnum, _initialDelay );
+        if( (_delay == null) || (_delay.isNegative()) )
+            throw new IllegalArgumentException( "Delay is null or invalid" );
+        if( _supplier == null )
+            throw new IllegalArgumentException( "Missing supplier" );
+
+        return scheduler.scheduleWithFixedDelay( () -> post( _hapEnum, _supplier.get() ), _initialDelay, _delay );
+    }
+
+
+    /**
+     * Schedule posting of the Hap with the given Hap enum with no associated data first after the given initial delay, and subsequently with the
+     * given delay from the completion of one scheduled posting to the next scheduled posting.  The average rate over time will be somewhat less than
+     * the rate defined by the given delay because of the execution time of each scheduled posting and the delays within the scheduler.  This method
+     * will not cause bursts of postings when the scheduler's thread free up after a busy period.
+     *
+     * @param _hapEnum The enum indicating what kind of Hap is to be posted.
+     * @param _initialDelay The {@link Duration} delay before the first scheduled Hap is posted.
+     * @param _delay The delay between scheduled Hap postings.
+     * @return A {@link ScheduledFuture} that allows this scheduled Hap to be cancelled.
+     * @throws IllegalStateException if scheduling is not enabled
+     */
+    public ScheduledFuture<?> scheduleWithFixedDelay( final E _hapEnum, final Duration _initialDelay, final Duration _delay ) {
+        return scheduleWithFixedDelay( _hapEnum, null, _initialDelay, _delay );
+    }
+
+
+        /**
+         * The {@link Runnable} functional implementation that runs in this class' {@link ExecutorService}.  It blocks until a {@link Hap} is available
+         * in the queue, then removes that Hap and handles it.  System Haps are detected by their null Hap enum value; they are handled separately.  All
+         * other Haps are dispatched to all their listeners.
+         */
     private void dispatcher() {
 
         try {
@@ -246,7 +519,7 @@ public final class Haps<E extends Enum<E>> {
                 switch( data.subscriptionType ) {
                     case ACTION:  ((Runnable)              data.listener).run();                       break;
                     case HAP:     ((Consumer<E>)           data.listener).accept( hap.hap );           break;
-                    case DATA:    ((Consumer<Object>)      data.listener).accept( hap.hap );           break;
+                    case DATA:    ((Consumer<Object>)      data.listener).accept( hap.data );          break;
                     case HAPDATA: ((BiConsumer<E, Object>) data.listener).accept( hap.hap, hap.data ); break;
                 }
             } );
