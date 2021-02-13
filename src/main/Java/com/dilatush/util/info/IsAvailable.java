@@ -1,7 +1,7 @@
 package com.dilatush.util.info;
 
 /**
- * Implemented by information classes that need to provide their own response to {@link Info#isAvailable}.
+ * Implemented by information classes that need to provide their own response to {@link Info#isInfoAvailable}.
  *
  * @author Tom Dilatush  tom@dilatush.com
  */

@@ -14,11 +14,11 @@ public class User {
 
 
     public void run() {
-        System.out.println( "User sees " + owner.infoViewer.get().info );
+        System.out.println( "User sees " + owner.info.getInfo() );
     }
 
 
     public void tick() {
-        System.out.println( "User sees " + owner.infoViewer.get().info );
+        System.out.println( "User sees " + owner.info.getInfo() );
     }
 }

@@ -240,7 +240,7 @@ public class ConsoleServer {
                         validate( () -> false, _messages, "class " + klassName + " does not exist" );
                 }
                 catch( NoSuchMethodException _e ) {
-                    validate( () -> false, _messages, "class " + klassName + " does not have a no-args constructor" );
+                    validate( () -> false, _messages, "class " + klassName + " does not have a public no-args constructor" );
                 }
             }
         }
