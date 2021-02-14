@@ -1,5 +1,7 @@
 package com.dilatush.util.console;
 
+import com.dilatush.util.Strings;
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -75,7 +77,7 @@ public abstract class ConsoleProvider {
     protected synchronized void writeLine( final String _line ) {
 
         try {
-            writer.write( _line );
+            writer.write( Strings.safe( _line ) );
             writer.newLine();
             writer.flush();
         }

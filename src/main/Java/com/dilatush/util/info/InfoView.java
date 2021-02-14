@@ -18,7 +18,10 @@ public class InfoView<T> implements Info<T> {
 
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern( "MMM dd, uuuu hh:mm:ss.SSS" );
 
-    private Info<T> provider;
+    // I chose to make this volatile out of an abundance of caution.  Most likely it isn't needed at all, as the general pattern of use for this
+    // class would have the provider set just once, if not at construction then shortly thereafter and in the same thread.  But just in case someone
+    // decides to use this differently than I expected, and because the penalty is small, I took the conservative route.
+    private volatile Info<T> provider;
 
 
     /**

@@ -239,9 +239,9 @@ public class Strings {
 
     /**
      * Returns the index of the choice made using the given key.  This method first filters the given list of choices by those that start with the
-     * given key (with the given case sensitivity).  If exactly one choice matched the filter, its index is returned.  If zero choices matched the
-     * give key, then {@code NO_KEY_MATCH_FOR_CHOOSER} (-1) is returned.  If more than one choice matched the filter, then
-     * {@code AMBIGUOUS_KEY_MATCH_FOR_CHOOSER} (-2) is returned.
+     * given key (with the given case sensitivity).  If exactly one choice matched the key, or if multiple choices match the key and one matches it
+     * exactly, its index is returned.  If zero choices matched the given key, then {@code NO_KEY_MATCH_FOR_CHOOSER} (-1) is returned.  If more than
+     * one choice matched the filter, then {@code AMBIGUOUS_KEY_MATCH_FOR_CHOOSER} (-2) is returned.
      *
      * @param _choices The list of strings to choose from.
      * @param _key The key to use when selecting a string.
@@ -262,9 +262,21 @@ public class Strings {
         // iterate over our choices, looking for matches...
         for( int i = 0; i < _choices.size(); i++ ) {
 
+            String choice = _choices.get( i );
+
+            // is this choice exactly the same as the key?
+            boolean same = _caseSensitive
+                    ? choice.equals( _key )
+                    : choice.equalsIgnoreCase( _key );
+
+            // if it's the same, we've got a winner; just leave with it...
+            if( same )
+                return i;
+
+            // does this choice match the key?
             boolean matched = _caseSensitive
-                    ? _choices.get( i ).startsWith( _key )
-                    : _choices.get( i ).toUpperCase().startsWith( _key.toUpperCase() );
+                    ? choice.startsWith( _key )
+                    : choice.toUpperCase().startsWith( _key.toUpperCase() );
 
             // if we matched, record it...
             if( matched ) {
