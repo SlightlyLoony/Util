@@ -172,6 +172,11 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
 
         // set up our events source...
         events = new FSMEvents<>( this, eventScheduler, _spec.eventEnums.get( 0 ) );
+
+        // if our initial state has an on-entry action, run it...
+        FSMStateAction<S,E> initialOnEntry = onEntryActions.get( state.ordinal() );
+        if( initialOnEntry != null )
+            initialOnEntry.run( states.get( state.ordinal() ) );
     }
 
 
