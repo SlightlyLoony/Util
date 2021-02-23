@@ -30,6 +30,9 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
     // the enum of the current state of the FSM, which is the only mutable field in an FSM instance...
     private       S                                                             state;
 
+    // the initial state of this FSM...
+    private final S                                                             initialState;
+
     // the optional listener for state changes...
     private final Consumer<S>                                                   stateChangeListener;
 
@@ -86,11 +89,14 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
             throw new IllegalArgumentException( "FSMSpec is not valid:\n" + _spec.getErrorMessage() );
 
         // copy what we can directly from the specification...
-        state               = _spec.initialState;
+        initialState        = _spec.initialState;
         fsmContext          = _spec.context;
         bufferedEvents      = _spec.bufferedEvents;
         eventScheduling     = _spec.eventScheduling;
         stateChangeListener = _spec.stateChangeListener;
+
+        // current state is null until init() is run...
+        state = null;
 
         // make our list of states...
         states = new ArrayList<>();
@@ -172,11 +178,6 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
 
         // set up our events source...
         events = new FSMEvents<>( this, eventScheduler, _spec.eventEnums.get( 0 ) );
-
-        // if our initial state has an on-entry action, run it...
-        FSMStateAction<S,E> initialOnEntry = onEntryActions.get( state.ordinal() );
-        if( initialOnEntry != null )
-            initialOnEntry.run( states.get( state.ordinal() ) );
     }
 
 
@@ -227,6 +228,18 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      * @param _event The event to be handled.
      */
     private void onEventImpl( final FSMEvent<E> _event ) {
+
+        // if the current state is null, then we need to set the initial state...
+        // this only happens on the first event that this FSM sees...
+        if( state == null ) {
+
+            state = initialState;
+
+            // if our initial state has an on-entry action, run it...
+            FSMStateAction<S,E> initialOnEntry = onEntryActions.get( state.ordinal() );
+            if( initialOnEntry != null )
+                initialOnEntry.run( states.get( state.ordinal() ) );
+        }
 
         // if our event is a cancellable event that has been cancelled, ignore it...
         if( _event.isCancelled() )
