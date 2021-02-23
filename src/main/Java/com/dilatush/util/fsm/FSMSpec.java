@@ -240,8 +240,9 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
      */
     public boolean isValid() {
 
-        // clear any error messages...
+        // clear any error messages and our transitions...
         errorMessages.clear();
+        transitions.clear();
 
         // iterate over all the transition definitions to map all our transitions...
         for( FSMTransitionDef<S,E> def : defs ) {

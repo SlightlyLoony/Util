@@ -143,11 +143,6 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
         for( int i = 0; i < _spec.eventEnums.size(); i++ ) eventActions.add( null );                     // fill the list with nulls for each event...
         _spec.eventActions.forEach( (event, action) -> eventActions.set( event.ordinal(), action ) );    // set any defined event actions...
 
-        // set up the initial state...
-        FSMState<S,E> initialState = states.get( state.ordinal() );
-        initialState.setLastEntered( Instant.now() );
-        initialState.setEntries( 1 );
-
         // set up our properties map...
         fsmProperties    = new HashMap<>();
 
@@ -234,6 +229,11 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
         if( state == null ) {
 
             state = initialState;
+
+            // set up the initial state...
+            FSMState<S,E> initialState = states.get( state.ordinal() );
+            initialState.setLastEntered( Instant.now() );
+            initialState.setEntries( 1 );
 
             // if our initial state has an on-entry action, run it...
             FSMStateAction<S,E> initialOnEntry = onEntryActions.get( state.ordinal() );
