@@ -76,4 +76,17 @@ public class FSMCancellableDataEvent<E extends Enum<E>> extends FSMDataEvent<E> 
         // then set our flag, in case the scheduler HAS dispatched it...
         cancelled = true;
     }
+
+
+    /**
+     * Return a string representing this instance.  If the event has no data object, then this method returns the result of the {@code toString()}
+     * method on the type {@code Enum}.  Otherwise this method returns the the result of the {@code toString()} method on the type {@code Enum},
+     * followed by a space, and finally the result of the {@code toString()} method on the data object.
+     *
+     * @return a string representing this instance
+     */
+    @Override
+    public String toString() {
+        return "Cancellable: " + ((data == null) ? event.toString() : event.toString() + " " + data.toString());
+    }
 }

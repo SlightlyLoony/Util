@@ -86,4 +86,15 @@ public class FSMCancellableEvent<E extends Enum<E>> extends FSMEvent<E> {
         // then set our flag, in case the scheduler HAS dispatched it...
         cancelled = true;
     }
+
+
+    /**
+     * Return a string representing this instance, which is "Cancellable" plus the result of the {@code toString()} method of the event enum.
+     *
+     * @return a string representing this instance
+     */
+    @Override
+    public String toString() {
+        return "Cancellable: " + event.toString();
+    }
 }

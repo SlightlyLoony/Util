@@ -13,7 +13,7 @@ import com.dilatush.util.fsm.FSM;
     /**
      * The event's optional data.
      */
-    private final Object data;
+    protected final Object data;
 
 
     /**

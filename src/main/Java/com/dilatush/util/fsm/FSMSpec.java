@@ -25,6 +25,7 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
     /*package-private*/ boolean                                                                     bufferedEvents;
     /*package-private*/ int                                                                         maxBufferedEvents = DEFAULT_MAX_BUFFERED_EVENTS;
     /*package-private*/ Consumer<S>                                                                 stateChangeListener;
+    /*package-private*/ Consumer<FSMEvent<E>>                                                       eventListener;
     /*package-private*/ List<FSMStateSpec<S>>                                                       stateSpecs;
     /*package-private*/ final List<E>                                                               eventEnums;
     /*package-private*/ final List<S>                                                               stateEnums;
@@ -112,6 +113,19 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
     @SuppressWarnings( "unused" )
     public void setStateChangeListener( final Consumer<S> _listener ) {
         stateChangeListener = _listener;
+    }
+
+
+    /**
+     * Sets the optional event listener for this FSM.  If provided, the listener will be called for every event processed by this FSM.  The listener
+     * could be called from multiple threads, and it must not block or consume significant CPU time.  What constitutes "significant" is of course
+     * completely application dependent.
+     *
+     * @param _eventListener the event listener for this FSM
+     */
+    @SuppressWarnings( "unused" )
+    public void setEventListener( final Consumer<FSMEvent<E>> _eventListener ) {
+        eventListener = _eventListener;
     }
 
 
