@@ -2,6 +2,8 @@ package com.dilatush.util.noisefilter;
 
 import com.dilatush.util.AConfig;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -82,6 +84,16 @@ public class NoiseFilter {
 
         // add our new sample to the end of the list...
         samples.add( _sample );
+    }
+
+
+    /**
+     * Returns a {@link Duration} that represents the age (from the moment this call was made) of the most recent sample in the filter.
+     *
+     * @return the age of the most recent sample in this filter.
+     */
+    public Duration getAge() {
+        return Duration.between( samples.get( samples.size() - 1 ).timestamp, Instant.now( Clock.systemUTC() ) );
     }
 
 
