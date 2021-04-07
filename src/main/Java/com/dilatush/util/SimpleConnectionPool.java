@@ -148,7 +148,8 @@ public class SimpleConnectionPool {
 
     private PooledConnection createConnection() throws SQLException {
         try {
-            Class.forName( "com.mysql.cj.jdbc.Driver" ).newInstance();
+            Class<?> klass = Class.forName( "com.mysql.cj.jdbc.Driver" );
+            klass.getDeclaredConstructor().newInstance();
             String sqlURL = "jdbc:mysql://" + host + "?useSSL=false";
             return new PooledConnection( this, DriverManager.getConnection( sqlURL, userName, password ) );
         }
