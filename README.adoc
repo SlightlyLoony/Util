@@ -28,6 +28,33 @@ It's very hard to give a general description of these, as there are a wide varie
 |===
 
 === Some particular mentions...
+
+==== String substitutions
+The string substitutions provide a simple way to replace keys in a target string with other values.  Generally the substitution key/value pairs are stored in a text file, but that's not a requirement.  The substitutions are implemented in Strings.substitute().
+
+The key/value pairs must be formatted according to the following rules:
+
+* A key starts at the beginning of the file or string, or after a newline.
+* A key can be a string containing any characters other than a colon (":").  A colon terminates the key.  Generally the key should be some string that is impossible (or extremely unlikely) to appear in the actual text.  For example, `<{<{password}>}>` might be a good key.
+* Whitespace (including newlines) after a key termination colon are ignored.
+* The value may appear on the same line as the key.  In this case, the value is terminated by the next newline or the end of the file.  For instance, `<{<{password}>}>: oh,my,gobbledegook822` is a key/value pair with the key `<{<{password}>}>` and the value `oh,my,gobbledegook822`.
+* The value may appear on lines following the key, which is especially useful when the value must have newlines in it.  The value on the first line following the key is the delimiter, which is then followed by the lines of the value, which is then followed by the delimiter, repeated.  See the example below to get an idea how this works.
+* A newline-terminated value may contain any characters other than a newline.
+* A multiline value may contain anything other than the delimiter string - but this is not really a limitation, as the delimiter string is under the user's control.
+
+....
+<{<{password}>}>: oh,my,gobbledegook822
+***yikes***:
+DELIMITER
+This is a really big value.
+It appears on multiple lines.
+With this, one can control the world.
+Well, a little world.
+DELIMITER
+....
+
+Note that the substitutions are recursive - if a value contains a key, that key will be replaced by _it's_ value.
+
 ==== LogFormatter
 This is a formatter for the `java.util.logging` file or console logging, providing a format to the author's liking.  Of note, it supports logging thread names (instead of the standard thread IDs), and it supports logging stack traces for exceptions being logged.  It has some properties which modify its behavior:
 

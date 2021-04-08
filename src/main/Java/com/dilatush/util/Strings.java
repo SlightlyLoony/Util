@@ -1,9 +1,8 @@
 package com.dilatush.util;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static com.dilatush.util.General.isNull;
 
@@ -312,4 +311,50 @@ public class Strings {
         // otherwise, scan all given strings to find the longest one...
         return _strings.stream().max( Comparator.comparing( String::length ) ).get().length();
     }
+
+
+    private static final Pattern SUBBER = Pattern.compile( "^([^:\\n]*?):[\\t ]*(?:([^\\n]+?)$|\\n^([^\\n]+)$\\n(.*)^\\3$)",
+            Pattern.MULTILINE | Pattern.DOTALL );
+
+    /**
+     * Return a string that is the given source string, modified by making the substitutions in the given substitutions document.  See the project
+     * README for details about how the substitutions document works.
+     *
+     * @param _source The string to make substitutions into.
+     * @param _substitutions The substitutions document.
+     * @return the source strings with substitutions made.
+     */
+    public static String substitute( final String _source, final String _substitutions ) {
+
+        // first we turn the substitution document into a nice, easy-to-use map...
+        Map<String, String> substitutions = new HashMap<>();
+        Matcher mat = SUBBER.matcher( _substitutions );
+        while( mat.find() ) {
+            String key = mat.group( 1 );
+            String value = mat.group( 2 );
+            if( value == null ) value = mat.group( 4 );
+            substitutions.put( key, value );
+        }
+        substitutions.hashCode();
+        return null;
+    }
+
+    public static void main( final String[] _args ) {
+        String source = """
+                I wonder where I put my key?  I'm sure it was somewhere bogus.  How awful! <bubba>
+                """;
+        String substitutions = """
+                key: value
+                bogus: burger
+                awful:
+                TEST
+                This is where I get my bogus.
+                I might also buy a key there.
+                And my name is Jose.
+                TEST
+                <bubba>: John Smith
+                """;
+        String result = substitute( source, substitutions );
+    }
+
 }
