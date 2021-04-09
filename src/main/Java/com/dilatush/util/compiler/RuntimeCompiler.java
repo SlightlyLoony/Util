@@ -1,5 +1,7 @@
 package com.dilatush.util.compiler;
 
+import com.dilatush.test.Configurator;
+
 import javax.tools.*;
 import java.io.*;
 import java.lang.management.ManagementFactory;
@@ -12,8 +14,6 @@ import java.util.*;
  * @author Tom Dilatush  tom@dilatush.com
  */
 public class RuntimeCompiler {
-
-    // TODO: come up with a way to do includes for secrets (file with list of named secrets, replaced)
 
     public static void main( final String[] _args ) throws IOException, ClassNotFoundException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
 
@@ -33,6 +33,8 @@ public class RuntimeCompiler {
         // compile task...
         List<JavaFileObject> sources = new ArrayList<>();
         sources.add( new MemoryFileObject( "Test", new File( "script/Test.java" ) ) );
+        sources.add( new MemoryFileObject( "Bogus", new File( "script/Bogus.java" ) ) );
+
         List<String> options = new ArrayList<>();
         options.add( "-g" );
         options.add( "-nowarn" );
@@ -52,15 +54,19 @@ public class RuntimeCompiler {
 
         // get the class binary...
         byte[] test = fileManager.getClasses().get( "Test" );
+        byte[] bogus = fileManager.getClasses().get( "Bogus" );
 
         // load what we just compiled...
         MemoryClassLoader mcl = new MemoryClassLoader();
         Class<?> klass = mcl.load( "Test", test );
+        mcl.load( "Bogus", bogus );
         Object what = klass.getDeclaredConstructor().newInstance();
+        Configurator configurator = (Configurator) what;
 
         // now run it...
-        Method method = klass.getMethod( "config", config.getClass() );
-        method.invoke( what, config );
+        configurator.config( config );
+//        Method method = klass.getMethod( "config", Object.class );
+//        method.invoke( what, config );
 
         long duration = System.currentTimeMillis() - start;
         System.out.println( "Runtime: " + duration );
