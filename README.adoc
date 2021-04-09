@@ -40,7 +40,10 @@ The key/value pairs must be formatted according to the following rules:
 * The value may appear on the same line as the key.  In this case, the value is terminated by the next newline or the end of the file.  For instance, `<{<{password}>}>: oh,my,gobbledegook822` is a key/value pair with the key `<{<{password}>}>` and the value `oh,my,gobbledegook822`.
 * The value may appear on lines following the key, which is especially useful when the value must have newlines in it.  The value on the first line following the key is the delimiter, which is then followed by the lines of the value, which is then followed by the delimiter, repeated.  See the example below to get an idea how this works.
 * A newline-terminated value may contain any characters other than a newline.
-* A multiline value may contain anything other than the delimiter string - but this is not really a limitation, as the delimiter string is under the user's control.
+* A multiline value may contain anything other than the delimiter string - but this is not really a limitation, as the delimiter string is under the user's control.  If the terminating delimiter appears on a line by itself, the value will have a trailing newline.  If the terminating delimiter appears at the end of the last line of the value, the value will _not_ have a trailing newline.
+* Substitutions are performed in the order that they appear in the substitutions document.
+* Substitutions are _not_ recursive - if a value contains a key, that key will not be replaced by _it's_ value.
+* If the same key appears in the substitutions document multiple times, it will be processed each time, on the text that is the result of all the prior substitutions.  This is not quite recursion, although it may have a similar effect.  Note that there is no requirement that the value be the same for each occurrence of the key.
 
 ....
 <{<{password}>}>: oh,my,gobbledegook822
@@ -53,7 +56,6 @@ Well, a little world.
 DELIMITER
 ....
 
-Note that the substitutions are recursive - if a value contains a key, that key will be replaced by _it's_ value.
 
 ==== LogFormatter
 This is a formatter for the `java.util.logging` file or console logging, providing a format to the author's liking.  Of note, it supports logging thread names (instead of the standard thread IDs), and it supports logging stack traces for exceptions being logged.  It has some properties which modify its behavior:

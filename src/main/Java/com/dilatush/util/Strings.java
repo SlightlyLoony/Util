@@ -312,8 +312,12 @@ public class Strings {
         return _strings.stream().max( Comparator.comparing( String::length ) ).get().length();
     }
 
-
-    private static final Pattern SUBBER = Pattern.compile( "^([^:\\n]*?):[\\t ]*(?:([^\\n]+?)$|\\n^([^\\n]+)$\\n(.*)^\\3$)",
+    // Pattern that parses the substitution document, finding all keys and values (both single-line and multiple-line values)
+    // The important capture groups:
+    //   1: key
+    //   2: single-line values
+    //   4: multiple-line values
+    private static final Pattern SUBBER = Pattern.compile( "^([^:\\n]*?):[\\t ]*(?:([^\\n]+?)$|\\n^([^\\n]+)$\\n(.*)\\3$)",
             Pattern.MULTILINE | Pattern.DOTALL );
 
     /**
@@ -324,37 +328,23 @@ public class Strings {
      * @param _substitutions The substitutions document.
      * @return the source strings with substitutions made.
      */
+    @SuppressWarnings( "unused" )
     public static String substitute( final String _source, final String _substitutions ) {
 
-        // first we turn the substitution document into a nice, easy-to-use map...
-        Map<String, String> substitutions = new HashMap<>();
+        // first we turn the substitution document into a nice, easy-to-use list of key/value pairs...
+        List<String[]> substitutions = new ArrayList<>();
         Matcher mat = SUBBER.matcher( _substitutions );
         while( mat.find() ) {
             String key = mat.group( 1 );
             String value = mat.group( 2 );
             if( value == null ) value = mat.group( 4 );
-            substitutions.put( key, value );
+            substitutions.add( new String[] {key, value} );
         }
-        substitutions.hashCode();
-        return null;
-    }
 
-    public static void main( final String[] _args ) {
-        String source = """
-                I wonder where I put my key?  I'm sure it was somewhere bogus.  How awful! <bubba>
-                """;
-        String substitutions = """
-                key: value
-                bogus: burger
-                awful:
-                TEST
-                This is where I get my bogus.
-                I might also buy a key there.
-                And my name is Jose.
-                TEST
-                <bubba>: John Smith
-                """;
-        String result = substitute( source, substitutions );
-    }
+        // now we process that list...
+        var ref = new Object() { String result = _source; };  // effectively final result...
+        substitutions.forEach( (pair) -> ref.result = ref.result.replaceAll( pair[0], pair[1] ) );
 
+        return ref.result;
+    }
 }
