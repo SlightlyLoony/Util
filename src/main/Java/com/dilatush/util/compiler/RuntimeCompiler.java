@@ -15,11 +15,46 @@ import java.util.*;
  */
 public class RuntimeCompiler {
 
+
+    private boolean isPreviewEnabled() {
+
+        // see what the compiler options are...
+        RuntimeMXBean runtimeMxBean = ManagementFactory.getRuntimeMXBean();
+        List<String> arguments = runtimeMxBean.getInputArguments();
+
+        return arguments.contains( "--enable-preview" );
+    }
+
+
+    private String getJavaSpecificationVersion() {
+        return System.getProperty( "java.specification.version" );
+    }
+
+
+    private List<String> getCompilerOptions() {
+
+        // first get the options we always want...
+        List<String> options = new ArrayList<>();
+        options.add( "-g" );
+        options.add( "-nowarn" );
+
+        // if preview is enabled, add these options...
+        if( isPreviewEnabled() ) {
+            options.add( "--enable-preview" );
+            options.add( "-source" );
+            options.add( getJavaSpecificationVersion() );
+        }
+
+        return options;
+    }
+
     public static void main( final String[] _args ) throws IOException, ClassNotFoundException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
 
         // see what the compiler options are...
         RuntimeMXBean runtimeMxBean = ManagementFactory.getRuntimeMXBean();
         List<String> arguments = runtimeMxBean.getInputArguments();
+
+        Properties props = System.getProperties();
 
         com.dilatush.test.Config config = new com.dilatush.test.Config();
 
@@ -62,6 +97,8 @@ public class RuntimeCompiler {
         mcl.load( "Bogus", bogus );
         Object what = klass.getDeclaredConstructor().newInstance();
         Configurator configurator = (Configurator) what;
+
+        Class<?> kk = mcl.findClass( "Bogus" );
 
         // now run it...
         configurator.config( config );

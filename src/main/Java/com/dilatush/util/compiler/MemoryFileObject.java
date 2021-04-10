@@ -1,11 +1,13 @@
 package com.dilatush.util.compiler;
 
 import com.dilatush.util.Files;
+import com.dilatush.util.Strings;
 
 import javax.tools.SimpleJavaFileObject;
 import java.io.File;
 import java.net.URI;
 
+import static com.dilatush.util.Strings.substitute;
 import static javax.tools.JavaFileObject.Kind.SOURCE;
 
 /**
@@ -20,7 +22,9 @@ public class MemoryFileObject extends SimpleJavaFileObject {
 
 
     /**
-     * Constructs a new instance of this class from a string containing the Java source code.
+     * Constructs a new instance of this class from a string containing the Java source code.  If a substitutions document is included, the
+     * given source is potentially modified by the given substitution document.  See {@link Strings#substitute(String,String)} for details on the
+     * substitution.
      *
      * @param _binaryName The binary name of the class represented by this file object.
      * @param _source The source code for the class represented by this file object.
@@ -31,7 +35,9 @@ public class MemoryFileObject extends SimpleJavaFileObject {
         // create a URI to make the base class happy...
         super( URI.create( "string:///" + _binaryName.replace( '.', '/' ) + SOURCE.extension ), SOURCE );
 
-        source = _source;
+        source = (_substitutions == null)
+                ? _source
+                : substitute( _source, _substitutions );
         binaryName = _binaryName;
     }
 

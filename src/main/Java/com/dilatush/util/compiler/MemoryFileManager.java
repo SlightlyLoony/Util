@@ -60,6 +60,7 @@ public class MemoryFileManager implements JavaFileManager {
             In my testing, I only ever saw this fetching class files for system modules.  If I ever see missing class files, though,
             this seems like a likely place to begin looking.
          */
+        //System.out.println( "Input: " + location.toString() + " : " + className + " " + kind.toString() );
         return standardJavaFileManager.getJavaFileForInput( location, className, kind );
     }
 
