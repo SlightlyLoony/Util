@@ -3,6 +3,7 @@
   <component name="JavadocGenerationManager">
     <option name="OUTPUT_DIRECTORY" value="$PROJECT_DIR$/docs" />
     <option name="OPTION_SCOPE" value="package" />
+    <option name="OTHER_OPTIONS" value="--enable-preview -source 15" />
   </component>
   <component name="MavenProjectsManager">
     <option name="originalFiles">

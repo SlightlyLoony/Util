@@ -36,6 +36,8 @@ public class MemoryFileManager implements JavaFileManager {
     @Override
     public JavaFileObject getJavaFileForOutput( final Location location, final String className, final JavaFileObject.Kind kind, final FileObject sibling ) throws IOException {
 
+        System.out.println( "Output: " + location.toString() + " : " + className + " " + kind.toString() );
+
         // if we're getting a file to output a class, return an output stream to collect the results in memory instead, mapped to the class name...
         if( kind == JavaFileObject.Kind.CLASS ) {
 
@@ -60,7 +62,7 @@ public class MemoryFileManager implements JavaFileManager {
             In my testing, I only ever saw this fetching class files for system modules.  If I ever see missing class files, though,
             this seems like a likely place to begin looking.
          */
-        //System.out.println( "Input: " + location.toString() + " : " + className + " " + kind.toString() );
+        System.out.println( "Input: " + location.toString() + " : " + className + " " + kind.toString() );
         return standardJavaFileManager.getJavaFileForInput( location, className, kind );
     }
 

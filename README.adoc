@@ -29,6 +29,13 @@ It's very hard to give a general description of these, as there are a wide varie
 
 === Some particular mentions...
 
+==== Outcomes
+The _Outcome_ class is a simple generic record with lots of potential.  It's intended to be used as a return value for functions implementing operations that might either success or fail (ok or not ok).
+
+When the outcome is success (ok), the _Outcome_ instance contains an ok flag set to true, and an optional info field that is the generic type of the _Outcome_.  This info field is intended to contain any result of the operation other than success or failure.
+
+When the outcome is failure (not ok), the _Outcome_ instance contains an ok flag set to false, a mandatory explanatory message (as a string), and an optional _Throwable_ that might provide even more information about the failure.
+
 ==== String substitutions
 The string substitutions provide a simple way to replace keys in a target string with other values.  Generally the substitution key/value pairs are stored in a text file, but that's not a requirement.  The substitutions are implemented in Strings.substitute().
 

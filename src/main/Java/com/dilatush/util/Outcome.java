@@ -41,6 +41,11 @@ public record Outcome<T>( boolean ok, String msg, Throwable cause, T info ) {
     }
 
 
+    /**
+     * Provides a factory class for {@link Outcome}, to provide easy and safe construction of new {@link Outcome} instances.
+     *
+     * @param <T> The type of information that may be contained by an Outcome.
+     */
     public static class Forge<T> {
 
 

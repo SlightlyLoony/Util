@@ -6,6 +6,6 @@ public class Bogus {
 
     public void bogus( final Test test ) {
 
-      test.hashCode();
+        test.hashCode();
     }
 }
