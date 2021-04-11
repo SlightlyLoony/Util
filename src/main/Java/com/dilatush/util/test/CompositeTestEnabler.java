@@ -8,7 +8,7 @@ import java.util.Map;
  * {@link TestEnabler}s, using short-circuit logic on the test enablers in the given order.  During the execution of this logic, if a test enabler
  * is discovered to have transitioned from enabled (<code>true</code> from {@link #isEnabled()}) to disabled, then the {@link #init()} method is
  * invoked on all the test enablers after it on the given list.  This is primarily useful in conjunction with the {@link PeriodicTestEnabler}, but
- * may also be useful in conjunction with custom {@link TestEnabler} implementations or with {@link JavaScriptTestEnabler}.
+ * may also be useful in conjunction with custom {@link TestEnabler} implementations.
  *
  * @author Tom Dilatush  tom@dilatush.com
  */

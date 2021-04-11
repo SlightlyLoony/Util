@@ -11,32 +11,61 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
+ * An implementation of {@link JavaFileManager} that extends {@link StandardJavaFileManager} to support compiling classes to binary (byte arrays)
+ * held in memory, and not stored on the file system as they ordinarily would be.
+ *
  * @author Tom Dilatush  tom@dilatush.com
  */
 @SuppressWarnings( "unused" )
 public class MemoryFileManager implements JavaFileManager {
 
+    // the StandardJavaFileManager instance we're extending...
     private final StandardJavaFileManager standardJavaFileManager;
+
+    // where we keep the binary image of the compiled classes...
     private final Map<String, ByteArrayOutputStream> classes = new ConcurrentHashMap<>();
 
 
+    /**
+     * Create a new instance of this class that extends the given {@link StandardJavaFileManager}.
+     *
+     * @param _standardJavaFileManager The {@link StandardJavaFileManager} instance to extend.
+     */
     public MemoryFileManager( final StandardJavaFileManager _standardJavaFileManager ) {
         standardJavaFileManager = _standardJavaFileManager;
     }
 
 
+    /**
+     * Return the map of compiled classes (binary class name -> binary class code).
+     *
+     * @return the map of compiled classes (binary class name -> binary class code)
+     */
     public Map<String, byte[]> getClasses() {
 
         Map<String, byte[]> result = new HashMap<>();
-        classes.forEach( ( key, value ) -> result.put( key, value.toByteArray() ) );
+        classes.forEach( ( binaryName, classCode ) -> result.put( binaryName, classCode.toByteArray() ) );
         return result;
     }
 
 
+    /**
+     * Returns a file object for output representing the specified class of the specified kind in the given package-oriented location.
+     *
+     * Optionally, this file manager might consider the sibling as a hint for where to place the output. The exact semantics of this hint is
+     * unspecified. The JDK compiler, javac, for example, will place class files in the same directories as originating source files unless a class
+     * file output directory is provided. To facilitate this behavior, javac might provide the originating source file as sibling when calling this
+     * method.
+     *
+     * @param location a package-oriented location
+     * @param className the binary name of a class
+     * @param kind the kind of file (SOURCE or CLASS)
+     * @param sibling a file object to be used as a hint for placement; may be {@code null}
+     * @return a file object for output
+     * @throws IOException if an I/O error has occurred, or if close() has been called and this file manager cannot be reopened
+     */
     @Override
     public JavaFileObject getJavaFileForOutput( final Location location, final String className, final JavaFileObject.Kind kind, final FileObject sibling ) throws IOException {
-
-        System.out.println( "Output: " + location.toString() + " : " + className + " " + kind.toString() );
 
         // if we're getting a file to output a class, return an output stream to collect the results in memory instead, mapped to the class name...
         if( kind == JavaFileObject.Kind.CLASS ) {
@@ -55,6 +84,7 @@ public class MemoryFileManager implements JavaFileManager {
     }
 
 
+    /* I thought I'd have to modify this method, but so far I haven't discovered a need... */
     @Override
     public JavaFileObject getJavaFileForInput( final Location location, final String className, final JavaFileObject.Kind kind ) throws IOException {
 
@@ -62,7 +92,6 @@ public class MemoryFileManager implements JavaFileManager {
             In my testing, I only ever saw this fetching class files for system modules.  If I ever see missing class files, though,
             this seems like a likely place to begin looking.
          */
-        System.out.println( "Input: " + location.toString() + " : " + className + " " + kind.toString() );
         return standardJavaFileManager.getJavaFileForInput( location, className, kind );
     }
 

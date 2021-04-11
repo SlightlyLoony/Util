@@ -89,4 +89,25 @@ public record Outcome<T>( boolean ok, String msg, Throwable cause, T info ) {
             return new Outcome<>( false, _msg, _cause, null );
         }
     }
+
+
+    /**
+     * Returns a string representing the contents of this instance.
+     *
+     * @return a string representing the contents of this instance
+     */
+    public String toString() {
+        if( ok ) {
+            if( info == null )
+                return "OK";
+            else
+                return "OK: " + info.toString();
+        }
+        else {
+            if( cause == null )
+                return "Not OK: " + msg;
+            else
+                return "Not OK: " + msg + "\n" + cause.toString();
+        }
+    }
 }

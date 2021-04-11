@@ -1,0 +1,142 @@
+= Java Configuration Support
+Tom Dilatush (tom@dilatush.com) +
+V1.0, 2021-01-07
+:toc:
+:toc-placement!:
+toc::[]
+
+== What is this Java configuration stuff, anyway?
+I have been using JSON configuration files for some time now.  They are convenient in the sense that relatively simple code can read them into a Java program.  At that point Java code can validate the configuration values, and use them directly.  However, these JSON configurations have some drawbacks (see list below).  The most obvious alternative is plain text files, as are used by very many Unix/Linux programs.  They have drawbacks as well (also below)!  Here are the main drawbacks of those two approaches for configuration files, starting with the worst in my assessment.
+[start=1]
+. *No comments.*  JSON (standard JSON, at least) cannot have comments at all.  Having a configuration file with no comments means that every time I forget what a parameter does, or what its valid values are (i.e., almost every time I use it!), I have to go back to the Java code to figure it out.  It's like a reverse-engineering exercise to make even the simplest change.  The Unix-style text files _do_ allow comments, which is great.
+. *Standardization.*  JSON is a standard (despite the variants available - the _base_ JSON really is a standard); that's one thing I really like about it.  Many Unix/Linux configuration files have similarities, but they are definitely _not_ a standard format.  If you have spent any time at all administering a Unix or Linux, you'll know exactly what I mean.  The lack of standardization makes the modifying the files error prone and difficult to remember.
+. *Only literals of limited type.*  If all configuration entries were constants, and were strings, numbers, or booleans, this would not be much of an issue.  There are times, however, when it would be very convenient to have an arbitrary type in the configuration file -- such as an `Enum` value, or perhaps a `URL` instance.  The best that JSON or plain text files can provide is a string that your program can convert into one of those objects - but then your code has to do that work, including validation of it.  There are also times when it would be convenient to be able to determine a configuration value programmatically.  A simple example: suppose you have a configuration value that represents time in milliseconds - and you want to configure 14 days.  You _could_ drag out your calculator, figure out the answer (it's 1,209,600,000), and put that in your configuration file.  But then when you look at the configuration file later you'll have no idea what that giant number means.  How much nicer it would be to write something like this:
+....
+time = 14 * 24 * 60 * 60 * 1000 // number of milliseconds in 14 days...
+....
+I had read several articles online about using executable code for configuration.  The more I thought about using Java for configuration, the more I liked it:
+[start=1]
+. *Java has comments.*  Nice, standard comments, both block ( `+/* ... */+` ) and line ( `\\ ...` ).  What more could I possibly want?
+. *Java is standard.*  There aren't 53 flavors of Java.  There's just one, evolving in a backwards-compatible way.  Perfect!
+. *Java is a programming language.*  That means my Java configuration files wouldn't be limited to literals of a few types.  Code can construct configuration values, as in the trivial example above.
+
+JavaScript also seems like a possibility, and indeed my first attempt at configuration-in-code used JavaScript.  However, starting with Java 15 the standard JavaScript engine ("Nashorn") has been dropped from the JVM, and it isn't obvious that it will be replaced as part of the standard runtime environment.  In the course of researching alternatives, I discovered that since Java 1.6 (a _long_ time ago), Java has supported compilation of Java source code _at runtime_.  The class `JavaCompiler` is the heart of this capability, and it doesn't seem likely that it will be removed -- there are lots of uses for it.  A little research on the web shows that while _I_ didn't know about it, many other people did.  Anyway, the capability to compile Java at runtime was all I needed for the purpose of configuration-in-Java-code support!
+
+== How does it work?
+The basic idea is very simple: put your application's configuration in a simple POJO (Plain Old Java Object) that has public, non-final fields containing the actual configuration.  Then run a Java 'script' (compiled at runtime, and therefore modifiable without rebuilding the application) to initialize that POJO.
+
+Because the fields are public and non-final, malicious or erroneous code could modify them -- so the safest thing to do is to use the configuration objects once at application startup and then discard them.  If you're _still_ worried about security of the configuration objects -- use another approach!
+
+Here's an example of the Java configuration in actual use:
+....
+    // get test configuration...
+    TestManager.Config tmConfig = new TestManager.Config();
+    Outcome<?> result = tmConfig.init( "TestTest", "TestTest.java" );
+    if( !result.ok() )
+        throw new IllegalStateException( "Configuration problem: " + result.msg() );
+....
+Let's take this one bit at a time:
+....
+    // get test configuration...
+    TestManager.Config tmConfig = new TestManager.Config();
+....
+This creates a new instance of the `TestManager.Config()` class, with all its fields having their default values.
+....
+    Outcome<?> result = tmConfig.init( "TestTest", "TestTest.java" );
+....
+Here we're compiling -- at runtime! -- the Java code in the file `TestTest.java`, with the binary class name `Test`.  That means this class is in the default package, something one normally doesn't see outside of test or prototype code, but is perfectly ok here.
+....
+    if( !result.ok() )
+        throw new IllegalStateException( "Configuration problem: " + result.msg() );
+....
+Now we're just checking to see if there was a problem initializing the configuration instance.  The problem could be a compilation error in the `TestTest.java`, an exception that occurred when running it, or a configuration validation problem.  If there was an error of any kind, the outcome would not be ok, and the outcome message will explain the problem.
+....
+    /**
+     * Validatable POJO for {@link TempReader} configuration
+     * (see {@link TempReader#TempReader(Config)}).
+     */
+    public static class Config extends AConfig {
+
+        /**
+         * The interval between temperature readings, in milliseconds.  Valid values are in the
+         * range [100..600,000] (0.1 second to 10 minutes).
+         */
+        public  long intervalMS = 250;
+
+        /**
+         * The interval between error events, in milliseconds.  Valid values are in the
+         * range [intervalMS..600,000].
+         */
+        public  long errorEventIntervalMS = 10000;
+
+        /**
+         * An instance of the class that implements {@link ErrorCalc}, for the noise filter.
+         */
+        public NoiseFilter.NoiseFilterConfig noiseFilter = new NoiseFilter.NoiseFilterConfig();
+
+
+        /**
+         * Verify the fields of this configuration.
+         */
+        @Override
+        public void verify( final List<String> _messages ) {
+            validate( () -> ((intervalMS >= 100) && (intervalMS <= 1000 * 60 * 10)), _messages,
+                    "Temperature Reader interval out of range: " + intervalMS );
+            validate( () -> ((errorEventIntervalMS >= intervalMS)
+                            && (errorEventIntervalMS <= 1000 * 60 * 10)), _messages,
+                    "Temperature Reader error event interval is out of range: " + errorEventIntervalMS );
+            noiseFilter.verify( _messages );
+        }
+    }
+....
+The first two fields defined are simple values, but the third (`NoiseFilter.NoiseFilterConfig noiseFilter`) is itself another subclass of `AConfig`.  This ability to create a hierarchy of `AConfig` instances is a key feature of the `AConfig` class.  It allows configurations (like the one above for `NoiseFilter`) to be defined a single time, typically as an inner class of the class needing the configuration -- and then be composed (as in the `TempReader` configuration above) as part of a larger and more complex configuration.
+
+The `verify()` method is another key feature of the `AConfig` class.  It's job is to verify the validity of the configuration values (after the script initializes them, of course).  For fields with simple values, this is done by calling the `validate()` method (which is defined in `AConfig`).  The first argument to `validate()` is a lambda that is a validity test; it returns `true` if the result was valid.  The second argument is a list of error messages, and the third argument is a message to add to the error messages if the validity test returned `false`.  There are no particular limits to what the validity test checks, but as the example shows they naturally tend to be simple and readable.   Note in the example above that when one of the fields is itself an `AConfig` subclass, _its_ `verify()` method is also called.  This is how a hierarchy of `AConfig` instances gets validated.
+
+So what does the Java configuration script look like for this?  Here's an example that corresponds to the `AConfig` subclass above:
+....
+import com.dilatush.util.config.Configurator;
+import com.dilatush.util.config.AConfig;
+import com.dilatush.util.noisefilter.MedianErrorCalc;
+
+public class TestTest implements Configurator {
+
+    public void config( final AConfig _config ) {
+
+        /*
+         * Temperature Reader configuration.
+         */
+
+        // The interval between temperature readings, in milliseconds.  Valid values are in the
+        // range [100..600,000] (0.1 second to 10 minutes).
+        config.intervalMS = 250;
+
+        // The interval between error events, in milliseconds.  Valid values are in the
+        // range [intervalMS..600,000].
+        config.errorEventIntervalMS = 5 * 60 * 1000;  // five minutes...
+
+        // The number of samples (history) to keep in the filter.  Valid values are 2 or greater.
+        config.noiseFilter.numSamples = 41;
+
+        // An instance of the class that implements ErrorCalc, for the noise filter.
+        config.noiseFilter.errorCalc = new MedianErrorCalc();
+
+        // The maximum number of samples that may be ignored by this filter, as a fraction of the number of
+        // samples.  Valid values are in the range [0..1].
+        config.noiseFilter.maxIgnoreFraction = 0.25;
+
+        // The maximum total error of the samples that may be ignored by this filter, as a fraction
+        // of the total error of all the samples in this filter.  Valid values are in the range of [0..1].
+        config.noiseFilter.maxTotalErrorIgnoreFraction = 1.0;
+
+        // The minimum value of the error for any sample to be ignored.  This value must be non-negative.
+        config.noiseFilter.minSampleErrorIgnore = 0.75;  // in degree C
+    }
+}
+....
+The Java class in the configuration script _must_ implement the `Configurator` interface, and must have a no-args constructor.  Other than those things, it can contain anything at all.
+
+Now look a bit more closely at the example `config()` function above.  Ah, look at the comments!  I love comments in configuration files!  Some fields here are initialized as the result of expressions - so nice!  The last five fields are all actually initializing fields _inside_ the `NoiseFilter.NoiseFilterConfig` field.  This is how your script can initialize a hierarchy of `AConfig` subclasses.
+
+== Learning more details...
+The entire Java configuration system is contained in a single package https://github.com/SlightlyLoony/Util/blob/master/src/main/Java/com/dilatush/util/config[on GitHub].  Take a look!

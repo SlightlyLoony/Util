@@ -1,6 +1,6 @@
 package com.dilatush.util.console;
 
-import com.dilatush.util.AConfig;
+import com.dilatush.util.config.AConfig;
 import com.dilatush.util.Base64Fast;
 import com.dilatush.util.Networking;
 

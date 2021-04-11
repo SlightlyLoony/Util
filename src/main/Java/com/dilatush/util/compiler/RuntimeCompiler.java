@@ -60,7 +60,7 @@ public class RuntimeCompiler {
         if( !success ) {
             StringBuilder sb = new StringBuilder();
             collector.getDiagnostics().forEach( (diagnostic) -> {
-                sb.append( diagnostic.toString().substring( 1 ) );   // skip the first character, which is always a "/" for some reason...
+                sb.append( diagnostic.toString() );
                 sb.append( '\n' );
             });
             String additional = writer.toString();

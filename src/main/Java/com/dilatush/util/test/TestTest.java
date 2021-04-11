@@ -1,6 +1,6 @@
 package com.dilatush.util.test;
 
-import com.dilatush.util.AConfig;
+import com.dilatush.util.Outcome;
 import com.dilatush.util.console.ConsoleServer;
 
 import java.util.HashMap;
@@ -22,11 +22,12 @@ public class TestTest {
         LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getSimpleName() );
 
         // get test configuration...
-        AConfig.InitResult ir = AConfig.init( TestManager.Config.class, "TestTest.js" );
-        if( !ir.valid )
-            throw new IllegalStateException( "Configuration problem: " + ir.message );
+        TestManager.Config tmConfig = new TestManager.Config();
+        Outcome<?> result = tmConfig.init( "TestTest", "TestTest.java" );
+        if( !result.ok() )
+            throw new IllegalStateException( "Configuration problem: " + result.msg() );
 
-        TestManager.configure( (TestManager.Config) ir.config );
+        TestManager.configure( tmConfig );
         TestManager mgr = TestManager.getInstance();
 
         TestEnabler te1 = mgr.register( "te1" );

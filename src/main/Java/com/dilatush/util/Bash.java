@@ -11,6 +11,7 @@ import static com.dilatush.util.Bash.UnquoteState.*;
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
+@SuppressWarnings( "unused" )
 public class Bash {
 
 
@@ -93,24 +94,18 @@ public class Bash {
                     break;
                 case InText:
                     switch( c ) {
-                        case ' ':
+                        case ' ' -> {
                             result.add( arg.toString() );
                             arg.setLength( 0 );
                             state = InSpace;
-                            break;
-                        case '\'':
-                            state = InSingleQuote;
-                            break;
-                        case '"':
-                            state = InDoubleQuote;
-                            break;
-                        case '\\':
+                        }
+                        case '\'' -> state = InSingleQuote;
+                        case '"' -> state = InDoubleQuote;
+                        case '\\' -> {
                             backTo = InText;
                             state = InBackslash;
-                            break;
-                        default:
-                            arg.append( c );
-                            break;
+                        }
+                        default -> arg.append( c );
                     }
                     break;
                 case InBackslash:
@@ -119,16 +114,12 @@ public class Bash {
                     break;
                 case InDoubleQuote:
                     switch( c ) {
-                        case '"':
-                            state = InText;
-                            break;
-                        case '\\':
+                        case '"' -> state = InText;
+                        case '\\' -> {
                             backTo = InDoubleQuote;
                             state = InBackslash;
-                            break;
-                        default:
-                            arg.append( c );
-                            break;
+                        }
+                        default -> arg.append( c );
                     }
                     break;
                 case InSingleQuote:
@@ -154,7 +145,8 @@ public class Bash {
     }
 
 
+    /** Possible states of the unquoter. */
     public enum UnquoteState {
-        InSpace, InText, InSingleQuote, InDoubleQuote, InBackslash;
+        InSpace, InText, InSingleQuote, InDoubleQuote, InBackslash
     }
 }

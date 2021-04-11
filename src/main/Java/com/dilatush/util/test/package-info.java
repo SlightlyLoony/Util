@@ -41,8 +41,6 @@
  *     test code runs.  For instance, one could configure such a test enabler to wait for 90 seconds after the application starts, then on each
  *     subsequent {@link com.dilatush.util.test.CompositeTestEnabler#isEnabled()} call return enabled with a 3.5% probability, but only one time.
  *     This has the effect of running the test code snippet exactly one time, at some random time at least 90 seconds after the application starts.</li>
- *     <li>{@link com.dilatush.util.test.JavaScriptTestEnabler} - provides a completely programmable test enabler, coded in JavaScript from a
- *     configuration file, changeable at runtime just like any other test enabler.</li>
  * </ul>
  *
  * @author Tom Dilatush  tom@dilatush.com

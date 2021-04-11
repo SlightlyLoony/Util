@@ -1,6 +1,7 @@
 package com.dilatush.util.noisefilter;
 
-import com.dilatush.util.AConfig;
+import com.dilatush.util.Outcome;
+import com.dilatush.util.config.AConfig;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -49,9 +50,9 @@ public class NoiseFilter {
      */
     public NoiseFilter( final NoiseFilterConfig _config ) {
 
-        AConfig.ValidationResult vr = _config.isValid();
-        if( !vr.valid )
-            throw new IllegalArgumentException( "Invalid configuration for NoiseFilter: " + vr.message );
+        Outcome<?> vr = _config.isValid();
+        if( !vr.ok() )
+            throw new IllegalArgumentException( "Invalid configuration for NoiseFilter: " + vr.msg() );
 
         numSamples                  = _config.numSamples;
         errorCalc                   = _config.errorCalc;

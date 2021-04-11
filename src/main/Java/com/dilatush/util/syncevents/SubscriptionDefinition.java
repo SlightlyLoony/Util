@@ -3,13 +3,16 @@ package com.dilatush.util.syncevents;
 import static com.dilatush.util.General.isNull;
 
 /**
- * Instances of this class define a synchronous events subscription as an immutable couple of the event handler and the event type.
+ * Instances of this class define a synchronous events subscription as an immutable couplet of the event handler and the event type.
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
 public class SubscriptionDefinition {
 
+    /** The subscriber. */
     public final SynchronousEventSubscriber subscriber;
+
+    /** The event's class. */
     public final Class<?>                   eventClass;
 
 

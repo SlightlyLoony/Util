@@ -1,6 +1,6 @@
 package com.dilatush.util.test;
 
-import com.dilatush.util.AConfig;
+import com.dilatush.util.config.AConfig;
 
 import java.util.ArrayList;
 import java.util.HashMap;

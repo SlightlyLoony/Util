@@ -7,6 +7,7 @@ package com.dilatush.util.syncevents;
  */
 public class SubscribeEvent implements SynchronousEvent {
 
+    /** The subscription definition. */
     public final SubscriptionDefinition definition;
 
 
