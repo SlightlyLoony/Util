@@ -26,7 +26,7 @@
  * code snippets, there would be five corresponding test enablers instantiated to control when those snippets ran.  Generally these test enablers
  * are created when the class embedding them is instantiated.  Each of these test enablers also has a configurable set of named properties, along
  * with a convenient set of getters (see, for example, {@link com.dilatush.util.test.TestEnabler#getAsDouble(java.lang.String)}).</p>
- * <p>The class {@link com.dilatush.util.test.TestTest}, along with the JavaScript configuration file <code>TestTest.js</code>, provide some simple
+ * <p>The class {@link com.dilatush.util.test.TestTest}, along with the Java configuration file <code>TestTest.java</code>, provide some simple
  * examples of how one might use the elements of this package.</p>
  * <p>The {@link com.dilatush.util.test.TestManager} provides the means to manage this test process at runtime.  One facility it provides is
  * particularly useful: test "scenarios".  A test scenario is a collection of test enabler configurations, for any number of test enablers.  A
