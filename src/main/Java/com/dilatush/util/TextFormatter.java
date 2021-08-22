@@ -81,7 +81,7 @@ public class TextFormatter {
             }
 
             // look for a tab near the start of a paragraph...
-            int tabStart = paragraph.substring( 0, Math.min( width, paragraph.length() ) ).indexOf( "//TAB" );
+            int tabStart = paragraph.substring( 0, java.lang.Math.min( width, paragraph.length() ) ).indexOf( "//TAB" );
             if( tabStart >= 0) {
 
                 // see if we also have the rest of the tab directive...

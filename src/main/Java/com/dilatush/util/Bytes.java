@@ -34,7 +34,7 @@ public class Bytes {
         for( int row = 0; row < rowCount; row++ ) {
 
             // iterate over the bytes in a row to dump the bytes in hex...
-            int maxIndex = Math.min( 16, _bytes.length - (row << 4) );
+            int maxIndex = java.lang.Math.min( 16, _bytes.length - (row << 4) );
             for( int index = 0; index < maxIndex; index++) {
                 result.append( toHex( _bytes[(row << 4) | index] ) );
                 result.append( ' ' );

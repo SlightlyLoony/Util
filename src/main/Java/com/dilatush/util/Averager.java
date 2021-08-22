@@ -106,7 +106,7 @@ public class Averager {
 
         for( int i = 0; i < size; i++ ) {
 
-            v += Math.abs( samples[index] - value );
+            v += java.lang.Math.abs( samples[index] - value );
             index = next( index );
         }
 

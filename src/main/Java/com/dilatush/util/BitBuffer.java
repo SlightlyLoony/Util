@@ -475,7 +475,7 @@ public class BitBuffer {
         while( bitsLeft > 0 ) {
 
             // figure out how many bits we can fit in the current byte...
-            int fitBits = Math.min( bitsLeft, Math.min( 8 - srcAddr.bitAddr, 8 - dstAddr.bitAddr ) );
+            int fitBits = java.lang.Math.min( bitsLeft, java.lang.Math.min( 8 - srcAddr.bitAddr, 8 - dstAddr.bitAddr ) );
 
             // if we can't fit at least one bit, then we've got a problem...
             if( fitBits < 1 )

@@ -9,6 +9,20 @@ import static com.dilatush.util.General.isNull;
  */
 public class Misc {
 
+    private final static String OS_NAME       = System.getProperty( "os.name" ).toLowerCase();
+
+    /** Returns true if executing on any version of Macintosh OS X */
+    public final static boolean IS_OSX        = OS_NAME.contains( "mac" );
+
+    /** Returns true if executing on any version of Windows */
+    public final static boolean IS_WINDOWS    = OS_NAME.contains( "windows" );
+
+    /** Returns true if executing on any version of Linux */
+    public final static boolean IS_LINUX      = OS_NAME.contains( "linux" );
+
+    /** Returns true if executing on something other than OSX, Windows, or Linux */
+    public final static boolean IS_UNKNOWN_OS = !(IS_LINUX || IS_WINDOWS || IS_OSX);
+
 
     /**
      * Returns a string that contains the stack trace for the given throwable, formatted as for presentation in a log or on-screen.  The

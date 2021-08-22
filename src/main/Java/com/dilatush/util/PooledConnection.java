@@ -30,12 +30,6 @@ public class PooledConnection implements Connection {
     }
 
 
-    protected void finalize() throws Throwable {
-        LOGGER.finer( "SQL connection being finalized" );
-        super.finalize();
-    }
-
-
     /* package-private */ void obtained() {
         obtained = System.currentTimeMillis();
     }

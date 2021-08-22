@@ -659,7 +659,7 @@ public class SSHExecutor {
      * and so may not forcibly terminate the process. Concrete implementations
      * of this class are strongly encouraged to override this method with a
      * compliant implementation.  Invoking this method on {@code Process}
-     * objects returned by {@link ProcessBuilder#start} and
+     * objects returned by {@link ProcessBuilder#start()} and
      * {@link Runtime#exec} will forcibly terminate the process.
      *
      * <p>Note: The subprocess may not terminate immediately.

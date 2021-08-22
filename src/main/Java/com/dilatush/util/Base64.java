@@ -59,13 +59,13 @@ public class Base64 {
         int bn = bytesNeededForCharacters( _base64.length() );
         if( bn > 8 ) throw new IllegalArgumentException( "Decoded base 64 encoding will not fit in long: " + _base64 );
         int start = 0;
-        int end = Math.min( 4, _base64.length() );
+        int end = java.lang.Math.min( 4, _base64.length() );
         long result = 0;
         while( start < _base64.length() ) {
             result <<= ((end - (start + 1)) << 3);
             result |= decodeBits( _base64, start, end );
             start = end;
-            end = Math.min( start + 4, _base64.length() );
+            end = java.lang.Math.min( start + 4, _base64.length() );
         }
 
         return result;
@@ -87,7 +87,7 @@ public class Base64 {
         int i = 0;
         while( i < _bytes.length ) {
             long bits = 0;
-            int lim = Math.min( 3, _bytes.length - i);
+            int lim = java.lang.Math.min( 3, _bytes.length - i);
             for( int s = 0; s < lim; s++ ) {
                 bits <<= 8;
                 bits |= (0xff & _bytes[s + i]);
@@ -113,7 +113,7 @@ public class Base64 {
         int bn = bytesNeededForCharacters( _base64.length() );
         ByteBuffer result = ByteBuffer.allocate( bn );
         int start = 0;
-        int end = Math.min( 4, _base64.length() );
+        int end = java.lang.Math.min( 4, _base64.length() );
         while( start < _base64.length() ) {
             int bytes = end - (start + 1);
             int bits = decodeBits( _base64, start, end );
@@ -121,7 +121,7 @@ public class Base64 {
                 result.put( (byte) (bits >>> (i << 3) ) );
             }
             start = end;
-            end = Math.min( end + 4, _base64.length() );
+            end = java.lang.Math.min( end + 4, _base64.length() );
         }
 
         return result.array();
@@ -200,7 +200,7 @@ public class Base64 {
 
     // Returns the number of bytes required to hold the given number.
     private static int bytesToEncode( final long _number ) {
-        return Math.max( 1, 8 - (Long.numberOfLeadingZeros( _number ) >> 3) );
+        return java.lang.Math.max( 1, 8 - (Long.numberOfLeadingZeros( _number ) >> 3) );
     }
 
 
