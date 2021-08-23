@@ -12,7 +12,6 @@ import java.util.function.Consumer;
 import java.util.logging.Logger;
 
 import static com.dilatush.util.Strings.isEmpty;
-import static java.lang.Thread.sleep;
 import static java.util.logging.Level.FINE;
 
 /**
@@ -174,6 +173,9 @@ public class TCPPinger {
     }
 
 
+    /**
+     * Instances of this helper class attempt a TCP connection, wait for its completion, and report the results.
+     */
     private class Runner implements Runnable {
 
         private final InetSocketAddress socketAddress;
@@ -251,6 +253,12 @@ public class TCPPinger {
     }
 
 
+    /**
+     * Compute the amount of time to wait before the next check for completion.
+     *
+     * @param _waitedMS the number of milliseconds we've waited so far
+     * @return the number of milliseconds to wait before the next check for completion
+     */
     private int nextWaitMS( final int _waitedMS ) {
         if( _waitedMS < 10 ) return 1;
         if( _waitedMS < 500 ) return 10;
