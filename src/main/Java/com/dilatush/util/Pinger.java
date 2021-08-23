@@ -90,11 +90,11 @@ public class Pinger {
     /**
      * Executes a "ping" command asynchronously in a local process.  The given IP address string may contain either an IPv4 address (in standard
      * dotted-decimal form) or an IPv6 address (in the forms defined in RFC 2732 or RFC 2373).  The callback can be any method that accepts an
-     * instance of {@link Outcome<PingResult>}.  The callback method is called if the ping fails for some reason (in which case the outcome is failure
-     * and there will be a diagnostic message and perhaps an exception), or when it completes.  If a response was received for the ping, then
-     * {@link PingResult#success} will be {@code true}, and {@link PingResult#roundTripSeconds} will contain the round trip time in seconds.  If no
-     * response was received for the ping, then {@link PingResult#success} will be {@code false} and {@link PingResult#roundTripSeconds} will contain
-     * zero.
+     * instance of {@link Outcome Outcome&lt;PingResult&gt;}.  The callback method is called if the ping fails for some reason (in which case the
+     * outcome is failure and there will be a diagnostic message and perhaps an exception), or when it completes.  If a response was received for the
+     * ping, then {@link PingResult#success} will be {@code true}, and {@link PingResult#roundTripSeconds} will contain the round trip time in
+     * seconds.  If no response was received for the ping, then {@link PingResult#success} will be {@code false} and
+     * {@link PingResult#roundTripSeconds} will contain zero.
      *
      * @param _address The IPv4 or IPv6 address to ping.
      * @param _callback The method to be called when the ping completes.

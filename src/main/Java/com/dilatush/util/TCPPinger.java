@@ -41,8 +41,8 @@ public class TCPPinger {
 
 
     /**
-     * Creates a new instance of this class using the default scheduler, which has a single daemon thread shared by all instances of Pinger that use
-     * the default scheduler.
+     * Creates a new instance of this class using the default scheduler, which has a single daemon thread shared by all instances of
+     * TCPPinger that use the default scheduler.
      */
     public TCPPinger() {
 
@@ -77,6 +77,20 @@ public class TCPPinger {
     }
 
 
+    /**
+     * "Pings" the given host and port by attempting to open a TCP connection to it.  This is an asynchronous method; calling the method starts the
+     * "ping", and the callback method is called when it completes or there is an error.  The given IP address string may contain either an IPv4
+     * address (in standard dotted-decimal form) or an IPv6 address (in the forms defined in RFC 2732 or RFC 2373).  The callback can be any method
+     * that accepts an instance of {@link Outcome Outcome&lt;PingResult&gt;}.  The callback method is called if the ping fails for some reason (in
+     * which case the outcome is failure and there will be a diagnostic message and perhaps an exception), or when it completes.  If a response was
+     * received for the ping, then {@link PingResult#success} will be {@code true}, and {@link PingResult#responseSeconds} will contain the response
+     * time in seconds.  If no response was received for the ping, then {@link PingResult#success} will be {@code false} and
+     * {@link PingResult#responseSeconds} will contain zero.
+     *
+     * @param _address The IPv4 or IPv6 address to attempt to open a TCP connection on.
+     * @param _port The TCP port to attempt to open a TCP connection on.
+     * @param _callback The method to be called when the ping completes.
+     */
     public void ping( final String _address, final int _port, final Consumer<Outcome<PingResult>> _callback ) {
 
         // sanity checks...
@@ -94,21 +108,23 @@ public class TCPPinger {
             throw new IllegalArgumentException( "Invalid IP address supplied for TCP ping: " + _address );
         }
 
-        InetSocketAddress socketAddress = new InetSocketAddress( address, _port );
-
-        new Runner( socketAddress, _callback ).run();
+        // attempt to connect and wait for the result...
+        new Runner( new InetSocketAddress( address, _port ), _callback ).run();
     }
 
 
     /**
-     * Executes a "ping" command synchronously in a local process.  The given IP address string may contain either an IPv4 address (in standard
-     * dotted-decimal form) or an IPv6 address (in the forms defined in RFC 2732 or RFC 2373).  This method returns if the ping fails for some reason
+     * "Pings" the given host and port by attempting to open a TCP connection to it.  This is a synchronous method; calling the method starts the
+     * "ping" and blocks until it is complete.  The given IP address string may contain either an IPv4 address (in standard dotted-decimal form)
+     * or an IPv6 address (in the forms defined in RFC 2732 or RFC 2373).  This method returns if the ping fails for some reason
      * (in which case the outcome is failure and there will be a diagnostic message and perhaps an exception), or when it completes.  If a response
-     * was received for the ping, then {@link PingResult#success} will be {@code true}, and {@link PingResult#responseSeconds} will contain the round
-     * trip time in seconds.  If no response was received for the ping, then {@link PingResult#success} will be {@code false} and
+     * was received for the ping, then {@link PingResult#success} will be {@code true}, and {@link PingResult#responseSeconds} will contain the
+     * response time in seconds.  If no response was received for the ping, then {@link PingResult#success} will be {@code false} and
      * {@link PingResult#responseSeconds} will contain zero.
      *
-     * @param _address The IPv4 or IPv6 address to ping.
+     * @param _address The IPv4 or IPv6 address to attempt to open a TCP connection on.
+     * @param _port The TCP port to attempt to open a TCP connection on.
+     * @return The {@link Outcome Outcome&lt;PingResult&gt;>} containing the result of the ping.
      */
     public Outcome<PingResult> pingSync( final String _address, final int _port ) throws InterruptedException {
 
@@ -178,89 +194,90 @@ public class TCPPinger {
         @Override
         public void run() {
 
+            // if we don't have a channel yet, then we need to create one and start a connection attempt...
             if( channel == null ) {
                 try {
                     channel = SocketChannel.open();
                     channel.configureBlocking( false );
                     channel.connect( socketAddress );
-                    scheduler.schedule( this, Duration.ofMillis( 1 ) );
                 }
                 catch( IOException _e ) {
-                    callback.accept( new Outcome<>( false, "Problem trying to connect", _e, null ) );
+                    callback.accept( new Outcome<>( false, "Problem creating a channel or trying to connect", _e, null ) );
                 }
-
-                return;
             }
 
-            boolean finishedConnecting;
             try {
-                finishedConnecting = channel.finishConnect();
-            }
-            catch( IOException _e ) {
 
-                if( (_e instanceof ConnectException) && (_e.getMessage().contains( "refused" )) ) {
-
-                    try {
-                        channel.close();
-                    }
-                    catch( IOException _f ) {
-                        // naught to do...
-                    }
-                    callback.accept( new Outcome<>( true, null, null, new PingResult( true, waitedMS / 1000d ) ) );
-                    return;
+                // if we've finished connecting, then close the channel and leave with success and a response time...
+                if( channel.finishConnect() ) {
+                    close( channel );
+                    callback.accept(
+                            new Outcome<>( true, null, null, new PingResult( true, waitedMS / 1000d ) )
+                    );
                 }
-                callback.accept( new Outcome<>( false, "Problem trying to finish connecting", _e, null ) );
-                return;
-            }
 
-            if( !finishedConnecting ) {
-
-                // we need to schedule another check and leave...
-                int nextWait;
-                if( waitedMS < 10 ) nextWait = 1;
-                else if( waitedMS < 500 ) nextWait = 10;
-                else if( waitedMS < 2000 ) nextWait = 50;
-                else {
-                    try {
-                        channel.close();
-                    }
-                    catch( IOException _e ) {
-                        // naught to do...
-                    }
+                // if we've already waited more than 2 seconds, it's time to fail...
+                else if( waitedMS > 2000 ) {
+                    close( channel );
                     callback.accept( new Outcome<>( true, null, null, new PingResult( false, 0 ) ) );
-                    return;
                 }
-                waitedMS += nextWait;
-                scheduler.schedule( this, Duration.ofMillis( nextWait ) );
-                return;
+
+                // otherwise, we need to schedule another check for completion...
+                else {
+                    int nextWait = nextWaitMS( waitedMS );
+                    waitedMS += nextWait;
+                    scheduler.schedule( this, Duration.ofMillis( nextWait ) );
+                }
+
             }
 
-            try {
-                channel.close();
-            }
+            // we got some kind of exception, which MIGHT be notification of a connection refusal...
             catch( IOException _e ) {
-                // naught to do...
+
+                // no matter what, we need to close the channel...
+                close( channel );
+
+                // if this is a "connection refused" exception, treat it just like a connection finished...
+                if( (_e instanceof ConnectException) && (_e.getMessage().contains( "refused" )) ) {
+                    callback.accept( new Outcome<>( true, null, null, new PingResult( true, waitedMS / 1000d ) ) );
+                }
+
+                // otherwise, it was actually an error and we've failed...
+                else {
+                    callback.accept(new Outcome<>(false, "Problem trying to finish connecting", _e, null));
+                }
             }
-            callback.accept( new Outcome<>( true, null, null, new PingResult( true, waitedMS / 1000d ) ) );
         }
     }
 
 
+    private int nextWaitMS( final int _waitedMS ) {
+        if( _waitedMS < 10 ) return 1;
+        if( _waitedMS < 500 ) return 10;
+        return 50;
+    }
+
+
+    /**
+     * Closes the given {@link SocketChannel}, ignoring any exceptions.
+     *
+     * @param _channel the {@link SocketChannel} to close.
+     */
+    private void close( final SocketChannel _channel ) {
+        try { _channel.close(); } catch( IOException _e ) { /* naught to do... */ }
+    }
+
+
+    /**
+     * Container for ping results:
+     * <ul>
+     *     <li>{@code success} is {@code true} if any response to the open connection attempt was received</li>
+     *     <li>{@code responseSeconds} is set to the time it took for the response to be received if {@code success} is {@code true}; otherwise it is
+     *     set to zero</li>
+     * </ul>
+     */
     public record PingResult(
             boolean success,
             double responseSeconds
     ) {}
-
-
-    public static void main( String[] _args ) throws InterruptedException {
-
-        TCPPinger pinger = new TCPPinger();
-        pinger.ping( "paradiseweather.info", 80, TCPPinger::callback );
-        System.out.println( pinger.pingSync( "paradiseweather.info", 80 ) );
-        sleep( 3000 );
-    }
-
-    private static void callback( Outcome<PingResult> _result ) {
-        System.out.println( _result.toString() );
-    }
 }
