@@ -30,7 +30,8 @@ import static java.util.logging.Level.FINE;
 @SuppressWarnings( "unused" )
 public class TCPPinger {
 
-    final static private Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
+    private static final Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
+    private static final int DEFAULT_TIMEOUT_MS = 2000;
 
     // null unless the no-args constructor is ever called, in which case it will refer to a scheduler with a single daemon thread...
     private static volatile ScheduledExecutor defaultScheduler;
@@ -81,16 +82,18 @@ public class TCPPinger {
      * "ping", and the callback method is called when it completes or there is an error.  The given IP address string may contain either an IPv4
      * address (in standard dotted-decimal form) or an IPv6 address (in the forms defined in RFC 2732 or RFC 2373).  The callback can be any method
      * that accepts an instance of {@link Outcome Outcome&lt;PingResult&gt;}.  The callback method is called if the ping fails for some reason (in
-     * which case the outcome is failure and there will be a diagnostic message and perhaps an exception), or when it completes.  If a response was
-     * received for the ping, then {@link PingResult#success} will be {@code true}, and {@link PingResult#responseSeconds} will contain the response
-     * time in seconds.  If no response was received for the ping, then {@link PingResult#success} will be {@code false} and
+     * which case the outcome is failure and there will be a diagnostic message and perhaps an exception), when it times out (no response received
+     * within the given timeout milliseconds), or when a response is received.  If a response was received for the "ping", then
+     * {@link PingResult#success} will be {@code true}, and {@link PingResult#responseSeconds} will contain the response
+     * time in seconds.  If no response was received for the "ping", then {@link PingResult#success} will be {@code false} and
      * {@link PingResult#responseSeconds} will contain zero.
      *
      * @param _address The IPv4 or IPv6 address to attempt to open a TCP connection on.
      * @param _port The TCP port to attempt to open a TCP connection on.
+     * @param _timeoutMS The maximum time to wait for a response, in milliseconds.
      * @param _callback The method to be called when the ping completes.
      */
-    public void ping( final String _address, final int _port, final Consumer<Outcome<PingResult>> _callback ) {
+    public void ping( final String _address, final int _port, final int _timeoutMS, final Consumer<Outcome<PingResult>> _callback ) {
 
         // sanity checks...
         if( _callback == null )
@@ -99,6 +102,8 @@ public class TCPPinger {
             throw new IllegalArgumentException( "No IP address supplied for TCP ping" );
         if( (_port <= 0) || (_port > 65535) )
             throw new IllegalArgumentException( "Invalid port supplied for TCP ping: " + _port );
+        if( _timeoutMS < 0 )
+            throw new IllegalArgumentException( "Invalid timeout: " + _timeoutMS );
         InetAddress address;
         try {
             address = InetAddress.getByName( _address );
@@ -108,17 +113,71 @@ public class TCPPinger {
         }
 
         // attempt to connect and wait for the result...
-        new Runner( new InetSocketAddress( address, _port ), _callback ).run();
+        new Runner( new InetSocketAddress( address, _port ), _timeoutMS, _callback ).run();
+    }
+
+
+    /**
+     * "Pings" the given host and port by attempting to open a TCP connection to it.  This is an asynchronous method; calling the method starts the
+     * "ping", and the callback method is called when it completes or there is an error.  The given IP address string may contain either an IPv4
+     * address (in standard dotted-decimal form) or an IPv6 address (in the forms defined in RFC 2732 or RFC 2373).  The callback can be any method
+     * that accepts an instance of {@link Outcome Outcome&lt;PingResult&gt;}.  The callback method is called if the ping fails for some reason (in
+     * which case the outcome is failure and there will be a diagnostic message and perhaps an exception), when it times out (no response received
+     * within two seconds), or when a response is received.  If a response was received for the "ping", then
+     * {@link PingResult#success} will be {@code true}, and {@link PingResult#responseSeconds} will contain the response
+     * time in seconds.  If no response was received for the "ping", then {@link PingResult#success} will be {@code false} and
+     * {@link PingResult#responseSeconds} will contain zero.
+     *
+     * @param _address The IPv4 or IPv6 address to attempt to open a TCP connection on.
+     * @param _port The TCP port to attempt to open a TCP connection on.
+     * @param _callback The method to be called when the ping completes.
+     */
+    public void ping( final String _address, final int _port, final Consumer<Outcome<PingResult>> _callback ) {
+        ping( _address, _port, DEFAULT_TIMEOUT_MS, _callback );
     }
 
 
     /**
      * "Pings" the given host and port by attempting to open a TCP connection to it.  This is a synchronous method; calling the method starts the
-     * "ping" and blocks until it is complete.  The given IP address string may contain either an IPv4 address (in standard dotted-decimal form)
-     * or an IPv6 address (in the forms defined in RFC 2732 or RFC 2373).  This method returns if the ping fails for some reason
-     * (in which case the outcome is failure and there will be a diagnostic message and perhaps an exception), or when it completes.  If a response
-     * was received for the ping, then {@link PingResult#success} will be {@code true}, and {@link PingResult#responseSeconds} will contain the
-     * response time in seconds.  If no response was received for the ping, then {@link PingResult#success} will be {@code false} and
+     * "ping" and blocks until it is complete.  The given IP address string may contain either an IPv4
+     * address (in standard dotted-decimal form) or an IPv6 address (in the forms defined in RFC 2732 or RFC 2373).  The callback can be any method
+     * that accepts an instance of {@link Outcome Outcome&lt;PingResult&gt;}.  The callback method is called if the ping fails for some reason (in
+     * which case the outcome is failure and there will be a diagnostic message and perhaps an exception), when it times out (no response received
+     * within the given timeout milliseconds), or when a response is received.  If a response was received for the "ping", then
+     * {@link PingResult#success} will be {@code true}, and {@link PingResult#responseSeconds} will contain the response
+     * time in seconds.  If no response was received for the "ping", then {@link PingResult#success} will be {@code false} and
+     * {@link PingResult#responseSeconds} will contain zero.
+     *
+     * @param _address The IPv4 or IPv6 address to attempt to open a TCP connection on.
+     * @param _port The TCP port to attempt to open a TCP connection on.
+     * @param _timeoutMS The maximum time to wait for a response, in milliseconds.
+     * @return The {@link Outcome Outcome&lt;PingResult&gt;>} containing the result of the ping.
+     */
+    public Outcome<PingResult> pingSync( final String _address, final int _port, final int _timeoutMS ) throws InterruptedException {
+
+        // create an instance that will collect the result of the ping and release a permit on a semaphore when the ping finishes...
+        Waiter waiter = new Waiter();
+
+        // start our ping...
+        ping( _address, _port, _timeoutMS, waiter::done );
+
+        // block until the ping has finished...
+        waiter.semaphore.acquire();
+
+        // return with the results...
+        return waiter.result;
+    }
+
+
+    /**
+     * "Pings" the given host and port by attempting to open a TCP connection to it.  This is a synchronous method; calling the method starts the
+     * "ping" and blocks until it is complete.  The given IP address string may contain either an IPv4
+     * address (in standard dotted-decimal form) or an IPv6 address (in the forms defined in RFC 2732 or RFC 2373).  The callback can be any method
+     * that accepts an instance of {@link Outcome Outcome&lt;PingResult&gt;}.  The callback method is called if the ping fails for some reason (in
+     * which case the outcome is failure and there will be a diagnostic message and perhaps an exception), when it times out (no response received
+     * within two seconds), or when a response is received.  If a response was received for the "ping", then
+     * {@link PingResult#success} will be {@code true}, and {@link PingResult#responseSeconds} will contain the response
+     * time in seconds.  If no response was received for the "ping", then {@link PingResult#success} will be {@code false} and
      * {@link PingResult#responseSeconds} will contain zero.
      *
      * @param _address The IPv4 or IPv6 address to attempt to open a TCP connection on.
@@ -126,18 +185,7 @@ public class TCPPinger {
      * @return The {@link Outcome Outcome&lt;PingResult&gt;>} containing the result of the ping.
      */
     public Outcome<PingResult> pingSync( final String _address, final int _port ) throws InterruptedException {
-
-        // create an instance that will collect the result of the ping and release a permit on a semaphore when the ping finishes...
-        Waiter waiter = new Waiter();
-
-        // start our ping...
-        ping( _address, _port, waiter::done );
-
-        // block until the ping has finished...
-        waiter.semaphore.acquire();
-
-        // return with the results...
-        return waiter.result;
+        return pingSync( _address, _port, DEFAULT_TIMEOUT_MS );
     }
 
 
@@ -179,6 +227,7 @@ public class TCPPinger {
     private class Runner implements Runnable {
 
         private final InetSocketAddress socketAddress;
+        private final int timeoutMS;
         private final Consumer<Outcome<PingResult>> callback;
 
         // the number of milliseconds to wait before the next check to see if ping has completed...
@@ -187,8 +236,9 @@ public class TCPPinger {
         private SocketChannel channel;
 
 
-        private Runner( final InetSocketAddress _socketAddress, final Consumer<Outcome<PingResult>> _callback ) {
+        private Runner( final InetSocketAddress _socketAddress, final int _timeoutMS, final Consumer<Outcome<PingResult>> _callback ) {
             socketAddress = _socketAddress;
+            timeoutMS = _timeoutMS;
             callback = _callback;
         }
 
@@ -218,8 +268,8 @@ public class TCPPinger {
                     );
                 }
 
-                // if we've already waited more than 2 seconds, it's time to fail...
-                else if( waitedMS > 2000 ) {
+                // if we've already waited more than the timeout milliseconds, it's time to fail...
+                else if( waitedMS > timeoutMS ) {
                     close( channel );
                     callback.accept( new Outcome<>( true, null, null, new PingResult( false, 0 ) ) );
                 }
