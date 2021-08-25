@@ -15,23 +15,23 @@ import static com.dilatush.util.Strings.isEmpty;
 import static java.util.logging.Level.FINE;
 
 /**
- * <p>Instances of this class "ping" a host or device with an open TCP port (or one that refuses a connection).  If there's a response (including
- * refusal to connect), then the ping was successful and the response time is returned.  If there's no response at all (not even a refusal), then
- * the ping was unsuccessful.  A successful TCP ping indicates good network connectivity to the host or device.</p>
- * <p>TCPPinger is asynchronous internally, but the convenience method {@link #pingSync(String,int)} is provided to emulate synchronous (blocking)
+ * <p>Instances of this class "ping" a host or device with a datagram sent an open UDP port that will respond with a datagram.  If there's a response,
+ * then the ping was successful and the response time is returned.  If there's no response at all within a specified time, then
+ * the ping was unsuccessful.  A successful UDP ping indicates good network connectivity to the host or device.</p>
+ * <p>UDPPinger is asynchronous internally, but the convenience method {@link #pingSync(String,int)} is provided to emulate synchronous (blocking)
  * behavior.</p>
- * <p>TCPPinger uses a {@link ScheduledExecutor} instance (either a default instance or a supplied instance) to schedule checks on the progress of the
- * TCP connection, rather than blocking until it is finished.  These checks are performed every millisecond up to 10 milliseconds, then every 10
+ * <p>UDPPinger uses a {@link ScheduledExecutor} instance (either a default instance or a supplied instance) to schedule checks for a response, rather
+ * than blocking until it is finished.  These checks are performed every millisecond up to 10 milliseconds, then every 10
  * milliseconds up to 500 milliseconds, then every 50 milliseconds.  This provides higher resolutions for faster responses, but still
  * keeps the worst-case number of checks to a reasonable number.</p>
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
 @SuppressWarnings( "unused" )
-public class TCPPinger {
+public class UDPPinger {
 
     private static final Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
-    private static final int DEFAULT_TIMEOUT_MS = 2000;
+    private static final int DEFAULT_TIMEOUT_MS = 1000;
 
     // null unless the no-args constructor is ever called, in which case it will refer to a scheduler with a single daemon thread...
     private static volatile ScheduledExecutor defaultScheduler;
@@ -42,9 +42,9 @@ public class TCPPinger {
 
     /**
      * Creates a new instance of this class using the default scheduler, which has a single daemon thread shared by all instances of
-     * TCPPinger that use the default scheduler.
+     * UDPPinger that use the default scheduler.
      */
-    public TCPPinger() {
+    public UDPPinger() {
 
         // non-blocking check to see if we don't already have a default scheduler...
         if( defaultScheduler == null ) {
@@ -72,7 +72,7 @@ public class TCPPinger {
      *
      * @param _scheduler  The {@link ScheduledExecutor} instance to use for asynchronous operations.
      */
-    public TCPPinger( final ScheduledExecutor _scheduler ) {
+    public UDPPinger( final ScheduledExecutor _scheduler ) {
         scheduler = _scheduler;
     }
 

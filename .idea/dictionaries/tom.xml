@@ -5,6 +5,7 @@
       <w>adak</w>
       <w>akdt</w>
       <w>arities</w>
+      <w>axfr</w>
       <w>forma</w>
       <w>fsm's</w>
       <w>generac</w>
@@ -12,8 +13,13 @@
       <w>hadt</w>
       <w>hapdata</w>
       <w>haps</w>
+      <w>hinfo</w>
       <w>hmmss</w>
+      <w>iquery</w>
       <w>kilopascals</w>
+      <w>maila</w>
+      <w>mailb</w>
+      <w>minfo</w>
       <w>multibyte</w>
       <w>myfile</w>
       <w>noninfringement</w>
@@ -26,6 +32,9 @@
       <w>pntr</w>
       <w>positionals</w>
       <w>prestart</w>
+      <w>qclass</w>
+      <w>qtype</w>
+      <w>qtypes</w>
       <w>randomish</w>
       <w>renormalize</w>
       <w>signoff</w>
