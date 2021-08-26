@@ -1,7 +1,12 @@
 package com.dilatush.util.dns;
 
+import com.dilatush.util.Outcome;
+
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+
+import static com.dilatush.util.General.isNull;
 
 /**
  * Enumerates the possible resource class types, and defines their codes and text representations.
@@ -18,6 +23,8 @@ public enum DNSRRClass {
     ASTER  ( true,  "*",  255 );    // A request for all classes...
 
 
+    private static final Outcome.Forge<DNSRRClass> outcome = new Outcome.Forge<>();
+
     /** {@code true} if this class is only valid in a query. */
     public final boolean isQCLASS;
 
@@ -26,6 +33,12 @@ public enum DNSRRClass {
 
     /** The value (code) of this class in a resource record. */
     public final int     code;
+
+    /** The bytes that encode this class in a resource record. */
+    public final byte[]  bytes;
+
+    /** The number of bytes that encode this class in a resource record. */
+    public final int     length;
 
 
     private static final Map<String, DNSRRClass>   fromText = new HashMap<>();  // mapping of text representation to instances of this class...
@@ -46,6 +59,10 @@ public enum DNSRRClass {
         isQCLASS = _isQCLASS;
         text = _text;
         code = _code;
+        length = 2;  // always encoded as 16 bits...
+        bytes = new byte[2];
+        bytes[0] = (byte)(code >>> 8);
+        bytes[1] = (byte)(code);
     }
 
 
@@ -68,5 +85,33 @@ public enum DNSRRClass {
      */
     public static DNSRRClass fromText( final String _text ) {
         return fromText.get( _text );
+    }
+
+
+    /**
+     * Attempts to create an instance of {@link DNSRRClass} from the given buffer, using bytes at the buffer's current position.  If the attempt is
+     * successful, then the returned outcome is ok and the newly created instance of {@link DNSRRClass} is the information in the outcome.  If the
+     * attempt fails, then the outcome is not ok and the message explains why.
+     *
+     * @param _buffer The {@link ByteBuffer} containing the bytes encoding the label.
+     * @return The {@link Outcome Outcome&lt;DNSRRClass&gt;} giving the results of the attempt.
+     */
+    public static Outcome<DNSRRClass> fromBuffer( final ByteBuffer _buffer ) {
+
+        if( isNull( _buffer ) )
+            return outcome.notOk( "Buffer is missing" );
+        if( _buffer.remaining() < 2 )
+            return outcome.notOk( "Buffer has insufficient bytes remaining");
+
+        // extract the 16 bit code (value)...
+        int code = 0xffff & _buffer.getShort();
+
+        // try to decode it...
+        DNSRRClass result = fromCode( code );
+
+        if( isNull( result ) )
+            return outcome.notOk( "Could not decode resource record class code: " + code );
+
+        return outcome.ok( result );
     }
 }

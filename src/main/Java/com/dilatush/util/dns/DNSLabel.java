@@ -2,8 +2,10 @@ package com.dilatush.util.dns;
 
 import com.dilatush.util.Outcome;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
+import static com.dilatush.util.General.isNull;
 import static com.dilatush.util.Strings.isEmpty;
 
 /**
@@ -13,6 +15,8 @@ import static com.dilatush.util.Strings.isEmpty;
  * @author Tom Dilatush  tom@dilatush.com
  */
 public class DNSLabel {
+
+    private static final Outcome.Forge<DNSLabel> outcome = new Outcome.Forge<>();
 
     /** The value of this label as a Java string. */
     public final String text;
@@ -54,15 +58,15 @@ public class DNSLabel {
 
         // empty strings are not allowed...
         if( isEmpty( _text ) )
-            return new Outcome<>( false, "Cannot create an empty DNS label", null, null );
+            return outcome.notOk( "Cannot create an empty DNS label" );
 
         // strings with more than 63 characters are not allowed...
         if( _text.length() > 63 )
-            return new Outcome<>( false, "Cannot have more than 63 characters in a label: " + _text, null, null );
+            return outcome.notOk( "Cannot have more than 63 characters in a label: " + _text );
 
         // first we make sure that neither the first nor the last character is a hyphen...
         if( (_text.charAt( 0 ) == '-') || (_text.charAt( _text.length() - 1 ) == '-') )
-            return new Outcome<>( false, "Hyphens may not be either the first or last character in a label: " + _text, null, null );
+            return outcome.notOk( "Hyphens may not be either the first or last character in a label: " + _text );
 
         // iterate over all the characters, checking them...
         for( char c : _text.toCharArray() ) {
@@ -71,10 +75,39 @@ public class DNSLabel {
                     ((c >= 'A') && (c <= 'Z')) ||
                     ((c >= '0') && (c <= '9'))
             ))
-                return new Outcome<>( false, "Illegal character in label: " + _text, null, null );
+                return outcome.notOk( "Illegal character in label: " + _text );
         }
 
         // if we make it here, then the given text is fine and we can make a label...
-        return new Outcome<>( true, null, null, new DNSLabel( _text ) );
+        return outcome.ok( new DNSLabel( _text ) );
+    }
+
+
+    /**
+     * Attempts to create an instance of {@link DNSLabel} from the given buffer, using bytes at the buffer's current position.  If the attempt is
+     * successful, then the returned outcome is ok and the newly created instance of {@link DNSLabel} is the information in the outcome.  If the
+     * attempt fails, then the outcome is not ok and the message explains why.
+     *
+     * @param _buffer The {@link ByteBuffer} containing the bytes encoding the label.
+     * @return The {@link Outcome Outcome&lt;DNSLabel&gt;} giving the results of the attempt.
+     */
+    public static Outcome<DNSLabel> fromBuffer( final ByteBuffer _buffer ) {
+
+        if( isNull( _buffer ) )
+            return outcome.notOk( "Buffer is missing" );
+        if( !_buffer.hasRemaining() )
+            return outcome.notOk( "Buffer has no bytes remaining");
+
+        // get the number of bytes (which is also the number of characters) in the label...
+        int length = _buffer.get() & 0xFF;
+
+        if( length > _buffer.remaining() )
+            return outcome.notOk( "Unexpected end of buffer" );
+
+        byte[] b = new byte[length];
+        _buffer.get( b );
+        String text = new String( b, StandardCharsets.US_ASCII );
+
+        return fromString( text );
     }
 }
