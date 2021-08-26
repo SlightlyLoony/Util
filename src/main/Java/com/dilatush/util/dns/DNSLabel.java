@@ -14,18 +14,30 @@ import static com.dilatush.util.Strings.isEmpty;
  */
 public class DNSLabel {
 
+    /** The value of this label as a Java string. */
     public final String text;
+
+    /** The value of this label as a sequence of ASCII bytes prefixed by a length byte. */
     public final byte[] bytes;
-    public final int length;
 
-    // TODO: needs comments...
+    /** The number of bytes in the bytes representation of this label. */
+    public final int    length;
 
 
+    /**
+     * Creates a new instance of this class from the given text.  Note that this constructor is private, and is called only from static factory
+     * methods; it assumes that the parameter is valid.
+     *
+     * @param _text The text to create a new label from.
+     */
     private DNSLabel( final String _text ) {
         text = _text;
-        bytes = new byte[ 1 + text.length() ];
+        bytes = new byte[ 1 + text.length() ];  // leave room for the length byte...
         bytes[0] = (byte)text.length();
-        System.arraycopy( text.getBytes( StandardCharsets.US_ASCII ), 0, bytes, 1, text.length() );
+        System.arraycopy(
+                text.getBytes( StandardCharsets.US_ASCII ), 0,   // get the text as ASCII bytes...
+                bytes, 1, text.length()                         // stuff it away 
+        );
         length = bytes.length;
     }
 
