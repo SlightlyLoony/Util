@@ -38,7 +38,8 @@ public enum DNSRRType {
     ASTER  ( true,  "*",     255 );    // A request for all records...
 
 
-    private static final Outcome.Forge<DNSRRType> outcome = new Outcome.Forge<>();
+    private static final Outcome.Forge<DNSRRType> outcome       = new Outcome.Forge<>();
+    private static final Outcome.Forge<?>         encodeOutcome = new Outcome.Forge<>();
 
     /** {@code true} if this type is only valid in a query. */
     public final boolean isQTYPE;
@@ -48,9 +49,6 @@ public enum DNSRRType {
 
     /** The value (code) of this type in a resource record. */
     public final int     code;
-
-    /** The bytes that encode this type in a resource record. */
-    public final byte[]  bytes;
 
     /** The number of bytes that encode this type in a resource record. */
     public final int     length;
@@ -75,9 +73,39 @@ public enum DNSRRType {
         text = _text;
         code = _code;
         length = 2;  // always encoded as 16 bits...
-        bytes = new byte[2];
+    }
+
+
+    /**
+     * Returns the bytes that encode this type in a resource record.
+     *
+     * @return the bytes that encode this type in a resource record.
+     */
+    public byte[] bytes() {
+        byte[] bytes = new byte[2];
         bytes[0] = (byte)(code >>> 8);
         bytes[1] = (byte)(code);
+        return bytes;
+    }
+
+
+    /**
+     * Encodes this instance into the given {@link ByteBuffer} at its current position.  If the encoding was successful, an ok {@link Outcome} is
+     * returned.  Otherwise, a not ok {@link Outcome} with an explanatory message is returned.
+     *
+     * @param _msgBuffer The {@link ByteBuffer} to encode this instance into.
+     * @return the bytes that encode this question.
+     */
+    public Outcome<?> encode( final ByteBuffer _msgBuffer ) {
+
+        if( isNull( _msgBuffer ) )
+            return encodeOutcome.notOk( "Missing message buffer" );
+
+        if( _msgBuffer.remaining() < 2 )
+            return encodeOutcome.notOk( "Insufficient room in message buffer" );
+
+        _msgBuffer.putShort( (short) code );
+        return encodeOutcome.ok();
     }
 
 
@@ -111,7 +139,7 @@ public enum DNSRRType {
      * @param _buffer The {@link ByteBuffer} containing the bytes encoding the label.
      * @return The {@link Outcome Outcome&lt;DNSRRType&gt;} giving the results of the attempt.
      */
-    public static Outcome<DNSRRType> fromBuffer( final ByteBuffer _buffer ) {
+    public static Outcome<DNSRRType> decode( final ByteBuffer _buffer ) {
 
         if( isNull( _buffer ) )
             return outcome.notOk( "Buffer is missing" );

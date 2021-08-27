@@ -7,6 +7,7 @@ package com.dilatush.util.dns;
 import com.dilatush.util.Outcome;
 
 import java.nio.ByteBuffer;
+import java.util.Map;
 
 import static com.dilatush.util.General.isNull;
 
@@ -15,9 +16,11 @@ import static com.dilatush.util.General.isNull;
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
+@SuppressWarnings( "unused" )
 public class DNSQuestion {
 
-    private static final Outcome.Forge<DNSQuestion> outcome = new Outcome.Forge<>();
+    private static final Outcome.Forge<DNSQuestion> outcome       = new Outcome.Forge<>();
+    private static final Outcome.Forge<?>           encodeOutcome = new Outcome.Forge<>();
 
     public final DNSDomainName qname;
     public final DNSRRType     qtype;
@@ -32,18 +35,27 @@ public class DNSQuestion {
 
 
     /**
-     * Returns the bytes that encode this question.
+     * Encodes this instance into the given {@link ByteBuffer} at its current position.  If the encoding was successful, an ok {@link Outcome} is
+     * returned.  Otherwise, a not ok {@link Outcome} with an explanatory message is returned.
      *
+     * @param _msgBuffer The {@link ByteBuffer} to encode this instance into.
+     * @param _nameOffsets The map of domain and sub-domain names that have been directly encoded, and their associated offset.
      * @return the bytes that encode this question.
      */
-    public byte[] encode() {
+    public Outcome<?> encode( final ByteBuffer _msgBuffer, final Map<String,Integer> _nameOffsets ) {
 
-        int length = qname.length + qtype.length + qclass.length;
-        byte[] result = new byte[length];
-        System.arraycopy( qname.bytes,  0, result, 0,                           qname.length  );
-        System.arraycopy( qtype.bytes,  0, result, qname.length,                qtype.length  );
-        System.arraycopy( qclass.bytes, 0, result, qname.length + qtype.length, qclass.length );
-        return result;
+        // encode the qname...
+        Outcome<?> result = qname.encode( _msgBuffer, _nameOffsets );
+        if( !result.ok() )
+            return result;
+
+        // encode the qtype...
+        result = qtype.encode( _msgBuffer );
+        if( !result.ok() )
+            return result;
+
+        // encode the qclass...
+        return qclass.encode( _msgBuffer );
     }
 
 
@@ -62,34 +74,18 @@ public class DNSQuestion {
      * @param _buffer The {@link ByteBuffer} containing the bytes encoding the question.
      * @return The {@link Outcome Outcome&lt;DNSQuestion&gt;} giving the results of the attempt.
      */
-    public static Outcome<DNSQuestion> fromBuffer( final ByteBuffer _buffer ) {
+    public static Outcome<DNSQuestion> decode( final ByteBuffer _buffer ) {
 
-        Outcome<DNSDomainName> domainNameOutcome = DNSDomainName.fromBuffer( _buffer );
+        Outcome<DNSDomainName> domainNameOutcome = DNSDomainName.decode( _buffer );
         if( !domainNameOutcome.ok() )
             return outcome.notOk( "Could not decode qname: " + domainNameOutcome.msg() );
-        Outcome<DNSRRType> rrTypeOutcome = DNSRRType.fromBuffer( _buffer );
+        Outcome<DNSRRType> rrTypeOutcome = DNSRRType.decode( _buffer );
         if( !rrTypeOutcome.ok() )
             return outcome.notOk( "Could not decode qtype: " + rrTypeOutcome.msg() );
-        Outcome<DNSRRClass> rrClassOutcome = DNSRRClass.fromBuffer( _buffer );
+        Outcome<DNSRRClass> rrClassOutcome = DNSRRClass.decode( _buffer );
         if( !rrClassOutcome.ok() )
             return outcome.notOk( "Could not decode qclass: " + rrClassOutcome.msg() );
 
         return outcome.ok( new DNSQuestion( domainNameOutcome.info(), rrTypeOutcome.info(), rrClassOutcome.info() ) );
-    }
-
-
-    public static void main( final String[] args ) {
-
-        Outcome<DNSDomainName> dno = DNSDomainName.fromString( "www.paradiseweather.info" );
-        DNSDomainName dn = dno.info();
-        Outcome<DNSQuestion> qo = create( dn, DNSRRType.A, DNSRRClass.IN );
-        DNSQuestion q = qo.info();
-        byte[] qe = q.encode();
-
-        ByteBuffer buffer = ByteBuffer.wrap( qe );
-
-        qo = fromBuffer( buffer );
-
-        new Object().hashCode();
     }
 }

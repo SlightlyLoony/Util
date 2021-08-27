@@ -21,9 +21,6 @@ public class DNSLabel {
     /** The value of this label as a Java string. */
     public final String text;
 
-    /** The value of this label as a sequence of ASCII bytes prefixed by a length byte. */
-    public final byte[] bytes;
-
     /** The number of bytes in the bytes representation of this label. */
     public final int    length;
 
@@ -36,13 +33,23 @@ public class DNSLabel {
      */
     private DNSLabel( final String _text ) {
         text = _text;
-        bytes = new byte[ 1 + text.length() ];  // leave room for the length byte...
+        length = text.length() + 1;
+    }
+
+
+    /**
+     * Return the value of this label as a sequence of ASCII bytes prefixed by a length byte.
+     *
+     * @return the value of this label as a sequence of ASCII bytes prefixed by a length byte.
+     */
+    public byte[] bytes() {
+        byte[] bytes = new byte[ 1 + text.length() ];  // leave room for the length byte...
         bytes[0] = (byte)text.length();
         System.arraycopy(
                 text.getBytes( StandardCharsets.US_ASCII ), 0,   // get the text as ASCII bytes...
-                bytes, 1, text.length()                         // stuff it away 
+                bytes, 1, text.length()                         // stuff it away
         );
-        length = bytes.length;
+        return bytes;
     }
 
 
@@ -91,7 +98,7 @@ public class DNSLabel {
      * @param _buffer The {@link ByteBuffer} containing the bytes encoding the label.
      * @return The {@link Outcome Outcome&lt;DNSLabel&gt;} giving the results of the attempt.
      */
-    public static Outcome<DNSLabel> fromBuffer( final ByteBuffer _buffer ) {
+    public static Outcome<DNSLabel> decode( final ByteBuffer _buffer ) {
 
         if( isNull( _buffer ) )
             return outcome.notOk( "Buffer is missing" );

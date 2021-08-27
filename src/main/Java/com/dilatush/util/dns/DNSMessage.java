@@ -1,5 +1,7 @@
 package com.dilatush.util.dns;
 
+import com.dilatush.util.dns.rr.DNSResourceRecord;
+
 import java.util.List;
 
 //   +----------------------------------------+
@@ -33,3 +35,8 @@ public class DNSMessage {
     private List<DNSResourceRecord> authorities;            // the authorities in this message...
     private List<DNSResourceRecord> additionalRecords;      // the additional records in this message...
 }
+
+// TODO: Dnsmessage
+// TODO:    Public final members
+// TODO:    Map constructor
+// TODO:    Builder

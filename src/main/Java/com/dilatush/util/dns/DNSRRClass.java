@@ -23,7 +23,8 @@ public enum DNSRRClass {
     ASTER  ( true,  "*",  255 );    // A request for all classes...
 
 
-    private static final Outcome.Forge<DNSRRClass> outcome = new Outcome.Forge<>();
+    private static final Outcome.Forge<DNSRRClass> outcome       = new Outcome.Forge<>();
+    private static final Outcome.Forge<?>          encodeOutcome = new Outcome.Forge<>();
 
     /** {@code true} if this class is only valid in a query. */
     public final boolean isQCLASS;
@@ -34,15 +35,13 @@ public enum DNSRRClass {
     /** The value (code) of this class in a resource record. */
     public final int     code;
 
-    /** The bytes that encode this class in a resource record. */
-    public final byte[]  bytes;
-
     /** The number of bytes that encode this class in a resource record. */
     public final int     length;
 
 
     private static final Map<String, DNSRRClass>   fromText = new HashMap<>();  // mapping of text representation to instances of this class...
     private static final Map<Integer, DNSRRClass>  fromCode = new HashMap<>();  // mapping of values (codes) to instances of this class...
+
 
     // initialized statically because we can't do it from the constructor...
     // see this good explanation:  https://stackoverflow.com/questions/443980/why-cant-enums-constructor-access-static-fields
@@ -60,9 +59,39 @@ public enum DNSRRClass {
         text = _text;
         code = _code;
         length = 2;  // always encoded as 16 bits...
-        bytes = new byte[2];
+    }
+
+
+    /**
+     * Return the bytes that encode this class in a resource record.
+     *
+     * @return the bytes that encode this class in a resource record.
+     */
+    public byte[] bytes() {
+        byte[] bytes = new byte[2];
         bytes[0] = (byte)(code >>> 8);
         bytes[1] = (byte)(code);
+        return bytes;
+    }
+
+
+    /**
+     * Encodes this instance into the given {@link ByteBuffer} at its current position.  If the encoding was successful, an ok {@link Outcome} is
+     * returned.  Otherwise, a not ok {@link Outcome} with an explanatory message is returned.
+     *
+     * @param _msgBuffer The {@link ByteBuffer} to encode this instance into.
+     * @return the bytes that encode this question.
+     */
+    public Outcome<?> encode( final ByteBuffer _msgBuffer ) {
+
+        if( isNull( _msgBuffer ) )
+            return encodeOutcome.notOk( "Missing message buffer" );
+
+        if( _msgBuffer.remaining() < 2 )
+            return encodeOutcome.notOk( "Insufficient room in message buffer" );
+
+        _msgBuffer.putShort( (short) code );
+        return encodeOutcome.ok();
     }
 
 
@@ -96,7 +125,7 @@ public enum DNSRRClass {
      * @param _buffer The {@link ByteBuffer} containing the bytes encoding the label.
      * @return The {@link Outcome Outcome&lt;DNSRRClass&gt;} giving the results of the attempt.
      */
-    public static Outcome<DNSRRClass> fromBuffer( final ByteBuffer _buffer ) {
+    public static Outcome<DNSRRClass> decode( final ByteBuffer _buffer ) {
 
         if( isNull( _buffer ) )
             return outcome.notOk( "Buffer is missing" );

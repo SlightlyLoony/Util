@@ -23,9 +23,6 @@ public class DNSDomainName {
     /** The length of the bytes representing this domain name. */
     public final int            length;
 
-    /** This domain name as a sequence of labels encoded in bytes, with a byte containing zero as a suffix. */
-    public final byte[]         bytes;
-
     /** This domain name as a sequence of {@link DNSLabel} instances. */
     public final List<DNSLabel> labels;
 
@@ -46,15 +43,6 @@ public class DNSDomainName {
             len += label.length;
         length = len + 1;  // the +1 is for the null termination byte...
 
-        // get the byte representation...
-        byte[] b = new byte[length + 1];  // the +1 is for the null termination byte...
-        int pos = 0;
-        for( DNSLabel label : labels ) {
-            System.arraycopy( label.bytes, 0, b, pos, label.length );
-            pos += label.length;
-        }
-        bytes = b;
-
         // get the text representation...
         StringBuilder sb = new StringBuilder( length + labels.size() - 1 );
         for( DNSLabel label : labels ) {
@@ -63,6 +51,25 @@ public class DNSDomainName {
             sb.append( label.text );
         }
         text = sb.toString();
+    }
+
+
+    /**
+     * Return this domain name as a sequence of labels encoded in bytes, with a byte containing zero as a suffix.  Note that this is done outside a
+     * particular message, so the result is not compressed.
+     *
+     * @return this domain name as a sequence of labels encoded in bytes, with a byte containing zero as a suffix.
+     */
+    public byte[] bytes() {
+
+        // get the byte representation...
+        byte[] bytes = new byte[length + 1];  // the +1 is for the null termination byte...
+        int pos = 0;
+        for( DNSLabel label : labels ) {
+            System.arraycopy( label.bytes(), 0, bytes, pos, label.length );
+            pos += label.length;
+        }
+        return bytes;
     }
 
     /*
@@ -142,7 +149,7 @@ public class DNSDomainName {
             _nameOffsets.put( dnsName.text, _msgBuffer.position() );
 
             // encode this label into our message buffer...
-            _msgBuffer.put( ls.get( 0 ).bytes );
+            _msgBuffer.put( ls.get( 0 ).bytes() );
 
             // we're done with this label, so pitch it away and carry on...
             ls.remove( 0 );
@@ -240,7 +247,7 @@ public class DNSDomainName {
      * @param _buffer The {@link ByteBuffer} containing the encoded bytes to create the new {@link DNSDomainName} instance from.
      * @return The {@link Outcome Outcome&lt;DNSDomainName&gt;} containing the result of this attempt.
      */
-    public static Outcome<DNSDomainName> fromBuffer( final ByteBuffer _buffer ) {
+    public static Outcome<DNSDomainName> decode( final ByteBuffer _buffer ) {
 
         if( isNull( _buffer ) )
             return outcome.notOk( "Buffer is missing" );
@@ -270,7 +277,7 @@ public class DNSDomainName {
 
             // we get here for a directly encoded (i.e., not compressed) label and add it to our list...
             // note that we can get here after following a compression pointer...
-            Outcome<DNSLabel> labelOutcome = DNSLabel.fromBuffer( _buffer );
+            Outcome<DNSLabel> labelOutcome = DNSLabel.decode( _buffer );
             if( !labelOutcome.ok() )
                 return outcome.notOk( "Could not decode label: " + labelOutcome.msg() );
             labels.add( labelOutcome.info() );
