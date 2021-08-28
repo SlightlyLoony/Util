@@ -9,7 +9,7 @@ import com.dilatush.util.dns.DNSDomainName;
 import com.dilatush.util.dns.DNSRRClass;
 import com.dilatush.util.dns.DNSRRType;
 
-import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
@@ -18,17 +18,17 @@ import java.util.Map;
 import static com.dilatush.util.General.isNull;
 
 /**
- * Instances of this class represent a DNS Resource Record for an IPv4 Internet address.
+ * Instances of this class represent a DNS Resource Record for an IPv6 Internet address.
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
-public class A extends DNSResourceRecord {
+public class AAAA extends DNSResourceRecord {
 
-    private static final Outcome.Forge<A> outcome       = new Outcome.Forge<>();
-    private static final Outcome.Forge<?> encodeOutcome = new Outcome.Forge<>();
+    private static final Outcome.Forge<AAAA> outcome       = new Outcome.Forge<>();
+    private static final Outcome.Forge<?>    encodeOutcome = new Outcome.Forge<>();
 
-    /** The IPv4 address associated with this DNS domain name. */
-    public final Inet4Address address;
+    /** The IPv6 address associated with this DNS domain name. */
+    public final Inet6Address address;
 
 
     /**
@@ -38,11 +38,11 @@ public class A extends DNSResourceRecord {
      * @param _klass The {@link DNSRRClass} that this resource record pertains to (in the real world, always IN for Internet).
      * @param _ttl This resource record's time-to-live (in a cache) in seconds, or zero for no caching.
      * @param _dataLength The length (in bytes) of this resource record's data (not including the resource record's header).
-     * @param _address The IPv4 address associated with the named owner of this resource record.
+     * @param _address The IPv6 address associated with the named owner of this resource record.
      */
-    private A(
+    private AAAA(
             final DNSDomainName _name, final DNSRRClass _klass, final long _ttl, final int _dataLength,
-            final Inet4Address _address ) {
+            final Inet6Address _address ) {
 
         super( new Init( _name, DNSRRType.A, _klass, _ttl, _dataLength ) );
         address = _address;
@@ -56,17 +56,17 @@ public class A extends DNSResourceRecord {
      * @param _name The {@link DNSDomainName} that the IP address in this class pertains to.
      * @param _klass The {@link DNSRRClass} that this resource record pertains to (in the real world, always IN for Internet).
      * @param _ttl This resource record's time-to-live (in a cache) in seconds, or zero for no caching.
-     * @param _address The IPv4 address associated with the named owner of this resource record.
+     * @param _address The IPv6 address associated with the named owner of this resource record.
      * @return The {@link Outcome Outcome&lt;A&gt;} with the result of this method.
      */
-    public static Outcome<A> create(
+    public static Outcome<AAAA> create(
             final DNSDomainName _name, final DNSRRClass _klass, final int _ttl,
-            final Inet4Address _address ) {
+            final Inet6Address _address ) {
 
         if( isNull( _name, _klass, _address ) )
             return outcome.notOk( "Missing argument (name, class, or address)" );
 
-        return outcome.ok( new A( _name, _klass, _ttl, 4, _address ) );
+        return outcome.ok( new AAAA( _name, _klass, _ttl, 16, _address ) );
     }
 
 
@@ -76,12 +76,12 @@ public class A extends DNSResourceRecord {
      *
      * @param _name The {@link DNSDomainName} that the IP address in this class pertains to.
      * @param _ttl This resource record's time-to-live (in a cache) in seconds, or zero for no caching.
-     * @param _address The IPv4 address associated with the named owner of this resource record.
+     * @param _address The IPv6 address associated with the named owner of this resource record.
      * @return The {@link Outcome Outcome&lt;A&gt;} with the result of this method.
      */
-    public static Outcome<A> create(
+    public static Outcome<AAAA> create(
             final DNSDomainName _name, final int _ttl,
-            final Inet4Address _address ) {
+            final Inet6Address _address ) {
         return create( _name, DNSRRClass.IN, _ttl, _address);
     }
 
@@ -95,18 +95,18 @@ public class A extends DNSResourceRecord {
      * @param _msgBuffer The {@link ByteBuffer} to decode this resource record from.
      * @return The {@link Outcome} of the decoding operation.
      */
-    protected static Outcome<A> decode( final ByteBuffer _msgBuffer, final Init _init ) {
+    protected static Outcome<AAAA> decode(final ByteBuffer _msgBuffer, final Init _init ) {
 
-        // this resource record's data should always be 4 bytes long; check it...
-        if( _init.dataLength() != 4 )
-            return outcome.notOk( "Data length is not four bytes" );
+        // this resource record's data should always be 16 bytes long; check it...
+        if( _init.dataLength() != 16 )
+            return outcome.notOk( "Data length is not sixteen bytes" );
 
-        // decode the IPv4 address...
-        byte[] addrBytes = new byte[4];
+        // decode the IPv6 address...
+        byte[] addrBytes = new byte[16];
         _msgBuffer.get( addrBytes );
         try {
-            Inet4Address addr = (Inet4Address)InetAddress.getByAddress( addrBytes );
-            return outcome.ok( new A(_init.name(), _init.klass(), _init.ttl(), _init.dataLength(), addr ) );
+            Inet6Address addr = (Inet6Address)InetAddress.getByAddress( addrBytes );
+            return outcome.ok( new AAAA(_init.name(), _init.klass(), _init.ttl(), _init.dataLength(), addr ) );
         }
 
         // this should be impossible, as it is only thrown if the wrong number of bytes is supplied...
@@ -129,7 +129,7 @@ public class A extends DNSResourceRecord {
     @Override
     protected Outcome<?> encodeChild( ByteBuffer _msgBuffer, Map<String, Integer> _nameOffsets ) {
 
-        if( _msgBuffer.remaining() < 4 )
+        if( _msgBuffer.remaining() < 16 )
             return encodeOutcome.notOk( "Insufficient space in buffer" );
 
         _msgBuffer.put( address.getAddress() );

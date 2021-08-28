@@ -9,26 +9,23 @@ import com.dilatush.util.dns.DNSDomainName;
 import com.dilatush.util.dns.DNSRRClass;
 import com.dilatush.util.dns.DNSRRType;
 
-import java.net.Inet4Address;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.Map;
 
 import static com.dilatush.util.General.isNull;
 
 /**
- * Instances of this class represent a DNS Resource Record for an IPv4 Internet address.
+ * Instances of this class represent a DNS Resource Record for the canonical domain name associated with this resource record's domain name (the alias).
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
-public class A extends DNSResourceRecord {
+@SuppressWarnings( "unused" )
+public class CNAME extends DNSResourceRecord {
 
-    private static final Outcome.Forge<A> outcome       = new Outcome.Forge<>();
-    private static final Outcome.Forge<?> encodeOutcome = new Outcome.Forge<>();
+    private static final Outcome.Forge<CNAME> outcome       = new Outcome.Forge<>();
 
-    /** The IPv4 address associated with this DNS domain name. */
-    public final Inet4Address address;
+    /** The canonical (primary) domain name associated with this DNS domain name (the alias). */
+    public final DNSDomainName cname;
 
 
     /**
@@ -38,14 +35,14 @@ public class A extends DNSResourceRecord {
      * @param _klass The {@link DNSRRClass} that this resource record pertains to (in the real world, always IN for Internet).
      * @param _ttl This resource record's time-to-live (in a cache) in seconds, or zero for no caching.
      * @param _dataLength The length (in bytes) of this resource record's data (not including the resource record's header).
-     * @param _address The IPv4 address associated with the named owner of this resource record.
+     * @param _cname The canonical domain name associated with the named owner of this resource record.
      */
-    private A(
+    private CNAME(
             final DNSDomainName _name, final DNSRRClass _klass, final long _ttl, final int _dataLength,
-            final Inet4Address _address ) {
+            final DNSDomainName _cname ) {
 
         super( new Init( _name, DNSRRType.A, _klass, _ttl, _dataLength ) );
-        address = _address;
+        cname = _cname;
     }
 
 
@@ -56,17 +53,17 @@ public class A extends DNSResourceRecord {
      * @param _name The {@link DNSDomainName} that the IP address in this class pertains to.
      * @param _klass The {@link DNSRRClass} that this resource record pertains to (in the real world, always IN for Internet).
      * @param _ttl This resource record's time-to-live (in a cache) in seconds, or zero for no caching.
-     * @param _address The IPv4 address associated with the named owner of this resource record.
+     * @param _cname The canonical domain name associated with the named owner of this resource record.
      * @return The {@link Outcome Outcome&lt;A&gt;} with the result of this method.
      */
-    public static Outcome<A> create(
+    public static Outcome<CNAME> create(
             final DNSDomainName _name, final DNSRRClass _klass, final int _ttl,
-            final Inet4Address _address ) {
+            final DNSDomainName _cname ) {
 
-        if( isNull( _name, _klass, _address ) )
-            return outcome.notOk( "Missing argument (name, class, or address)" );
+        if( isNull( _name, _klass, _cname ) )
+            return outcome.notOk( "Missing argument (name, class, or cname)" );
 
-        return outcome.ok( new A( _name, _klass, _ttl, 4, _address ) );
+        return outcome.ok( new CNAME( _name, _klass, _ttl, 4, _cname ) );
     }
 
 
@@ -76,13 +73,13 @@ public class A extends DNSResourceRecord {
      *
      * @param _name The {@link DNSDomainName} that the IP address in this class pertains to.
      * @param _ttl This resource record's time-to-live (in a cache) in seconds, or zero for no caching.
-     * @param _address The IPv4 address associated with the named owner of this resource record.
+     * @param _cname The canonical domain name associated with the named owner of this resource record.
      * @return The {@link Outcome Outcome&lt;A&gt;} with the result of this method.
      */
-    public static Outcome<A> create(
+    public static Outcome<CNAME> create(
             final DNSDomainName _name, final int _ttl,
-            final Inet4Address _address ) {
-        return create( _name, DNSRRClass.IN, _ttl, _address);
+            final DNSDomainName _cname ) {
+        return create( _name, DNSRRClass.IN, _ttl, _cname );
     }
 
 
@@ -95,24 +92,15 @@ public class A extends DNSResourceRecord {
      * @param _msgBuffer The {@link ByteBuffer} to decode this resource record from.
      * @return The {@link Outcome} of the decoding operation.
      */
-    protected static Outcome<A> decode( final ByteBuffer _msgBuffer, final Init _init ) {
+    protected static Outcome<CNAME> decode(final ByteBuffer _msgBuffer, final Init _init ) {
 
-        // this resource record's data should always be 4 bytes long; check it...
-        if( _init.dataLength() != 4 )
-            return outcome.notOk( "Data length is not four bytes" );
+        // decode the domain name...
+        Outcome<DNSDomainName> dnOutcome = DNSDomainName.decode( _msgBuffer );
+        if( dnOutcome.notOk() )
+            return outcome.notOk(dnOutcome.msg() );
 
-        // decode the IPv4 address...
-        byte[] addrBytes = new byte[4];
-        _msgBuffer.get( addrBytes );
-        try {
-            Inet4Address addr = (Inet4Address)InetAddress.getByAddress( addrBytes );
-            return outcome.ok( new A(_init.name(), _init.klass(), _init.ttl(), _init.dataLength(), addr ) );
-        }
-
-        // this should be impossible, as it is only thrown if the wrong number of bytes is supplied...
-        catch (UnknownHostException e) {
-            return outcome.notOk( "We got the impossible UnknownHostException" );
-        }
+        // create and return our instance...
+        return outcome.ok( new CNAME(_init.name(), _init.klass(), _init.ttl(), _init.dataLength(), dnOutcome.info() ) );
     }
 
 
@@ -129,11 +117,8 @@ public class A extends DNSResourceRecord {
     @Override
     protected Outcome<?> encodeChild( ByteBuffer _msgBuffer, Map<String, Integer> _nameOffsets ) {
 
-        if( _msgBuffer.remaining() < 4 )
-            return encodeOutcome.notOk( "Insufficient space in buffer" );
-
-        _msgBuffer.put( address.getAddress() );
-        return encodeOutcome.ok();
+        // encode the cname and skedaddle...
+        return cname.encode( _msgBuffer, _nameOffsets );
     }
 
 
@@ -143,6 +128,6 @@ public class A extends DNSResourceRecord {
      * @return a string representing this instance.
      */
     public String toString() {
-        return type.name() + ": " + address.getHostAddress() + super.toString();
+        return type.name() + ": " + cname.text + super.toString();
     }
 }

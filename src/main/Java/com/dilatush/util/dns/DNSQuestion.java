@@ -11,6 +11,7 @@ import java.util.Map;
 
 import static com.dilatush.util.General.isNull;
 
+// TODO: add toString()...
 /**
  * Instances of this class represent a DNS question.  Instances are immutable and threadsafe.
  *
@@ -68,12 +69,18 @@ public class DNSQuestion {
     }
 
 
-    /**
-     * Attempts to create a new instance of this class from the bytes at the current position of the given {@link ByteBuffer}.
-     *
-     * @param _buffer The {@link ByteBuffer} containing the bytes encoding the question.
-     * @return The {@link Outcome Outcome&lt;DNSQuestion&gt;} giving the results of the attempt.
-     */
+    public static Outcome<DNSQuestion> create(  final DNSDomainName _qname, final DNSRRType _qtype ) {
+        return create( _qname, _qtype, DNSRRClass.IN );
+    }
+
+
+
+        /**
+         * Attempts to create a new instance of this class from the bytes at the current position of the given {@link ByteBuffer}.
+         *
+         * @param _buffer The {@link ByteBuffer} containing the bytes encoding the question.
+         * @return The {@link Outcome Outcome&lt;DNSQuestion&gt;} giving the results of the attempt.
+         */
     public static Outcome<DNSQuestion> decode( final ByteBuffer _buffer ) {
 
         Outcome<DNSDomainName> domainNameOutcome = DNSDomainName.decode( _buffer );
