@@ -42,6 +42,16 @@ public record Outcome<T>( boolean ok, String msg, Throwable cause, T info ) {
 
 
     /**
+     * Returns {@code true} if this instance is <i>not</i> ok.
+     *
+     * @return {@code true} if this instance is <i>not</i> ok.
+     */
+    public boolean notOk() {
+        return !ok();
+    }
+
+
+    /**
      * Provides a factory class for {@link Outcome}, to provide easy and safe construction of new {@link Outcome} instances.
      *
      * @param <T> The type of information that may be contained by an Outcome.
