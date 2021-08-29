@@ -12,6 +12,7 @@ import java.util.Map;
 import static com.dilatush.util.General.isNull;
 
 // TODO: add toString()...
+// TODO: add comments...
 /**
  * Instances of this class represent a DNS question.  Instances are immutable and threadsafe.
  *

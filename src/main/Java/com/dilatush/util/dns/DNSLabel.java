@@ -9,7 +9,7 @@ import static com.dilatush.util.General.isNull;
 import static com.dilatush.util.Strings.isEmpty;
 
 /**
- * Instances of this class represent DNS "labels", which are sequences of [0..63] ASCII characters.  A label may use the characters [a..z], [A-Z],
+ * Instances of this class represent DNS "labels", which are sequences of [0..63] ASCII characters.  A label may use the characters [a..z], [A..Z],
  * [0..9], plus a hyphen ('-'), but the first and last characters must not be a hyphen.  Instances of this class are immutable and threadsafe.
  *
  * @author Tom Dilatush  tom@dilatush.com
@@ -85,7 +85,7 @@ public class DNSLabel {
                 return outcome.notOk( "Illegal character in label: " + _text );
         }
 
-        // if we make it here, then the given text is fine and we can make a label...
+        // if we make it here, then the given text is fine, and we can make a label...
         return outcome.ok( new DNSLabel( _text ) );
     }
 
