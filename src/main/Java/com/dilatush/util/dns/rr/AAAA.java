@@ -44,7 +44,7 @@ public class AAAA extends DNSResourceRecord {
             final DNSDomainName _name, final DNSRRClass _klass, final long _ttl, final int _dataLength,
             final Inet6Address _address ) {
 
-        super( new Init( _name, DNSRRType.A, _klass, _ttl, _dataLength ) );
+        super( new Init( _name, DNSRRType.AAAA, _klass, _ttl, _dataLength ) );
         address = _address;
     }
 

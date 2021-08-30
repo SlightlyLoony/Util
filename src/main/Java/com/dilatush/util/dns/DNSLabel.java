@@ -80,7 +80,8 @@ public class DNSLabel {
             if( !(
                     ((c >= 'a') && (c <= 'z')) ||
                     ((c >= 'A') && (c <= 'Z')) ||
-                    ((c >= '0') && (c <= '9'))
+                    ((c >= '0') && (c <= '9')) ||
+                     (c == '-')
             ))
                 return outcome.notOk( "Illegal character in label: " + _text );
         }

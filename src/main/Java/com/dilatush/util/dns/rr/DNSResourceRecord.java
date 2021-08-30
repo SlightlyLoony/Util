@@ -181,6 +181,8 @@ public abstract class DNSResourceRecord {
                 case A     -> A.decode    ( _msgBuffer, init );
                 case AAAA  -> AAAA.decode ( _msgBuffer, init );
                 case CNAME -> CNAME.decode( _msgBuffer, init );
+                case NS    -> NS.decode   ( _msgBuffer, init );
+                case SOA   -> SOA.decode  ( _msgBuffer, init );
 
                 default   -> outcome.notOk( "Unimplemented resource record type: " + typeOutcome.info().name() );
             };
