@@ -3,6 +3,7 @@ package com.dilatush.util.dns;
 import com.dilatush.util.Outcome;
 import com.dilatush.util.dns.rr.DNSResourceRecord;
 
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.util.*;
 
@@ -22,7 +23,9 @@ import static com.dilatush.util.General.isNull;
 @SuppressWarnings( "unused" )
 public class DNSMessage {
 
-    private static final int MAX_DNS_MESSAGE_SIZE = 512;
+    // the buffer sizes that we'll try while encoding...
+    private static final int[] MAX_DNS_MESSAGE_BUFFER_SIZES = new int[] { 512, 8192 + 2, 16384 + 2, 65536 + 2 };
+
     private static final Outcome.Forge<DNSMessage> outcome       = new Outcome.Forge<>();
     private static final Outcome.Forge<ByteBuffer> encodeOutcome = new Outcome.Forge<>();
 
@@ -118,79 +121,103 @@ public class DNSMessage {
 
 
     /**
-     * Attempt to encode this instance into the wire format for a DNS message, into a {@link ByteBuffer} instance.  If the attempt is successful,
+     * <p>Attempt to encode this instance into the wire format for a DNS message, into a {@link ByteBuffer} instance.  If the attempt is successful,
      * an ok {@link Outcome Outcome&lt;ByteBuffer&gt;} is returned containing the {@link ByteBuffer} with the encoded instance.  If the attempt was
-     * unsuccessful, a not ok outcome is returned, with a message explaining the problem encountered.
+     * unsuccessful, a not ok outcome is returned, with a message explaining the problem encountered.</p>
+     * <p>Internally this method first attempts to encode into a 512-byte buffer (the maximum size of a UDP DNS packet).  If that attempt fails, it
+     * will try several successively larger buffers until either it fits, or we've determined that it cannot fit into the 65538 bytes that is the
+     * maximum size for a TCP DNS packet.  Note that for all output buffers larger than 512 bytes, the result is prepended with the 16-bit length
+     * prefix required by TCP DNS.</p>
      *
      * @return the {@link Outcome Outcome&lt;ByteBuffer&gt;} with the results of the encoding attempt.
      */
     public Outcome<ByteBuffer> encode() {
 
-        // create the buffer to contain our result...
-        ByteBuffer msgBuffer = ByteBuffer.allocate( MAX_DNS_MESSAGE_SIZE );  // by default, it's big-endian...
+        // try successively larger buffers to encode into...
+        bufferSizes:
+        for( int maxDnsMessageBufferSize : MAX_DNS_MESSAGE_BUFFER_SIZES ) {
 
-        // create an empty offsets map for the domain name compression mechanism...
-        Map<String,Integer> offsets = new HashMap<>();
+            // create the buffer to contain our result...
+            ByteBuffer msgBuffer = ByteBuffer.allocate( maxDnsMessageBufferSize );  // by default, it's big-endian...
 
-        // we don't need to check whether we have enough space for the header, as we know we just allocated this thing...
-        // so we can just jump into encoding the header...
+            // create an empty offsets map for the domain name compression mechanism...
+            Map<String,Integer> offsets = new HashMap<>();
 
-        // stuff the app-supplied id away...
-        msgBuffer.putShort( (short) id );
+            // we don't need to check whether we have enough space for the header, as we know we just allocated this thing...
+            // so we can just jump into encoding the header...
 
-        // fabricate and stuff away our sixteen bits of flags and codes, working from the LSBs up...
-        int x;
-        x  = responseCode.code;
-        x |= checkingDisabled    ? 0x0010 : 0;
-        x |= authenticated       ? 0x0020 : 0;
-        x |= z                   ? 0x0040 : 0;
-        x |= canRecurse          ? 0x0080 : 0;
-        x |= recurse             ? 0x0100 : 0;
-        x |= truncated           ? 0x0200 : 0;
-        x |= authoritativeAnswer ? 0x0400 : 0;
-        x |= (opCode.code << 11);
-        x |= isResponse          ? 0x8000 : 0;
-        msgBuffer.putShort( (short)x );
+            // if it's larger than 512 bytes (UDP size), prepend the two byte length field for TCP (zero for placeholder, fill in later)...
+            if( msgBuffer.capacity() > 512 )
+                msgBuffer.putShort( (short) 0 );
 
-        // stuff away our four counts for questions and resource records...
-        msgBuffer.putShort( (short)questions.size()         );
-        msgBuffer.putShort( (short)answers.size()           );
-        msgBuffer.putShort( (short)authorities.size()       );
-        msgBuffer.putShort( (short)additionalRecords.size() );
+            // stuff the app-supplied id away...
+            msgBuffer.putShort( (short) id );
 
-        Outcome<?> result;
+            // fabricate and stuff away our sixteen bits of flags and codes, working from the LSBs up...
+            int x;
+            x = responseCode.code;
+            x |= checkingDisabled ? 0x0010 : 0;
+            x |= authenticated ? 0x0020 : 0;
+            x |= z ? 0x0040 : 0;
+            x |= canRecurse ? 0x0080 : 0;
+            x |= recurse ? 0x0100 : 0;
+            x |= truncated ? 0x0200 : 0;
+            x |= authoritativeAnswer ? 0x0400 : 0;
+            x |= (opCode.code << 11);
+            x |= isResponse ? 0x8000 : 0;
+            msgBuffer.putShort( (short) x );
 
-        // encode our questions...
-        for( DNSQuestion question : questions ) {
-            result = question.encode( msgBuffer, offsets );
-            if( result.notOk() )
+            // stuff away our four counts for questions and resource records...
+            msgBuffer.putShort( (short) questions.size() );
+            msgBuffer.putShort( (short) answers.size() );
+            msgBuffer.putShort( (short) authorities.size() );
+            msgBuffer.putShort( (short) additionalRecords.size() );
+
+            Outcome<?> result;
+
+            // encode our questions...
+            for( DNSQuestion question : questions ) {
+                result = question.encode( msgBuffer, offsets );
+                if( result.ok() ) continue;
+                if( result.cause() instanceof BufferOverflowException ) continue bufferSizes;
                 return encodeOutcome.notOk( result.msg() );
+            }
+
+            // encode our answers...
+            for( DNSResourceRecord answer : answers ) {
+                result = answer.encode( msgBuffer, offsets );
+                if( result.ok() ) continue;
+                if( result.cause() instanceof BufferOverflowException ) continue bufferSizes;
+                return encodeOutcome.notOk( result.msg() );
+            }
+
+            // encode our authorities...
+            for( DNSResourceRecord authority : authorities ) {
+                result = authority.encode( msgBuffer, offsets );
+                if( result.ok() ) continue;
+                if( result.cause() instanceof BufferOverflowException ) continue bufferSizes;
+                return encodeOutcome.notOk( result.msg() );
+            }
+
+            // encode our additional records...
+            for( DNSResourceRecord additionalRecord : additionalRecords ) {
+                result = additionalRecord.encode( msgBuffer, offsets );
+                if( result.ok() ) continue;
+                if( result.cause() instanceof BufferOverflowException ) continue bufferSizes;
+                return encodeOutcome.notOk( result.msg() );
+            }
+
+            // if it's larger than 512 bytes (UDP size), set the two byte length prefix for TCP...
+            if( msgBuffer.capacity() > 512 )
+                msgBuffer.putShort( 0, (short) (msgBuffer.limit() - 2) );
+
+            // if we make it here, then we've encoded the whole thing - flip the buffer and skedaddle...
+            msgBuffer.flip();
+            return encodeOutcome.ok( msgBuffer );
         }
 
-        // encode our answers...
-        for( DNSResourceRecord answer : answers ) {
-            result = answer.encode( msgBuffer, offsets );
-            if( result.notOk() )
-                return encodeOutcome.notOk( result.msg() );
-        }
-
-        // encode our authorities...
-        for( DNSResourceRecord authority : authorities ) {
-            result = authority.encode( msgBuffer, offsets );
-            if( result.notOk() )
-                return encodeOutcome.notOk( result.msg() );
-        }
-
-        // encode our additional records...
-        for( DNSResourceRecord additionalRecord : additionalRecords ) {
-            result = additionalRecord.encode( msgBuffer, offsets );
-            if( result.notOk() )
-                return encodeOutcome.notOk( result.msg() );
-        }
-
-        // if we make it here, then we've encoded the whole thing - flip the buffer and skedaddle...
-        msgBuffer.flip();
-        return encodeOutcome.ok( msgBuffer );
+        // if we get here, that means we couldn't fit the message even into the largest possible TCP message...
+        return encodeOutcome.notOk( "Message is too large to encode (over 64k bytes)" );
     }
 
 
@@ -207,6 +234,10 @@ public class DNSMessage {
         // make sure we actually HAVE a message buffer...
         if( isNull( _msgBuffer) )
             return outcome.notOk( "Missing message buffer" );
+
+        // if this buffer has more bytes than could be from a UDP DNS message, move past the two byte length prefix for TCP DNS messages...
+        if( _msgBuffer.limit() > 512 )
+            _msgBuffer.position( 2 );
 
         // instantiate a builder for us to build the decoded message as we go...
         Builder builder = new Builder();

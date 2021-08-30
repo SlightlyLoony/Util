@@ -2,6 +2,7 @@ package com.dilatush.util.dns;
 
 import com.dilatush.util.Outcome;
 
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
@@ -77,7 +78,8 @@ public enum DNSRRClass {
 
     /**
      * Encodes this instance into the given {@link ByteBuffer} at its current position.  If the encoding was successful, an ok {@link Outcome} is
-     * returned.  Otherwise, a not ok {@link Outcome} with an explanatory message is returned.
+     * returned.  Otherwise, a not ok {@link Outcome} with an explanatory message is returned.  If the result was a buffer overflow, the outcome is
+     * not ok with a cause of {@link BufferOverflowException}.
      *
      * @param _msgBuffer The {@link ByteBuffer} to encode this instance into.
      * @return the bytes that encode this question.
@@ -88,7 +90,7 @@ public enum DNSRRClass {
             return encodeOutcome.notOk( "Missing message buffer" );
 
         if( _msgBuffer.remaining() < 2 )
-            return encodeOutcome.notOk( "Insufficient room in message buffer" );
+            return encodeOutcome.notOk( new BufferOverflowException() );
 
         _msgBuffer.putShort( (short) code );
         return encodeOutcome.ok();

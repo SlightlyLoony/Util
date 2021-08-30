@@ -9,6 +9,7 @@ import com.dilatush.util.dns.DNSDomainName;
 import com.dilatush.util.dns.DNSRRClass;
 import com.dilatush.util.dns.DNSRRType;
 
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.util.Map;
 
@@ -94,15 +95,15 @@ public class SOA extends DNSResourceRecord {
      * @param _retry The unsigned 32-bit minimum interval (in seconds) before retrying a failed refresh for this zone.
      * @param _expire The unsigned 32-bit maximum interval (in seconds) before the zone is no longer authoritative.
      * @param _minimum The unsigned 32-bit minimum time-to-live (in seconds) for any resource record exported from this zone
-     * @return The {@link Outcome Outcome&lt;A&gt;} with the result of this method.
+     * @return The {@link Outcome Outcome&lt;SOA&gt;} with the result of this method.
      */
     public static Outcome<SOA> create(
             final DNSDomainName _name, final DNSRRClass _klass, final int _ttl,
             final DNSDomainName _mname, final DNSDomainName _rname,
             final long _serial, final long _refresh, final long _retry, final long _expire, final long _minimum ) {
 
-        if( isNull( _name, _klass, _mname ) )
-            return outcome.notOk( "Missing argument (name, class, or mname)" );
+        if( isNull( _name, _klass, _mname, _rname ) )
+            return outcome.notOk( "Missing argument (name, class, mname, or rname)" );
 
         return outcome.ok( new SOA( _name, _klass, _ttl, 4, _mname, _rname, _serial, _refresh, _retry, _expire, _minimum ) );
     }
@@ -121,7 +122,7 @@ public class SOA extends DNSResourceRecord {
      * @param _retry The unsigned 32-bit minimum interval (in seconds) before retrying a failed refresh for this zone.
      * @param _expire The unsigned 32-bit maximum interval (in seconds) before the zone is no longer authoritative.
      * @param _minimum The unsigned 32-bit minimum time-to-live (in seconds) for any resource record exported from this zone
-     * @return The {@link Outcome Outcome&lt;A&gt;} with the result of this method.
+     * @return The {@link Outcome Outcome&lt;SOA&gt;} with the result of this method.
      */
     public static Outcome<SOA> create(
             final DNSDomainName _name, final int _ttl,
@@ -173,7 +174,9 @@ public class SOA extends DNSResourceRecord {
      * Encode the resource data for the concrete resource record class.  On entry, the given DNS message {@link ByteBuffer} is positioned at the first
      * byte of the resource data, and the given map of name offsets contains pointers to all the previously encoded domain names.  On exit, the
      * message buffer must be positioned at the first byte following the resource data.  See {@link DNSDomainName#encode(ByteBuffer, Map)
-     * DNSDomainName.encode(ByteBuffer,Map&lt;String,Integer&gt;)} for details about the message compression mechanism.
+     * DNSDomainName.encode(ByteBuffer,Map&lt;String,Integer&gt;)} for details about the message compression mechanism.  The outcome returned is ok if
+     * the encoding was successful, and not ok (with a message) if there was a problem.  If the result was a buffer overflow, the outcome is not ok
+     * with a cause of {@link BufferOverflowException}.
      *
      * @param _msgBuffer The {@link ByteBuffer} to encode this resource record into.
      * @param _nameOffsets The map of domain and sub-domain names that have been directly encoded, and their associated offset.
@@ -184,17 +187,15 @@ public class SOA extends DNSResourceRecord {
 
         // encode the name server domain name...
         Outcome<?> dno = mname.encode( _msgBuffer, _nameOffsets );
-        if( dno.notOk() )
-            return dno;
+        if( dno.notOk() ) return dno;
 
         // encode the responsible person's mailbox domain name...
         Outcome<?> rpo = rname.encode( _msgBuffer, _nameOffsets );
-        if( rpo.notOk() )
-            return rpo;
+        if( rpo.notOk() ) return rpo;
 
         // do we have enough room remaining to encode five 32-bit integers (20 bytes)?
         if( _msgBuffer.remaining() < 20 )
-            return outcome.notOk( "Insufficient space in message buffer" );
+            return outcome.notOk( new BufferOverflowException() );
 
         // encode our five numbers...
         _msgBuffer.putInt( (int) serial  );

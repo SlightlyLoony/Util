@@ -12,6 +12,7 @@ import com.dilatush.util.dns.DNSRRType;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.util.Map;
 
@@ -32,7 +33,8 @@ public class A extends DNSResourceRecord {
 
 
     /**
-     * Create a new instance of this class with the given parameters.  Note that this constructor is private and is used only by factory methods and decoders in this class.
+     * Create a new instance of this class with the given parameters.  Note that this constructor is private and is used only by factory methods and
+     * decoders in this class.
      *
      * @param _name The {@link DNSDomainName} that the IP address in this class pertains to.
      * @param _klass The {@link DNSRRClass} that this resource record pertains to (in the real world, always IN for Internet).
@@ -50,8 +52,8 @@ public class A extends DNSResourceRecord {
 
 
     /**
-     * Create a new instance of this class from the given parameters.  Returns an ok outcome with the newly created instance if there were no problems.  Otherwise, returns a not ok
-     * outcome with an explanatory message.
+     * Create a new instance of this class from the given parameters.  Returns an ok outcome with the newly created instance if there were no
+     * problems.  Otherwise, returns a not ok outcome with an explanatory message.
      *
      * @param _name The {@link DNSDomainName} that the IP address in this class pertains to.
      * @param _klass The {@link DNSRRClass} that this resource record pertains to (in the real world, always IN for Internet).
@@ -120,7 +122,9 @@ public class A extends DNSResourceRecord {
      * Encode the resource data for the concrete resource record class.  On entry, the given DNS message {@link ByteBuffer} is positioned at the first
      * byte of the resource data, and the given map of name offsets contains pointers to all the previously encoded domain names.  On exit, the
      * message buffer must be positioned at the first byte following the resource data.  See {@link DNSDomainName#encode(ByteBuffer, Map)
-     * DNSDomainName.encode(ByteBuffer,Map&lt;String,Integer&gt;)} for details about the message compression mechanism.
+     * DNSDomainName.encode(ByteBuffer,Map&lt;String,Integer&gt;)} for details about the message compression mechanism.  The outcome returned is ok if
+     * the encoding was successful, and not ok (with a message) if there was a problem.  If the result was a buffer overflow, the outcome is not ok
+     * with a cause of {@link BufferOverflowException}.
      *
      * @param _msgBuffer The {@link ByteBuffer} to encode this resource record into.
      * @param _nameOffsets The map of domain and sub-domain names that have been directly encoded, and their associated offset.
@@ -130,7 +134,7 @@ public class A extends DNSResourceRecord {
     protected Outcome<?> encodeChild( ByteBuffer _msgBuffer, Map<String, Integer> _nameOffsets ) {
 
         if( _msgBuffer.remaining() < 4 )
-            return encodeOutcome.notOk( "Insufficient space in buffer" );
+            return encodeOutcome.notOk( new BufferOverflowException() );
 
         _msgBuffer.put( address.getAddress() );
         return encodeOutcome.ok();

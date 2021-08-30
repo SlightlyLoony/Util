@@ -2,6 +2,7 @@ package com.dilatush.util.dns;
 
 import com.dilatush.util.Outcome;
 
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.util.*;
 
@@ -105,7 +106,8 @@ public class DNSDomainName {
      * message.  If this domain name (or its sub-domain names) matches any of them, an offset is encoded instead of the actual characters.  Otherwise,
      * the name is directly encoded.  Any directly encoded domains or sub-domains is added to the map of offsets.  For example, the first time (in a
      * given message) that "www.cnn.com" is encoded, offsets are added for "www.cnn.com", "cnn.com", and "com".  The outcome returned is ok if the
-     * encoding was successful, and not ok (with a message) if there was a problem.
+     * encoding was successful, and not ok (with a message) if there was a problem.  If the result was a buffer overflow, the outcome is not ok with
+     * a cause of {@link BufferOverflowException}.
      *
      * @param _msgBuffer The {@link ByteBuffer} to encode this instance into.
      * @param _nameOffsets The map of domain and sub-domain names that have been directly encoded, and their associated offset.
@@ -130,7 +132,7 @@ public class DNSDomainName {
 
                 // check that we have the space in our buffer...
                 if( _msgBuffer.remaining() < 2 )
-                    return outcome.notOk( "Buffer underflow" );
+                    return outcome.notOk( new BufferOverflowException() );
 
                 // create and encode the offset pointer, and we're done...
                 // note that no terminating null is needed in this case...
@@ -143,10 +145,11 @@ public class DNSDomainName {
 
             // check that we have the space in our buffer...
             if( ls.get( 0 ).length > _msgBuffer.remaining() )
-                return outcome.notOk( "Buffer underflow" );
+                return outcome.notOk(  new BufferOverflowException() );
 
-            // map the offset to this domain or sub-domain, in case we ever see it again...
-            _nameOffsets.put( dnsName.text, _msgBuffer.position() );
+            // if the position is within the offset pointer range, map the offset to this domain or sub-domain, in case we ever see it again...
+            if( (_msgBuffer.position() & 0xFFFFC000) == 0 )
+                _nameOffsets.put( dnsName.text, _msgBuffer.position() );
 
             // encode this label into our message buffer...
             _msgBuffer.put( ls.get( 0 ).bytes() );
@@ -159,7 +162,7 @@ public class DNSDomainName {
 
         // check that we have the space in our buffer...
         if( _msgBuffer.remaining() < 1 )
-            return outcome.notOk( "Buffer underflow" );
+            return outcome.notOk( new BufferOverflowException() );
 
         // stuff the terminating null...
         _msgBuffer.put( (byte) 0 );

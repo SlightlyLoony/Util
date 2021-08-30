@@ -9,6 +9,7 @@ import com.dilatush.util.dns.DNSDomainName;
 import com.dilatush.util.dns.DNSRRClass;
 import com.dilatush.util.dns.DNSRRType;
 
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.util.Map;
 
@@ -62,7 +63,8 @@ public abstract class DNSResourceRecord {
     /**
      * Encode this resource record into the given DNS message {@link ByteBuffer} at the current position, using message compression when possible.
      * See {@link DNSDomainName#encode(ByteBuffer,Map) DNSDomainName.encode(ByteBuffer,Map&lt;String,Integer&gt;)} for details about the message
-     * compression mechanism.
+     * compression mechanism.  The outcome returned is ok if the encoding was successful, and not ok (with a message) if there was a problem.  If the
+     * result was a buffer overflow, the outcome is not ok with a cause of {@link BufferOverflowException}.
      *
      * @param _msgBuffer The {@link ByteBuffer} to encode this instance into.
      * @param _nameOffsets The map of domain and sub-domain names that have been directly encoded, and their associated offset.
@@ -74,22 +76,19 @@ public abstract class DNSResourceRecord {
 
         // first the domain name that this resource record pertains to...
         Outcome<?> result = name.encode( _msgBuffer, _nameOffsets);
-        if( result.notOk() )
-            return result;
+        if( result.notOk() ) return result;
 
         // then the resource record type...
         result = type.encode( _msgBuffer );
-        if( result.notOk() )
-            return result;
+        if( result.notOk() ) return result;
 
         // then the resource record class (which is basically always IN for internet)...
         result = klass.encode( _msgBuffer );
-        if( result.notOk() )
-            return result;
+        if( result.notOk() ) return result;
 
         // at this point we must have at least 6 bytes to encode the TTL and resource data length fields, so check that...
         if( _msgBuffer.remaining() < 6 )
-            return encodeOutcome.notOk( "Insufficient space in buffer" );
+            return encodeOutcome.notOk( new BufferOverflowException() );
 
         // encode the TTL...
         _msgBuffer.putInt( (int)ttl );
@@ -105,8 +104,7 @@ public abstract class DNSResourceRecord {
 
         // encode the child class' data...
         result = encodeChild( _msgBuffer, _nameOffsets );
-        if( result.notOk() )
-            return result;
+        if( result.notOk() ) return result;
 
         // calculate the size of the resource's data, and stuff that into the length field...
         _msgBuffer.putShort( dataLengthPos, (short)(_msgBuffer.position() - dataStartPos) );
@@ -120,7 +118,9 @@ public abstract class DNSResourceRecord {
      * Encode the resource data for the concrete resource record class.  On entry, the given DNS message {@link ByteBuffer} is positioned at the first
      * byte of the resource data, and the given map of name offsets contains pointers to all the previously encoded domain names.  On exit, the
      * message buffer must be positioned at the first byte following the resource data.  See {@link DNSDomainName#encode(ByteBuffer, Map)
-     * DNSDomainName.encode(ByteBuffer,Map&lt;String,Integer&gt;)} for details about the message compression mechanism.
+     * DNSDomainName.encode(ByteBuffer,Map&lt;String,Integer&gt;)} for details about the message compression mechanism.  The outcome returned is ok if
+     * the encoding was successful, and not ok (with a message) if there was a problem.  If the result was a buffer overflow, the outcome is not ok
+     * with a cause of {@link BufferOverflowException}.
      *
      * @param _msgBuffer The {@link ByteBuffer} to encode this resource record into.
      * @param _nameOffsets The map of domain and sub-domain names that have been directly encoded, and their associated offset.
@@ -183,6 +183,7 @@ public abstract class DNSResourceRecord {
                 case CNAME -> CNAME.decode( _msgBuffer, init );
                 case NS    -> NS.decode   ( _msgBuffer, init );
                 case SOA   -> SOA.decode  ( _msgBuffer, init );
+                case TXT   -> TXT.decode  ( _msgBuffer, init );
 
                 default   -> outcome.notOk( "Unimplemented resource record type: " + typeOutcome.info().name() );
             };

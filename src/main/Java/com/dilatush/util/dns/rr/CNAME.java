@@ -9,6 +9,7 @@ import com.dilatush.util.dns.DNSDomainName;
 import com.dilatush.util.dns.DNSRRClass;
 import com.dilatush.util.dns.DNSRRType;
 
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.util.Map;
 
@@ -54,7 +55,7 @@ public class CNAME extends DNSResourceRecord {
      * @param _klass The {@link DNSRRClass} that this resource record pertains to (in the real world, always IN for Internet).
      * @param _ttl This resource record's time-to-live (in a cache) in seconds, or zero for no caching.
      * @param _cname The canonical domain name associated with the named owner of this resource record.
-     * @return The {@link Outcome Outcome&lt;A&gt;} with the result of this method.
+     * @return The {@link Outcome Outcome&lt;CNAME&gt;} with the result of this method.
      */
     public static Outcome<CNAME> create(
             final DNSDomainName _name, final DNSRRClass _klass, final int _ttl,
@@ -74,7 +75,7 @@ public class CNAME extends DNSResourceRecord {
      * @param _name The {@link DNSDomainName} that the IP address in this class pertains to.
      * @param _ttl This resource record's time-to-live (in a cache) in seconds, or zero for no caching.
      * @param _cname The canonical domain name associated with the named owner of this resource record.
-     * @return The {@link Outcome Outcome&lt;A&gt;} with the result of this method.
+     * @return The {@link Outcome Outcome&lt;CNAME&gt;} with the result of this method.
      */
     public static Outcome<CNAME> create(
             final DNSDomainName _name, final int _ttl,
@@ -108,7 +109,9 @@ public class CNAME extends DNSResourceRecord {
      * Encode the resource data for the concrete resource record class.  On entry, the given DNS message {@link ByteBuffer} is positioned at the first
      * byte of the resource data, and the given map of name offsets contains pointers to all the previously encoded domain names.  On exit, the
      * message buffer must be positioned at the first byte following the resource data.  See {@link DNSDomainName#encode(ByteBuffer, Map)
-     * DNSDomainName.encode(ByteBuffer,Map&lt;String,Integer&gt;)} for details about the message compression mechanism.
+     * DNSDomainName.encode(ByteBuffer,Map&lt;String,Integer&gt;)} for details about the message compression mechanism.  The outcome returned is ok if
+     * the encoding was successful, and not ok (with a message) if there was a problem.  If the result was a buffer overflow, the outcome is not ok
+     * with a cause of {@link BufferOverflowException}.
      *
      * @param _msgBuffer The {@link ByteBuffer} to encode this resource record into.
      * @param _nameOffsets The map of domain and sub-domain names that have been directly encoded, and their associated offset.

@@ -98,6 +98,17 @@ public record Outcome<T>( boolean ok, String msg, Throwable cause, T info ) {
         public Outcome<T> notOk( final String _msg, final Throwable _cause ) {
             return new Outcome<>( false, _msg, _cause, null );
         }
+
+
+        /**
+         * Creates a new instance of {@link Outcome} that is not ok and has no explanatory message and {@link Throwable} cause.
+         *
+         * @param _cause When the overall outcome of an operation is unsuccessful, this optional {@link Throwable} may supply some additional
+         *               information about the cause of a failure.
+         */
+        public Outcome<T> notOk( final Throwable _cause ) {
+            return new Outcome<>( false, "See cause", _cause, null );
+        }
     }
 
 
@@ -111,13 +122,13 @@ public record Outcome<T>( boolean ok, String msg, Throwable cause, T info ) {
             if( info == null )
                 return "OK";
             else
-                return "OK: " + info.toString();
+                return "OK: " + info;
         }
         else {
             if( cause == null )
                 return "Not OK: " + msg;
             else
-                return "Not OK: " + msg + "\n" + cause.toString();
+                return "Not OK: " + msg + "\n" + cause;
         }
     }
 }

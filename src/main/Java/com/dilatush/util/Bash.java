@@ -57,12 +57,12 @@ public class Bash {
     /**
      * Unquotes the given string (which is assumed to be a command-line) exactly as Bash would, returning a list of the command and its arguments
      * sans quotes, again exactly as Bash would.  If there are any unpaired quotes or a backslash at the end, throws an
-     * {@link IllegalArgumentException}.
+     * {@link IllegalArgumentException}.  NOTE: this method has a bad bug - if an argument is double-quoted, the quotes get stripped.
      *
      * @param _str the command line to unquote
      * @return the list of command and arguments
      */
-    // TODO: this method has a bad bug - if an argument is double-quoted, the quotes get stripped - bad
+    @Deprecated
     static public List<String> unquote( final String _str ) {
         Checks.required( _str );
         UnquoteState state = InSpace;
