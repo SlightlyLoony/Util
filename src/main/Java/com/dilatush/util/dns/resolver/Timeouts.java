@@ -2,6 +2,7 @@ package com.dilatush.util.dns.resolver;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Logger;
 
 /**
  * Instances of this class efficiently manage a collection of timeouts.  Methods allow for adding new timeouts and checking timeouts to see if they've
@@ -9,11 +10,15 @@ import java.util.List;
  */
 public class Timeouts {
 
+    final static private Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
+
     // The list of active timeouts, in order of their expiration times (earlier times first)...
     private final List<Timeout> timeouts = new ArrayList<>();
 
 
     public synchronized void add( final Timeout _newTimeout ) {
+
+        LOGGER.finest( "Adding timeout" );
 
         // Walk backwards down the list, looking for a timeout expiring no later than the new timeout; we want to insert the
         // new one right after that.  We walk backwards on the theory that if the list is large, the insertion point will be closer to the end than
@@ -39,6 +44,8 @@ public class Timeouts {
      */
     public synchronized void check() {
 
+        LOGGER.finest( "Checking timeouts" );
+
         // walk the list of timeouts until we run into one that has not expired yet...
         int i;
         for( i = 0; i < timeouts.size(); i++ ) {
@@ -47,6 +54,8 @@ public class Timeouts {
         }
 
         // clear all the expired timeouts off the beginning of the list...
+        if( i > 0)
+            LOGGER.finest( "Deleting " + i + " timeouts" );
         timeouts.subList( 0, i ).clear();
     }
 }

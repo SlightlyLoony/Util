@@ -1,13 +1,23 @@
 package com.dilatush.util.dns.resolver;
 
 import com.dilatush.util.Outcome;
-import com.dilatush.util.dns.DNSMessage;
+import com.dilatush.util.dns.*;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.nio.channels.*;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.concurrent.BlockingDeque;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
+import java.util.logging.Logger;
 
 import static com.dilatush.util.General.isNull;
+import static java.lang.Thread.sleep;
 
 /**
  * Implements an asynchronous resolver for DNS queries to a particular DNS server.  Any number of resolvers can be instantiated concurrently, but
@@ -19,13 +29,18 @@ import static com.dilatush.util.General.isNull;
  */
 public class DNSResolver {
 
+    final static private Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
+
     private static final Outcome.Forge<DNSResolver> createOutcome = new Outcome.Forge<>();
 
     private static DNSResolverRunner runner;  // the singleton instance of the resolver runner...
 
     private final InetSocketAddress serverAddress;  // the DNS server's address for this resolver...
-    private final DatagramChannel   udpChannel;
-    private final SocketChannel     tcpChannel;
+
+    protected final DatagramChannel   udpChannel;
+    protected final SocketChannel     tcpChannel;
+    protected final AtomicInteger     sendsOutstanding;
+    protected final Deque<ByteBuffer> sendData;
 
 
     private DNSResolver( final InetSocketAddress _serverAddress, final DatagramChannel _udpChannel, final SocketChannel _tcpChannel ) {
@@ -33,11 +48,38 @@ public class DNSResolver {
         serverAddress = _serverAddress;
         udpChannel    = _udpChannel;
         tcpChannel    = _tcpChannel;
+
+        sendsOutstanding = new AtomicInteger();
+        sendData         = new LinkedBlockingDeque<>();
     }
 
 
-    public void resolve( final DNSMessage _dnsMsg ) {
+    //TODO better comments...
+    /**
+     * Query for host address IPv4.
+     *
+     * @param _domain
+     * @param _handler
+     * @param _timeoutMillis
+     */
+    public void query( final String _domain, final Consumer<Outcome<DNSMessage>> _handler, final long _timeoutMillis ) {
 
+        DNSMessage.Builder builder = new DNSMessage.Builder();
+        builder.setOpCode( DNSOpCode.QUERY );
+        builder.setRecurse( true );
+
+        // TODO: flesh out this prototype code...
+        builder.addQuestion( DNSQuestion.create( DNSDomainName.fromString( _domain ).info(), DNSRRType.A ).info() );
+        DNSMessage queryMsg = builder.getMessage();
+        ByteBuffer data = queryMsg.encode().info();
+
+        DNSQuery query = new DNSQuery( Transport.UDP, new Timeout( 500, this::timeoutHandler ), _handler, queryMsg, data, this );
+        runner.send( query );
+    }
+
+
+    private void timeoutHandler() {
+        LOGGER.info( "timeout handler" );
     }
 
 
@@ -67,7 +109,10 @@ public class DNSResolver {
             SocketChannel   tcp = SocketChannel.open();
             DNSResolver     resolver = new DNSResolver( _serverAddress, udp, tcp );
             udp.configureBlocking( false );
+            udp.bind( null );
+            udp.connect( _serverAddress );
             tcp.configureBlocking( false );
+            tcp.bind( null );
             runner.register( resolver, udp, tcp );
             return createOutcome.ok( resolver );
         }

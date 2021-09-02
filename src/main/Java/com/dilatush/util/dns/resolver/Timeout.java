@@ -11,11 +11,10 @@ import static com.dilatush.util.General.isNull;
 @SuppressWarnings( "unused" )
 public class Timeout {
 
-    private final long             expiration;       // the system time that this timeout expires...
-    private boolean                cancelled;        // true if this timeout has been cancelled...
-    private boolean                done;             // true if this timeout has expired or has been cancelled...
-    private final Consumer<Object> timeoutHandler;   // called upon expiration...
-    private final Object           attachment;       // an optional attachment to the timeout...
+    private final long     expiration;       // the system time that this timeout expires...
+    private boolean        cancelled;        // true if this timeout has been cancelled...
+    private boolean        done;             // true if this timeout has expired or has been cancelled...
+    private final Runnable timeoutHandler;   // called upon expiration...
 
 
     /**
@@ -24,9 +23,8 @@ public class Timeout {
      *
      * @param _timeoutMS      The time (in milliseconds) from now that this timeout should expire.
      * @param _timeoutHandler The {@link Consumer Consumer&lt;Object&gt;} handler to call upon expiration; the argument is the optional attachment.
-     * @param _attachment     The optional attachment, provided when the {@link Consumer Consumer&lt;Object&gt;} is called upon timeout expiration.
      */
-    public Timeout( final long _timeoutMS, final Consumer<Object> _timeoutHandler, final Object _attachment ) {
+    public Timeout( final long _timeoutMS, final Runnable _timeoutHandler ) {
 
         if( isNull( _timeoutHandler ) )
             throw new IllegalArgumentException( "Missing method to call on timeout");
@@ -35,20 +33,6 @@ public class Timeout {
         timeoutHandler = _timeoutHandler;
         cancelled      = false;
         done           = false;
-        attachment     = _attachment;
-    }
-
-
-    /**
-     * Create a new instance of this class that will expire at the given number of milliseconds from now, and will call the given
-     * {@link Consumer Consumer&lt;Object&gt;} upon timeout expiration with no attachment.
-     *
-     * @param _timeoutMS      The time (in milliseconds) from now that this timeout should expire.
-     * @param _timeoutHandler The {@link Consumer Consumer&lt;Object&gt;} handler to call upon expiration; the argument is the optional attachment.
-     */
-    public Timeout( final long _timeoutMS, final Consumer<Object> _timeoutHandler ) {
-
-        this( _timeoutMS, _timeoutHandler, null );
     }
 
 
@@ -69,7 +53,7 @@ public class Timeout {
             return true;
 
         // looks like we actually have to expire - so call our handler with the attachment (if we have one)...
-        timeoutHandler.accept( attachment );
+        timeoutHandler.run();
 
         // mark us as done (so we don't do this again), and leave with a positive...
         done = true;
@@ -124,15 +108,5 @@ public class Timeout {
      */
     public synchronized boolean isCancelled() {
         return cancelled;
-    }
-
-
-    /**
-     * Returns the attachment on this timeout.  The attachment may be of any type, or {@code null}.
-     *
-     * @return the attachment on this timeout.
-     */
-    public Object getAttachment() {
-        return attachment;
     }
 }
