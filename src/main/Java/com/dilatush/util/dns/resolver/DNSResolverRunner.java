@@ -61,32 +61,16 @@ class DNSResolverRunner {
     }
 
 
-    protected void register( final DNSResolver _resolver, final DatagramChannel _udp, final SocketChannel _tcp ) throws ClosedChannelException {
+    protected void register( final DNSUDPChannel _udp, final DNSTCPChannel _tcp ) throws ClosedChannelException {
 
-        _udp.register( selector, OP_READ, _resolver );
-        _tcp.register( selector, OP_READ, _resolver );
+        // TODO: safety checks
+        _udp.channel.register( selector, OP_READ, _udp );
+        _tcp.channel.register( selector, OP_READ, _tcp );
     }
 
 
-    protected void send( final DNSQuery _query ) {
-
-        // add the data to our queue of data to send...
-        _query.resolver.sendData.offerFirst( _query.queryData );
-
-        // increment our count of data blocks to send...
-        int count = _query.resolver.sendsOutstanding.incrementAndGet();
-
-        // set our write interest if necessary...
-        if( count == 1 ) {
-            if( _query.transport == Transport.UDP ) {
-
-                try {
-                    _query.resolver.udpChannel.register( selector, SelectionKey.OP_WRITE | OP_READ, _query );
-                } catch( ClosedChannelException _e ) {
-                    // TODO: handle closed channel by sending a not ok outcome
-                }
-            }
-        }
+    protected void register( final DNSChannel _dnsChannel, final SelectableChannel _channel, final int _ops ) throws ClosedChannelException {
+        _channel.register( selector, _ops, _dnsChannel );
     }
 
 
@@ -112,28 +96,13 @@ class DNSResolverRunner {
 
                     if( key.isValid() && key.isWritable() ) {
 
-                        DNSQuery query = (DNSQuery) key.attachment();  // TODO: more safely here...
-                        if( query.transport == Transport.UDP ) {
-                            query.resolver.udpChannel.write( query.resolver.sendData.pollLast() );  // TODO: more safely here...
-                            int count = query.resolver.sendsOutstanding.decrementAndGet();
-                            if( count == 0 ) {
-                                try {
-                                    query.resolver.udpChannel.register( selector, OP_READ, query );
-                                } catch( ClosedChannelException _e ) {
-                                    // TODO: return a not ok outcome...
-                                }
-                            }
-                        }
+                        DNSChannel channel = (DNSChannel) key.attachment();  // TODO: more safely here...
+                        channel.write();
                     }
 
                     if( key.isValid() && key.isReadable() ) {
-                        DNSQuery query = (DNSQuery) key.attachment();  // TODO: more safely here...
-                        if( query.transport == Transport.UDP ) {
-                            ByteBuffer readBuffer = ByteBuffer.allocate( 512 );
-                            int read = query.resolver.udpChannel.read( readBuffer );  // TODO: more safely here...
-                            readBuffer.hashCode();
-                        }
-
+                        DNSChannel channel = (DNSChannel) key.attachment();  // TODO: more safely here...
+                        channel.read();
                     }
 
                     // get rid the key we just processed...

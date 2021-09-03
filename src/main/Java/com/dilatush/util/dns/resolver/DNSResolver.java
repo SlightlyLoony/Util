@@ -29,28 +29,19 @@ import static java.lang.Thread.sleep;
  */
 public class DNSResolver {
 
-    final static private Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
+    private static final Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
 
     private static final Outcome.Forge<DNSResolver> createOutcome = new Outcome.Forge<>();
 
-    private static DNSResolverRunner runner;  // the singleton instance of the resolver runner...
+    protected static DNSResolverRunner runner;  // the singleton instance of the resolver runner...
 
-    private final InetSocketAddress serverAddress;  // the DNS server's address for this resolver...
-
-    protected final DatagramChannel   udpChannel;
-    protected final SocketChannel     tcpChannel;
-    protected final AtomicInteger     sendsOutstanding;
-    protected final Deque<ByteBuffer> sendData;
+    protected       DNSUDPChannel                 udpChannel;
+    protected       DNSTCPChannel                 tcpChannel;
+    protected final Consumer<Outcome<DNSMessage>> handler;
 
 
-    private DNSResolver( final InetSocketAddress _serverAddress, final DatagramChannel _udpChannel, final SocketChannel _tcpChannel ) {
-
-        serverAddress = _serverAddress;
-        udpChannel    = _udpChannel;
-        tcpChannel    = _tcpChannel;
-
-        sendsOutstanding = new AtomicInteger();
-        sendData         = new LinkedBlockingDeque<>();
+    private DNSResolver( final Consumer<Outcome<DNSMessage>> _handler ) {
+        handler = _handler;
     }
 
 
@@ -59,10 +50,9 @@ public class DNSResolver {
      * Query for host address IPv4.
      *
      * @param _domain
-     * @param _handler
      * @param _timeoutMillis
      */
-    public void query( final String _domain, final Consumer<Outcome<DNSMessage>> _handler, final long _timeoutMillis ) {
+    public void query( final String _domain, final long _timeoutMillis ) {
 
         DNSMessage.Builder builder = new DNSMessage.Builder();
         builder.setOpCode( DNSOpCode.QUERY );
@@ -73,8 +63,8 @@ public class DNSResolver {
         DNSMessage queryMsg = builder.getMessage();
         ByteBuffer data = queryMsg.encode().info();
 
-        DNSQuery query = new DNSQuery( Transport.UDP, new Timeout( 500, this::timeoutHandler ), _handler, queryMsg, data, this );
-        runner.send( query );
+        DNSQuery query = new DNSQuery( new Timeout( 500, this::timeoutHandler ), queryMsg, data, this );
+        udpChannel.send( query );
     }
 
 
@@ -98,22 +88,28 @@ public class DNSResolver {
     }
 
 
-    public static Outcome<DNSResolver> create(  final InetSocketAddress _serverAddress  ) {
+    public static Outcome<DNSResolver> create( final InetSocketAddress _serverAddress, final Consumer<Outcome<DNSMessage>> _handler ) {
 
         if( isNull( _serverAddress ) )
             return createOutcome.notOk( "Server address is missing (null)" );
 
         try {
             ensureRunner();
-            DatagramChannel udp = DatagramChannel.open();
-            SocketChannel   tcp = SocketChannel.open();
-            DNSResolver     resolver = new DNSResolver( _serverAddress, udp, tcp );
-            udp.configureBlocking( false );
-            udp.bind( null );
-            udp.connect( _serverAddress );
-            tcp.configureBlocking( false );
-            tcp.bind( null );
-            runner.register( resolver, udp, tcp );
+
+            DNSResolver resolver = new DNSResolver( _handler );
+
+            Outcome<DNSUDPChannel> udpOutcome = DNSUDPChannel.create( resolver, _serverAddress );
+            if( udpOutcome.notOk() )
+                return createOutcome.notOk( udpOutcome.msg(), udpOutcome.cause() );
+            resolver.udpChannel = udpOutcome.info();
+
+            Outcome<DNSTCPChannel> tcpOutcome = DNSTCPChannel.create( resolver, _serverAddress );
+            if( tcpOutcome.notOk() )
+                return createOutcome.notOk( tcpOutcome.msg(), tcpOutcome.cause() );
+            resolver.tcpChannel = tcpOutcome.info();
+
+            runner.register( resolver.udpChannel, resolver.tcpChannel );
+
             return createOutcome.ok( resolver );
         }
 
@@ -121,40 +117,4 @@ public class DNSResolver {
             return createOutcome.notOk( "Problem creating DNSResolver", _e );
         }
     }
-
-
-    //    public static void main( final String[] _args ) throws IOException {
-//
-//        DNSMessage.Builder b = new DNSMessage.Builder();
-//        b.setId( 666 );
-//        b.setOpCode( DNSOpCode.QUERY );
-//        b.setRecurse( true );
-//
-//        DNSQuestion q = DNSQuestion.create( DNSDomainName.fromString( "cnn.com" ).info(), DNSRRType.TXT ).info();
-//        //DNSQuestion q1 = DNSQuestion.create( DNSDomainName.fromString( "www.paradiseweather.info" ).info(), DNSRRType.CNAME ).info();
-//        b.addQuestion( q );
-//        //b.addQuestion( q1 );
-//        DNSMessage m = b.getMessage();
-//
-//        Outcome<ByteBuffer> eo = m.encode();
-//        ByteBuffer bb = eo.info();
-//
-//        InetAddress server = InetAddress.getByName( "10.2.5.200" );
-//        byte[] packetBytes = new byte[bb.limit()];
-//        bb.get( packetBytes );
-//        DatagramPacket packet = new DatagramPacket( packetBytes, packetBytes.length, server, 53 );
-//        DatagramSocket socket = new DatagramSocket();
-//        socket.send( packet );
-//
-//        byte[] buff = new byte[512];
-//        packet = new DatagramPacket( buff, buff.length );
-//        socket.receive( packet );
-//        int len = packet.getLength();
-//        ByteBuffer rb = ByteBuffer.wrap( buff, 0, len );
-//
-//        Outcome<DNSMessage> decodeOutcome = DNSMessage.decode( rb );
-//        DNSMessage received = decodeOutcome.info();
-//
-//        b.hashCode();
-//    }
 }

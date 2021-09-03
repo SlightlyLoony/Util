@@ -6,12 +6,15 @@ import com.dilatush.util.dns.DNSMessage;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 
 import static java.lang.Thread.sleep;
 
 public class Test {
 
+    private static final List<Outcome<DNSMessage>> results = new ArrayList<>();
 
     public static void main( final String[] _args ) throws InterruptedException, UnknownHostException {
 
@@ -20,18 +23,21 @@ public class Test {
         System.getProperties().setProperty( "java.util.logging.config.file", "logging.properties" );
 
         InetSocketAddress address = new InetSocketAddress( InetAddress.getByName( "10.2.5.200" ), 53 );
-        Outcome<DNSResolver> ro1 = DNSResolver.create( address );
+        Outcome<DNSResolver> ro1 = DNSResolver.create( address, Test::handler );
         if( ro1.ok() ) {
 
             DNSResolver r1 = ro1.info();
-            r1.query( "www.cnn.com",  Test::handler, 500);
+            r1.query( "www.cnn.com",  500);
+            r1.query( "www.foxnews.com",  500);
+            r1.query( "paradiseweather.info",  500);
         }
 
         sleep(1000);
+        results.hashCode();
     }
 
 
     private static void handler( final Outcome<DNSMessage> _outcome )  {
-        System.out.println( _outcome );
+        results.add( _outcome );
     }
 }

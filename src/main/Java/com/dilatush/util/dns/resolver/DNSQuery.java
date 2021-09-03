@@ -15,11 +15,7 @@ import java.util.function.Consumer;
  */
 public class DNSQuery {
 
-    public final Transport transport;
-
     public final Timeout timeout;
-
-    public final Consumer<Outcome<DNSMessage>> onDone;
 
     public final DNSMessage queryMessage;
 
@@ -28,12 +24,10 @@ public class DNSQuery {
     public final DNSResolver resolver;
 
     
-    public DNSQuery( final Transport _transport, final Timeout _timeout, final Consumer<Outcome<DNSMessage>> _onDone,
+    public DNSQuery( final Timeout _timeout,
                      final DNSMessage _queryMessage, final ByteBuffer _queryData, final DNSResolver _resolver ) {
 
-        transport    = _transport;
         timeout      = _timeout;
-        onDone       = _onDone;
         queryMessage = _queryMessage;
         queryData    = _queryData;
         resolver     = _resolver;
