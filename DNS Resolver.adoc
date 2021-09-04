@@ -1,0 +1,35 @@
+= DNS Resolver
+Tom Dilatush (tom@dilatush.com) +
+V1.0, 2021-09-04
+:toc:
+:toc-placement!:
+toc::[]
+
+== What exactly is the DNS Resolver?
+It's a package that implements, in pure Java, a DNS resolver.  Shocking surprise, that!  A DNS resolver communicates with a DNS server to answer questions about a domain name.  The most common question asked is "What is the IP address associated with this domain name?" -- but there are many other questions that may be asked (and potentially answered) as well.
+
+== Why did the author inflict this monstrosity on us?
+It all started with the desire to make a UDP "pinger" that could test connectivity to a known IP address.  DNS servers, by their very nature, are at well-known IP addresses, so they make a good target.  UDP being a connectionless protocol, to implement a pinger I needed something that could send a well-formed query to the DNS server and listen for a response.  It seemed a small step to go from that to an actual fully-formed DNS resolver.  That turned out to be a rather large small step, but ... here it is.
+
+== Theory of Operation
+
+=== The life of a query
+.  Query constructed
+.  ID assigned
+.  Stuffed into a map, indexed by ID
+.  Query encoded
+.  Query sent to DNS server
+.  If it times out (because the DNS server doesn't respond quickly enough)
+..  Remove the query from the map
+..  Complete query with not ok, timeout
+.  If the DNS response is received
+..  If the response can be decoded
+...  If the ID can be found in the map
+....  Remove the query from the map
+....  Complete query with ok, and received message
+...  If the ID cannot be found in the map
+....  Log the event
+....  Discard the message
+.. If the response cannot be decoded (garbled)
+...  Log the event
+...  Discard the message
