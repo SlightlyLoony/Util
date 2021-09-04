@@ -4,32 +4,58 @@ import com.dilatush.util.Outcome;
 import com.dilatush.util.dns.DNSMessage;
 
 import java.nio.ByteBuffer;
-import java.nio.channels.Channel;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 /**
- * Instances of this class the elements of a DNS query.  Instances are created before {@link DNSResolver} sends each query.  Each query has
- * a unique ID (within a given {@link DNSResolver} instance.  This ID, a 16-bit integer, is stored within the query message.  Just after it is
- * created, each instance of this class is mapped by its ID in the {@link DNSResolver} instance; this allows the response {@link DNSMessage}s to be
- * matched up with the query that produced them.  After the mapping, each instance is passed to the {@link DNSResolverRunner} to have the query sent.
+ * Instances of this class contain the elements of a DNS query.
  */
 public class DNSQuery {
 
-    public final Timeout timeout;
+    private static final Outcome.Forge<DNSQuery> queryOutcome = new Outcome.Forge<>();
 
-    public final DNSMessage queryMessage;
 
-    public final ByteBuffer queryData;
+    public final long                         timeoutMillis;
 
-    public final DNSResolver resolver;
+    public final DNSQueryTimeout              timeout;
 
-    
-    public DNSQuery( final Timeout _timeout,
-                     final DNSMessage _queryMessage, final ByteBuffer _queryData, final DNSResolver _resolver ) {
+    public final DNSMessage                   queryMessage;
 
-        timeout      = _timeout;
-        queryMessage = _queryMessage;
-        queryData    = _queryData;
-        resolver     = _resolver;
+    public final DNSMessage                   responseMessage;
+
+    public final ByteBuffer                   queryData;
+
+    private final Consumer<Outcome<DNSQuery>> handler;
+
+
+    private DNSQuery( final DNSMessage _queryMessage, final ByteBuffer _queryData, final Consumer<Outcome<DNSQuery>> _handler,
+                     final long _timeoutMillis, final DNSMessage _response ) {
+
+        handler         = _handler;
+        timeoutMillis   = _timeoutMillis;
+        timeout         = new DNSQueryTimeout( timeoutMillis, this::onTimeout );
+        queryMessage    = _queryMessage;
+        queryData       = _queryData;
+        responseMessage = _response;
+    }
+
+
+
+    public DNSQuery( final DNSMessage _queryMessage, final ByteBuffer _queryData, final Consumer<Outcome<DNSQuery>> _handler, final long _timeoutMillis ) {
+        this( _queryMessage, _queryData, _handler, _timeoutMillis, null );
+    }
+
+    protected DNSQuery addResponse( final DNSMessage _response ) {
+        return new DNSQuery( queryMessage, queryData, handler, timeoutMillis, _response );
+    }
+
+
+    protected void onCompletion() {
+        handler.accept( queryOutcome.ok( this ) );
+    }
+
+
+    private void onTimeout() {
+        handler.accept( queryOutcome.notOk( "Timeout", new TimeoutException(), this ) );
     }
 }

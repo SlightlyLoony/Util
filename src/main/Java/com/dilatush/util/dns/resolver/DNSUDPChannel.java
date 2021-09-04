@@ -1,18 +1,15 @@
 package com.dilatush.util.dns.resolver;
 
 import com.dilatush.util.Outcome;
-import com.dilatush.util.dns.DNSMessage;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.DatagramChannel;
-import java.nio.channels.SelectableChannel;
-import java.nio.channels.SelectionKey;
 import java.util.logging.Logger;
 
-import static java.nio.channels.SelectionKey.*;
+import static java.nio.channels.SelectionKey.OP_READ;
 
 public class DNSUDPChannel extends DNSChannel {
 
@@ -41,10 +38,12 @@ public class DNSUDPChannel extends DNSChannel {
         }
 
         catch( IOException _e ) {
-            return createOutcome.notOk( "Program creating DatagramChannel", _e );
+            return createOutcome.notOk( "Problem creating DatagramChannel", _e );
         }
     }
 
+
+    // TODO: error handling needed...
 
     @Override
     public synchronized void write() {
@@ -71,13 +70,16 @@ public class DNSUDPChannel extends DNSChannel {
 
     @Override
     protected void read() {
-        ByteBuffer readData = ByteBuffer.allocate( 512 );
-        try {
-            udpChannel.read( readData );
-            readData.flip();
-            resolver.handler.accept( DNSMessage.decode( readData ) );
 
-        } catch( IOException _e ) {
+        try {
+            ByteBuffer readData = ByteBuffer.allocate( 512 );
+            if( udpChannel.read( readData ) == 0 )
+                return;
+            readData.flip();
+            resolver.handleReceivedData( readData );
+        }
+
+        catch( IOException _e ) {
             _e.printStackTrace();
         }
     }

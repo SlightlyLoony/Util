@@ -5,12 +5,12 @@ import com.dilatush.util.Outcome;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectableChannel;
-import java.nio.channels.SelectionKey;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static java.nio.channels.SelectionKey.*;
+import static java.nio.channels.SelectionKey.OP_READ;
+import static java.nio.channels.SelectionKey.OP_WRITE;
 
 public abstract class DNSChannel {
 
@@ -49,6 +49,9 @@ public abstract class DNSChannel {
                 return outcome.notOk( "Problem registering write interest", _e );
             }
         }
+
+        //
+        DNSResolver.runner.addTimeout( _query.timeout );
 
         return outcome.ok();
     }

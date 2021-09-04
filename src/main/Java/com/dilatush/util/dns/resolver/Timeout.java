@@ -2,37 +2,26 @@ package com.dilatush.util.dns.resolver;
 
 import java.util.function.Consumer;
 
-import static com.dilatush.util.General.isNull;
-
 /**
- * Instances of this class represent cancellable timeouts that call a {@link Consumer Consumer&lt;Object&gt;} if the timeout actually occurs.  The
+ * Concrete instances of this class represent cancellable timeouts that call a {@link Consumer Consumer&lt;Object&gt;} if the timeout actually occurs.  The
  * companion {@link Timeouts} class manages a collection of these timeouts.
  */
 @SuppressWarnings( "unused" )
-public class Timeout {
+public abstract class Timeout {
 
     private final long     expiration;       // the system time that this timeout expires...
     private boolean        cancelled;        // true if this timeout has been cancelled...
     private boolean        done;             // true if this timeout has expired or has been cancelled...
-    private final Runnable timeoutHandler;   // called upon expiration...
 
 
     /**
-     * Create a new instance of this class that will expire at the given number of milliseconds from now, and will call the given
-     * {@link Consumer Consumer&lt;Object&gt;} upon timeout expiration with the given attachment.
+     * Create a new instance of this class that will expire at the given number of milliseconds from now.
      *
      * @param _timeoutMS      The time (in milliseconds) from now that this timeout should expire.
-     * @param _timeoutHandler The {@link Consumer Consumer&lt;Object&gt;} handler to call upon expiration; the argument is the optional attachment.
      */
-    public Timeout( final long _timeoutMS, final Runnable _timeoutHandler ) {
-
-        if( isNull( _timeoutHandler ) )
-            throw new IllegalArgumentException( "Missing method to call on timeout");
+    protected Timeout( final long _timeoutMS ) {
 
         expiration     = System.currentTimeMillis() + _timeoutMS;  // calculating the system time at timeout expiration...
-        timeoutHandler = _timeoutHandler;
-        cancelled      = false;
-        done           = false;
     }
 
 
@@ -52,13 +41,16 @@ public class Timeout {
         if( done || cancelled )
             return true;
 
-        // looks like we actually have to expire - so call our handler with the attachment (if we have one)...
-        timeoutHandler.run();
+        // looks like we actually have to expire - so call our handler...
+        onTimeout();
 
         // mark us as done (so we don't do this again), and leave with a positive...
         done = true;
         return true;
     }
+
+
+    protected abstract void onTimeout();
 
 
     /**

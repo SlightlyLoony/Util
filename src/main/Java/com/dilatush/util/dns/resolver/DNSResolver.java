@@ -4,21 +4,19 @@ import com.dilatush.util.Outcome;
 import com.dilatush.util.dns.*;
 
 import java.io.IOException;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.channels.*;
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.concurrent.BlockingDeque;
-import java.util.concurrent.LinkedBlockingDeque;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static com.dilatush.util.General.isNull;
-import static java.lang.Thread.sleep;
 
+// TODO: implement iterative resolution...
+// TODO: implement TCP on truncation...
 /**
  * Implements an asynchronous resolver for DNS queries to a particular DNS server.  Any number of resolvers can be instantiated concurrently, but
  * only one resolver for each DNS server.  Each resolver can process any number of queries concurrently.  Each resolver can connect using either UDP
@@ -32,44 +30,83 @@ public class DNSResolver {
     private static final Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
 
     private static final Outcome.Forge<DNSResolver> createOutcome = new Outcome.Forge<>();
+    private static final Outcome.Forge<DNSQuery> queryOutcome = new Outcome.Forge<>();
 
     protected static DNSResolverRunner runner;  // the singleton instance of the resolver runner...
 
     protected       DNSUDPChannel                 udpChannel;
     protected       DNSTCPChannel                 tcpChannel;
-    protected final Consumer<Outcome<DNSMessage>> handler;
+
+    private   final Map<Integer,DNSQuery>         queryMap = new ConcurrentHashMap<>();
+    private   final AtomicInteger                 nextID = new AtomicInteger();
 
 
-    private DNSResolver( final Consumer<Outcome<DNSMessage>> _handler ) {
-        handler = _handler;
+    private DNSResolver() {
     }
 
 
     //TODO better comments...
     /**
-     * Query for host address IPv4.
+     * Query asynchronously for host address IPv4.
      *
      * @param _domain
+     * @param _handler
      * @param _timeoutMillis
      */
-    public void query( final String _domain, final long _timeoutMillis ) {
+    public Outcome<DNSQuery> query( final String _domain, final Consumer<Outcome<DNSQuery>> _handler, final long _timeoutMillis ) {
 
         DNSMessage.Builder builder = new DNSMessage.Builder();
         builder.setOpCode( DNSOpCode.QUERY );
         builder.setRecurse( true );
+        builder.setId( nextID.getAndIncrement() );
 
         // TODO: flesh out this prototype code...
-        builder.addQuestion( DNSQuestion.create( DNSDomainName.fromString( _domain ).info(), DNSRRType.A ).info() );
-        DNSMessage queryMsg = builder.getMessage();
-        ByteBuffer data = queryMsg.encode().info();
+        Outcome<DNSDomainName> domainNameOutcome = DNSDomainName.fromString( _domain );
+        if( domainNameOutcome.notOk() )
+            return queryOutcome.notOk( domainNameOutcome.msg(), domainNameOutcome.cause() );
 
-        DNSQuery query = new DNSQuery( new Timeout( 500, this::timeoutHandler ), queryMsg, data, this );
+        Outcome<DNSQuestion> questionOutcome = DNSQuestion.create( domainNameOutcome.info(), DNSRRType.A );
+        if( questionOutcome.notOk() )
+            return queryOutcome.notOk( questionOutcome.msg(), questionOutcome.cause() );
+
+        builder.addQuestion( questionOutcome.info() );
+
+        DNSMessage queryMsg = builder.getMessage();
+
+        Outcome<ByteBuffer> encodeOutcome = queryMsg.encode();
+        if( encodeOutcome.notOk() )
+            return queryOutcome.notOk( encodeOutcome.msg(), encodeOutcome.cause() );
+
+        ByteBuffer data = encodeOutcome.info();
+
+        DNSQuery query = new DNSQuery( queryMsg, data, _handler, _timeoutMillis );
+        queryMap.put( queryMsg.id, query );
         udpChannel.send( query );
+
+        return queryOutcome.ok( query );
     }
 
 
-    private void timeoutHandler() {
-        LOGGER.info( "timeout handler" );
+    protected void handleReceivedData( final ByteBuffer _receivedData ) {
+
+        Outcome<DNSMessage> messageOutcome = DNSMessage.decode( _receivedData );
+
+        if( messageOutcome.notOk() ) {
+            LOGGER.log( Level.WARNING, "Can't decode received message: " + messageOutcome.msg(), messageOutcome.cause() );
+            return;
+        }
+
+        DNSMessage message = messageOutcome.info();
+        DNSQuery query = queryMap.get( message.id );
+        if( query == null ) {
+            LOGGER.log( Level.WARNING, "Received response to inactive query (timed out?)" );
+            return;
+        }
+
+        boolean cancelled = query.timeout.cancel();
+        queryMap.remove( message.id );
+        query = query.addResponse( message );
+        query.onCompletion();
     }
 
 
@@ -88,7 +125,7 @@ public class DNSResolver {
     }
 
 
-    public static Outcome<DNSResolver> create( final InetSocketAddress _serverAddress, final Consumer<Outcome<DNSMessage>> _handler ) {
+    public static Outcome<DNSResolver> create( final InetSocketAddress _serverAddress ) {
 
         if( isNull( _serverAddress ) )
             return createOutcome.notOk( "Server address is missing (null)" );
@@ -96,7 +133,7 @@ public class DNSResolver {
         try {
             ensureRunner();
 
-            DNSResolver resolver = new DNSResolver( _handler );
+            DNSResolver resolver = new DNSResolver();
 
             Outcome<DNSUDPChannel> udpOutcome = DNSUDPChannel.create( resolver, _serverAddress );
             if( udpOutcome.notOk() )

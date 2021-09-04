@@ -3,8 +3,10 @@ package com.dilatush.util.dns.resolver;
 import com.dilatush.util.ExecutorService;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.*;
+import java.nio.channels.ClosedChannelException;
+import java.nio.channels.SelectableChannel;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.logging.Level;
@@ -74,6 +76,11 @@ class DNSResolverRunner {
     }
 
 
+    protected void addTimeout( final Timeout _timeout ) {
+        timeouts.add( _timeout );
+    }
+
+
     /**
      * The main I/O loop for {@link DNSResolver}s.
      */
@@ -102,7 +109,7 @@ class DNSResolverRunner {
 
                     if( key.isValid() && key.isReadable() ) {
                         DNSChannel channel = (DNSChannel) key.attachment();  // TODO: more safely here...
-                        channel.read();
+                        executor.submit( channel::read );
                     }
 
                     // get rid the key we just processed...
