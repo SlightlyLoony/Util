@@ -27,9 +27,11 @@ public class DNSQuery {
 
     private final Consumer<Outcome<DNSQuery>> handler;
 
+    private final DNSResolver                 resolver;
 
-    private DNSQuery( final DNSMessage _queryMessage, final ByteBuffer _queryData, final Consumer<Outcome<DNSQuery>> _handler,
-                     final long _timeoutMillis, final DNSMessage _response ) {
+
+    private DNSQuery( final DNSResolver _resolver, final DNSMessage _queryMessage, final ByteBuffer _queryData, final Consumer<Outcome<DNSQuery>> _handler,
+                      final long _timeoutMillis, final DNSMessage _response ) {
 
         handler         = _handler;
         timeoutMillis   = _timeoutMillis;
@@ -37,25 +39,29 @@ public class DNSQuery {
         queryMessage    = _queryMessage;
         queryData       = _queryData;
         responseMessage = _response;
+        resolver        = _resolver;
     }
 
 
 
-    public DNSQuery( final DNSMessage _queryMessage, final ByteBuffer _queryData, final Consumer<Outcome<DNSQuery>> _handler, final long _timeoutMillis ) {
-        this( _queryMessage, _queryData, _handler, _timeoutMillis, null );
+    public DNSQuery( final DNSResolver _resolver, final DNSMessage _queryMessage, final ByteBuffer _queryData, final Consumer<Outcome<DNSQuery>> _handler,
+                     final long _timeoutMillis ) {
+        this( _resolver, _queryMessage, _queryData, _handler, _timeoutMillis, null );
     }
 
     protected DNSQuery addResponse( final DNSMessage _response ) {
-        return new DNSQuery( queryMessage, queryData, handler, timeoutMillis, _response );
+        return new DNSQuery( resolver, queryMessage, queryData, handler, timeoutMillis, _response );
     }
 
 
     protected void onCompletion() {
+        resolver.removeQueryMapping( queryMessage.id );
         handler.accept( queryOutcome.ok( this ) );
     }
 
 
     private void onTimeout() {
+        resolver.removeQueryMapping( queryMessage.id );
         handler.accept( queryOutcome.notOk( "Timeout", new TimeoutException(), this ) );
     }
 }

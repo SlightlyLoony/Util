@@ -79,11 +79,16 @@ public class DNSResolver {
 
         ByteBuffer data = encodeOutcome.info();
 
-        DNSQuery query = new DNSQuery( queryMsg, data, _handler, _timeoutMillis );
+        DNSQuery query = new DNSQuery( this, queryMsg, data, _handler, _timeoutMillis );
         queryMap.put( queryMsg.id, query );
         udpChannel.send( query );
 
         return queryOutcome.ok( query );
+    }
+
+
+    protected void removeQueryMapping( final int _id ) {
+        queryMap.remove( _id );
     }
 
 
@@ -104,7 +109,6 @@ public class DNSResolver {
         }
 
         boolean cancelled = query.timeout.cancel();
-        queryMap.remove( message.id );
         query = query.addResponse( message );
         query.onCompletion();
     }

@@ -39,6 +39,9 @@ public abstract class DNSChannel {
         if( !wasAdded )
             return outcome.notOk( "Send data queue full" );
 
+        //
+        DNSResolver.runner.addTimeout( _query.timeout );
+
         // if we just added the first data, set write interest on...
         if( sendData.size() == 1 ) {
             try {
@@ -49,9 +52,6 @@ public abstract class DNSChannel {
                 return outcome.notOk( "Problem registering write interest", _e );
             }
         }
-
-        //
-        DNSResolver.runner.addTimeout( _query.timeout );
 
         return outcome.ok();
     }

@@ -20,7 +20,7 @@ public class Test {
         // set the configuration file location (must do before any logging actions occur)...
         System.getProperties().setProperty( "java.util.logging.config.file", "logging.properties" );
 
-        InetSocketAddress address = new InetSocketAddress( InetAddress.getByName( "10.2.5.201" ), 53 );
+        InetSocketAddress address = new InetSocketAddress( InetAddress.getByName( "8.8.8.8" ), 53 );
         Outcome<DNSResolver> ro1 = DNSResolver.create( address );
         if( ro1.ok() ) {
 
@@ -28,9 +28,10 @@ public class Test {
             r1.query( "www.cnn.com",  Test::handler, 500);
             r1.query( "www.foxnews.com",  Test::handler, 500);
             r1.query( "paradiseweather.info",  Test::handler, 500);
-        }
 
-        sleep(1000);
+            sleep(1000);
+            results.hashCode();
+        }
         results.hashCode();
     }
 
