@@ -126,8 +126,7 @@ public class DNSMessage {
      * unsuccessful, a not ok outcome is returned, with a message explaining the problem encountered.</p>
      * <p>Internally this method first attempts to encode into a 512-byte buffer (the maximum size of a UDP DNS packet).  If that attempt fails, it
      * will try several successively larger buffers until either it fits, or we've determined that it cannot fit into the 65538 bytes that is the
-     * maximum size for a TCP DNS packet.  Note that for all output buffers larger than 512 bytes, the result is prepended with the 16-bit length
-     * prefix required by TCP DNS.</p>
+     * maximum size for a TCP DNS packet.</p>
      *
      * @return the {@link Outcome Outcome&lt;ByteBuffer&gt;} with the results of the encoding attempt.
      */
@@ -145,10 +144,6 @@ public class DNSMessage {
 
             // we don't need to check whether we have enough space for the header, as we know we just allocated this thing...
             // so we can just jump into encoding the header...
-
-            // if it's larger than 512 bytes (UDP size), prepend the two byte length field for TCP (zero for placeholder, fill in later)...
-            if( msgBuffer.capacity() > 512 )
-                msgBuffer.putShort( (short) 0 );
 
             // stuff the app-supplied id away...
             msgBuffer.putShort( (short) id );
@@ -207,10 +202,6 @@ public class DNSMessage {
                 return encodeOutcome.notOk( result.msg() );
             }
 
-            // if it's larger than 512 bytes (UDP size), set the two byte length prefix for TCP...
-            if( msgBuffer.capacity() > 512 )
-                msgBuffer.putShort( 0, (short) (msgBuffer.limit() - 2) );
-
             // if we make it here, then we've encoded the whole thing - flip the buffer and skedaddle...
             msgBuffer.flip();
             return encodeOutcome.ok( msgBuffer );
@@ -234,10 +225,6 @@ public class DNSMessage {
         // make sure we actually HAVE a message buffer...
         if( isNull( _msgBuffer) )
             return outcome.notOk( "Missing message buffer" );
-
-        // if this buffer has more bytes than could be from a UDP DNS message, move past the two byte length prefix for TCP DNS messages...
-        if( _msgBuffer.limit() > 512 )
-            _msgBuffer.position( 2 );
 
         // instantiate a builder for us to build the decoded message as we go...
         Builder builder = new Builder();

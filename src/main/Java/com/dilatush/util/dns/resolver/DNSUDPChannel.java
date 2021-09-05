@@ -10,6 +10,7 @@ import java.nio.channels.DatagramChannel;
 import java.util.logging.Logger;
 
 import static java.nio.channels.SelectionKey.OP_READ;
+import static java.nio.channels.SelectionKey.OP_WRITE;
 
 public class DNSUDPChannel extends DNSChannel {
 
@@ -43,6 +44,31 @@ public class DNSUDPChannel extends DNSChannel {
     }
 
 
+    @Override
+    protected synchronized Outcome<?> send( final ByteBuffer _data ) {
+
+        if( _data.position() != 0 )
+            _data.flip();
+
+        boolean wasAdded = sendData.offerFirst( _data );
+        if( !wasAdded )
+            return outcome.notOk( "Send data queue full" );
+
+        // if we just added the first data, set write interest on...
+        if( sendData.size() == 1 ) {
+            try {
+                DNSResolver.runner.register( this, channel, OP_WRITE | OP_READ );
+                return outcome.ok();
+            }
+            catch( ClosedChannelException _e ) {
+                return outcome.notOk( "Problem registering write interest", _e );
+            }
+        }
+
+        return outcome.ok();
+    }
+
+
     // TODO: error handling needed...
 
     @Override
@@ -73,10 +99,12 @@ public class DNSUDPChannel extends DNSChannel {
 
         try {
             ByteBuffer readData = ByteBuffer.allocate( 512 );
+
             if( udpChannel.read( readData ) == 0 )
                 return;
+
             readData.flip();
-            resolver.handleReceivedData( readData );
+            resolver.handleReceivedData( readData, DNSTransport.UDP );
         }
 
         catch( IOException _e ) {

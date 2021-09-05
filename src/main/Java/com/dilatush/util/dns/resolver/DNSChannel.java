@@ -33,28 +33,7 @@ public abstract class DNSChannel {
     }
 
 
-    protected synchronized Outcome<?> send( final DNSQuery _query ) {
-
-        boolean wasAdded = sendData.offerFirst( _query.queryData );
-        if( !wasAdded )
-            return outcome.notOk( "Send data queue full" );
-
-        //
-        DNSResolver.runner.addTimeout( _query.timeout );
-
-        // if we just added the first data, set write interest on...
-        if( sendData.size() == 1 ) {
-            try {
-                DNSResolver.runner.register( this, channel, OP_WRITE | OP_READ );
-                return outcome.ok();
-            }
-            catch( ClosedChannelException _e ) {
-                return outcome.notOk( "Problem registering write interest", _e );
-            }
-        }
-
-        return outcome.ok();
-    }
+    protected abstract Outcome<?> send( final ByteBuffer _data );
 
     protected abstract void write( );
     protected abstract void read();

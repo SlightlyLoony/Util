@@ -3,10 +3,7 @@ package com.dilatush.util.dns.resolver;
 import com.dilatush.util.ExecutorService;
 
 import java.io.IOException;
-import java.nio.channels.ClosedChannelException;
-import java.nio.channels.SelectableChannel;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
+import java.nio.channels.*;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.logging.Level;
@@ -110,6 +107,11 @@ class DNSResolverRunner {
                     if( key.isValid() && key.isReadable() ) {
                         DNSChannel channel = (DNSChannel) key.attachment();  // TODO: more safely here...
                         executor.submit( channel::read );
+                    }
+
+                    if( key.isValid() && key.isConnectable() ) {
+                        DNSChannel channel = (DNSChannel) key.attachment();  // TODO: more safely here...
+                        ((SocketChannel) channel.channel).finishConnect();
                     }
 
                     // get rid the key we just processed...

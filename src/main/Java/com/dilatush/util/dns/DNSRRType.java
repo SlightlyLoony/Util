@@ -1,6 +1,7 @@
 package com.dilatush.util.dns;
 
 import com.dilatush.util.Outcome;
+import com.dilatush.util.dns.rr.UNIMPLEMENTED;
 
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
@@ -31,7 +32,8 @@ public enum DNSRRType {
     AXFR  ( true,  "AXFR",  252 ),    // A request for a transfer of an entire zone...
     MAILB ( true,  "MAILB", 253 ),    // A request for mailbox-related records (MB, MG or MR)...
     MAILA ( true,  "MAILA", 254 ),    // A request for mail agent RRs (Obsolete - see MX)...
-    ANY   ( true,  "*",     255 );    // A request for all records...
+    ANY   ( true,  "*",     255 ),    // A request for all records...
+    UNIMPLEMENTED ( false, "UNIMPL", -1 );
 
 
     private static final Outcome.Forge<DNSRRType> outcome       = new Outcome.Forge<>();
@@ -150,7 +152,7 @@ public enum DNSRRType {
         DNSRRType result = fromCode( code );
 
         if( isNull( result ) )
-            return outcome.notOk( "Could not decode resource record type code: " + code );
+            return outcome.ok( UNIMPLEMENTED );
 
         return outcome.ok( result );
     }

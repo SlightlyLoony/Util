@@ -20,16 +20,21 @@ public class Test {
         // set the configuration file location (must do before any logging actions occur)...
         System.getProperties().setProperty( "java.util.logging.config.file", "logging.properties" );
 
-        InetSocketAddress address = new InetSocketAddress( InetAddress.getByName( "8.8.8.8" ), 53 );
+        // OpenDNS: 208.67.220.220  (secondary)
+        // Beast: 10.2.5.200
+        InetSocketAddress address = new InetSocketAddress( InetAddress.getByName( "10.2.5.200" ), 53 );
         Outcome<DNSResolver> ro1 = DNSResolver.create( address );
         if( ro1.ok() ) {
 
             DNSResolver r1 = ro1.info();
-            r1.query( "www.cnn.com",  Test::handler, 500);
-            r1.query( "www.foxnews.com",  Test::handler, 500);
-            r1.query( "paradiseweather.info",  Test::handler, 500);
+//            r1.queryIPv4( "www.cnn.com",  Test::handler, 500);
+//            r1.queryIPv4( "www.foxnews.com",  Test::handler, 500);
+//            r1.queryIPv4( "paradiseweather.info",  Test::handler, 500);
+//            r1.queryIPv4( "beast.dilatush.com", Test::handler, 100 );
+            r1.queryAny( "bogus.com", Test::handler, 1000 );
 
-            sleep(1000);
+
+            sleep(3000);
             results.hashCode();
         }
         results.hashCode();

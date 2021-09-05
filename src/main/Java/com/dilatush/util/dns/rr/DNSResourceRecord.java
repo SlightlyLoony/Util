@@ -148,6 +148,7 @@ public abstract class DNSResourceRecord {
             return outcome.notOk( nameOutcome.msg() );
 
         // decode this resource record type...
+        int typeCodePos = _msgBuffer.position();
         Outcome<DNSRRType> typeOutcome = DNSRRType.decode( _msgBuffer );
         if( typeOutcome.notOk() )
             return outcome.notOk(typeOutcome.msg() );
@@ -178,14 +179,13 @@ public abstract class DNSResourceRecord {
         // call the appropriate subclass decoder to decode the resource data...
         Outcome<? extends DNSResourceRecord> result = switch( typeOutcome.info() ) {
 
-                case A     -> A.decode    ( _msgBuffer, init );
-                case AAAA  -> AAAA.decode ( _msgBuffer, init );
-                case CNAME -> CNAME.decode( _msgBuffer, init );
-                case NS    -> NS.decode   ( _msgBuffer, init );
-                case SOA   -> SOA.decode  ( _msgBuffer, init );
-                case TXT   -> TXT.decode  ( _msgBuffer, init );
-
-                default   -> outcome.notOk( "Unimplemented resource record type: " + typeOutcome.info().name() );
+                case A     -> A.decode            ( _msgBuffer, init );
+                case AAAA  -> AAAA.decode         ( _msgBuffer, init );
+                case CNAME -> CNAME.decode        ( _msgBuffer, init );
+                case NS    -> NS.decode           ( _msgBuffer, init );
+                case SOA   -> SOA.decode          ( _msgBuffer, init );
+                case TXT   -> TXT.decode          ( _msgBuffer, init );
+                default    -> UNIMPLEMENTED.decode( _msgBuffer, init, typeCodePos );
             };
 
         // if the subclass decoder had a problem, bail out...
