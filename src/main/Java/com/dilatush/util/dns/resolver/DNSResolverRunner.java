@@ -73,7 +73,7 @@ class DNSResolverRunner {
     }
 
 
-    protected void addTimeout( final Timeout _timeout ) {
+    protected void addTimeout( final AbstractTimeout _timeout ) {
         timeouts.add( _timeout );
     }
 
@@ -101,7 +101,7 @@ class DNSResolverRunner {
                     if( key.isValid() && key.isWritable() ) {
 
                         DNSChannel channel = (DNSChannel) key.attachment();  // TODO: more safely here...
-                        channel.write();
+                        executor.submit( channel::write );
                     }
 
                     if( key.isValid() && key.isReadable() ) {

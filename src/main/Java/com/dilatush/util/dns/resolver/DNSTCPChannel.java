@@ -8,22 +8,23 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SocketChannel;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static java.nio.channels.SelectionKey.*;
 
 public class DNSTCPChannel extends DNSChannel {
 
-    private static final Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
-
+    private static final Logger                       LOGGER        = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
     private static final Outcome.Forge<DNSTCPChannel> createOutcome = new Outcome.Forge<>();
+    private static final long                         LINGER_MILLIS = 3000;   // allow TCP connection to linger for 3 seconds after last data sent or received...
 
-    public final SocketChannel tcpChannel;
+    public  final SocketChannel        tcpChannel;
+    public  final InetSocketAddress    socketAddress;
 
-    public final InetSocketAddress socketAddress;
-
-    private final ByteBuffer prefix = ByteBuffer.allocate( 2 );
-    private       ByteBuffer message;
+    private final ByteBuffer           prefix = ByteBuffer.allocate( 2 );
+    private       ByteBuffer           message;
+    private       DNSTCPLingerTimeout  timeout;
 
 
     private DNSTCPChannel( final DNSResolver _resolver, final SocketChannel _channel, final InetSocketAddress _socketAddress ) {
@@ -65,7 +66,7 @@ public class DNSTCPChannel extends DNSChannel {
             return outcome.notOk( "Send data queue full" );
 
         // if we just added the first data, connect and set write interest on...
-        if( sendData.size() == 1 ) {
+        if( !(tcpChannel.isConnected() || tcpChannel.isConnectionPending()) ) {
             try {
                 tcpChannel.connect( socketAddress );
                 DNSResolver.runner.register( this, channel, OP_WRITE | OP_READ | OP_CONNECT );
@@ -78,8 +79,11 @@ public class DNSTCPChannel extends DNSChannel {
             }
         }
 
+        linger();
+
         return outcome.ok();
     }
+
 
     @Override
     public synchronized void write() {
@@ -98,6 +102,7 @@ public class DNSTCPChannel extends DNSChannel {
                 int bytesWritten = tcpChannel.write( buffer );
                 if( bytesWritten == 0 )
                     break;
+                linger();
 
             } catch( IOException _e ) {
                 _e.printStackTrace();
@@ -115,7 +120,7 @@ public class DNSTCPChannel extends DNSChannel {
 
 
     @Override
-    protected void read() {
+    protected synchronized void read() {
 
         try {
             if( prefix.hasRemaining() ) {
@@ -123,22 +128,56 @@ public class DNSTCPChannel extends DNSChannel {
                 if( prefix.hasRemaining() ) {
                     return;
                 }
+                LOGGER.finest( "Read TCP prefix: " + (prefix.getShort( 0 ) & 0xFFFF) );
+                linger();
             }
             if( message == null ) {
                 prefix.flip();
                 int messageLength = prefix.getShort() & 0xFFFF;
                 message = ByteBuffer.allocate( messageLength );
+                LOGGER.finest( "Made TCP message buffer: " + (prefix.getShort( 0 ) & 0xFFFF) );
             }
-            tcpChannel.read( message );
-            if( !message.hasRemaining() ) {
-                message.flip();
-                resolver.handleReceivedData( message, DNSTransport.TCP );
-                message = null;
-                prefix.clear();
+            if( tcpChannel.read( message ) != 0 ) {
+                linger();
+                if( !message.hasRemaining() ) {
+                    message.flip();
+                    LOGGER.finest( "Got message: " + message.limit() );
+                    resolver.handleReceivedData( message, DNSTransport.TCP );
+                    message = null;
+                    prefix.clear();
+                }
             }
 
         } catch( IOException _e ) {
             _e.printStackTrace();
+        }
+    }
+
+
+    private void linger() {
+
+        if( "IO Runner".equals( Thread.currentThread().getName() ) )
+            "".hashCode();
+
+        LOGGER.log( Level.FINEST, "Setting TCP linger timeout" );
+        if( timeout != null )
+            timeout.cancel();
+        timeout = new DNSTCPLingerTimeout( LINGER_MILLIS, this::handleLingerTimeout );
+        DNSResolver.runner.addTimeout( timeout );
+    }
+
+
+    private void handleLingerTimeout() {
+
+        if( (timeout == null) || timeout.isCancelled() )
+            return;
+
+        LOGGER.log( Level.FINEST, "TCP linger timeout" );
+        timeout = null;
+        try {
+            tcpChannel.close();
+        } catch( IOException _e ) {
+            LOGGER.log( Level.WARNING, "Problem when closing TCP channel after lingering", _e );
         }
     }
 }

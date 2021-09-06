@@ -116,6 +116,6 @@ public class DNSLabel {
         _buffer.get( b );
         String text = new String( b, StandardCharsets.US_ASCII );
 
-        return fromString( text );
+        return outcome.ok( new DNSLabel( text ) );
     }
 }

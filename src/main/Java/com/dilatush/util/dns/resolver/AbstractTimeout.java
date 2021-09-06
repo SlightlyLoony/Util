@@ -7,7 +7,7 @@ import java.util.function.Consumer;
  * companion {@link Timeouts} class manages a collection of these timeouts.
  */
 @SuppressWarnings( "unused" )
-public abstract class Timeout {
+public abstract class AbstractTimeout {
 
     private final long     expiration;       // the system time that this timeout expires...
     private boolean        cancelled;        // true if this timeout has been cancelled...
@@ -19,7 +19,7 @@ public abstract class Timeout {
      *
      * @param _timeoutMS      The time (in milliseconds) from now that this timeout should expire.
      */
-    protected Timeout( final long _timeoutMS ) {
+    protected AbstractTimeout( final long _timeoutMS ) {
 
         expiration     = System.currentTimeMillis() + _timeoutMS;  // calculating the system time at timeout expiration...
     }

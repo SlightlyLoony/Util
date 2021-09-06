@@ -15,11 +15,11 @@ import java.util.logging.Logger;
 
 import static com.dilatush.util.General.isNull;
 import static com.dilatush.util.dns.resolver.DNSTransport.TCP;
+import static com.dilatush.util.dns.resolver.DNSTransport.UDP;
 
 // TODO: implement iterative resolution...
 // TODO: implement delayed shutdown of TCP connection
 // TODO: implement logic to handle:
-// TODO:   - normal UDP on truncation TCP recursive
 // TODO:   - TCP-only recursive
 // TODO:   - normal UDP on truncation TCP incremental
 // TODO:   - TCP-only incremental
@@ -36,18 +36,58 @@ public class DNSResolver {
     private static final Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
 
     private   static final Outcome.Forge<DNSResolver> createOutcome = new Outcome.Forge<>();
-    private   static final Outcome.Forge<DNSQuery>    queryOutcome = new Outcome.Forge<>();
+    private   static final Outcome.Forge<DNSQuery>    queryOutcome  = new Outcome.Forge<>();
 
     protected static       DNSResolverRunner          runner;  // the singleton instance of the resolver runner...
 
-    protected       DNSUDPChannel                 udpChannel;
-    protected       DNSTCPChannel                 tcpChannel;
+    protected              DNSUDPChannel              udpChannel;
+    protected              DNSTCPChannel              tcpChannel;
+    private   final        Map<Integer,DNSQuery>      queryMap           = new ConcurrentHashMap<>();
+    private   final        AtomicInteger              nextID             = new AtomicInteger();
+    private   final        DNSTransport               initialTransport;
+    private   final        DNSResolution              resolutionMode;
 
-    private   final Map<Integer,DNSQuery>         queryMap = new ConcurrentHashMap<>();
-    private   final AtomicInteger                 nextID = new AtomicInteger();
+
+    private DNSResolver( final DNSTransport _initialTransport, final DNSResolution _resolutionMode ) {
+
+        initialTransport = _initialTransport;
+        resolutionMode   = _resolutionMode;
+    }
 
 
-    private DNSResolver() {
+    public static Outcome<DNSResolver> create( final InetSocketAddress _serverAddress, final DNSTransport _initialTransport, final DNSResolution _resolutionMode ) {
+
+        if( isNull( _serverAddress, _initialTransport, _resolutionMode ) )
+            return createOutcome.notOk( "Missing required parameter(s)" );
+
+        try {
+            ensureRunner();
+
+            DNSResolver resolver = new DNSResolver( _initialTransport, _resolutionMode );
+
+            Outcome<DNSUDPChannel> udpOutcome = DNSUDPChannel.create( resolver, _serverAddress );
+            if( udpOutcome.notOk() )
+                return createOutcome.notOk( udpOutcome.msg(), udpOutcome.cause() );
+            resolver.udpChannel = udpOutcome.info();
+
+            Outcome<DNSTCPChannel> tcpOutcome = DNSTCPChannel.create( resolver, _serverAddress );
+            if( tcpOutcome.notOk() )
+                return createOutcome.notOk( tcpOutcome.msg(), tcpOutcome.cause() );
+            resolver.tcpChannel = tcpOutcome.info();
+
+            runner.register( resolver.udpChannel, resolver.tcpChannel );
+
+            return createOutcome.ok( resolver );
+        }
+
+        catch( IOException _e ) {
+            return createOutcome.notOk( "Problem creating DNSResolver", _e );
+        }
+    }
+
+
+    public static Outcome<DNSResolver> create( final InetSocketAddress _serverAddress ) {
+        return create( _serverAddress, UDP, DNSResolution.RECURSIVE );
     }
 
 
@@ -71,7 +111,7 @@ public class DNSResolver {
         if( questionOutcome.notOk() )
             return queryOutcome.notOk( questionOutcome.msg(), questionOutcome.cause() );
 
-        return query( questionOutcome.info(), _handler, _timeoutMillis, DNSResolution.RECURSIVE, DNSTransport.UDP );
+        return query( questionOutcome.info(), _handler, _timeoutMillis );
     }
 
     /**
@@ -93,16 +133,23 @@ public class DNSResolver {
         if( questionOutcome.notOk() )
             return queryOutcome.notOk( questionOutcome.msg(), questionOutcome.cause() );
 
-        return query( questionOutcome.info(), _handler, _timeoutMillis, DNSResolution.RECURSIVE, DNSTransport.UDP );
+        return query( questionOutcome.info(), _handler, _timeoutMillis );
     }
 
-    public Outcome<DNSQuery> query( final DNSQuestion _question, final Consumer<Outcome<DNSQuery>> _handler, final long _timeoutMillis,
-                                    final DNSResolution _resolution, final DNSTransport _transport ) {
 
-        if( isNull( _question, _handler, _resolution, _transport ) )
+    /**
+     *
+     * @param _question
+     * @param _handler
+     * @param _timeoutMillis
+     * @return
+     */
+    public Outcome<DNSQuery> query( final DNSQuestion _question, final Consumer<Outcome<DNSQuery>> _handler, final long _timeoutMillis ) {
+
+        if( isNull( _question, _handler ) )
             return queryOutcome.notOk( "Missing parameter(s)" );
 
-        return DNSQuery.initiate( this, _resolution, _question, _timeoutMillis, _transport, _handler, nextID.getAndIncrement() );
+        return DNSQuery.initiate( this, resolutionMode, _question, _timeoutMillis, initialTransport, _handler, nextID.getAndIncrement() );
     }
 
 
@@ -168,37 +215,6 @@ public class DNSResolver {
                 return;
 
             runner = new DNSResolverRunner();
-        }
-    }
-
-
-    public static Outcome<DNSResolver> create( final InetSocketAddress _serverAddress ) {
-
-        if( isNull( _serverAddress ) )
-            return createOutcome.notOk( "Server address is missing (null)" );
-
-        try {
-            ensureRunner();
-
-            DNSResolver resolver = new DNSResolver();
-
-            Outcome<DNSUDPChannel> udpOutcome = DNSUDPChannel.create( resolver, _serverAddress );
-            if( udpOutcome.notOk() )
-                return createOutcome.notOk( udpOutcome.msg(), udpOutcome.cause() );
-            resolver.udpChannel = udpOutcome.info();
-
-            Outcome<DNSTCPChannel> tcpOutcome = DNSTCPChannel.create( resolver, _serverAddress );
-            if( tcpOutcome.notOk() )
-                return createOutcome.notOk( tcpOutcome.msg(), tcpOutcome.cause() );
-            resolver.tcpChannel = tcpOutcome.info();
-
-            runner.register( resolver.udpChannel, resolver.tcpChannel );
-
-            return createOutcome.ok( resolver );
-        }
-
-        catch( IOException _e ) {
-            return createOutcome.notOk( "Problem creating DNSResolver", _e );
         }
     }
 }

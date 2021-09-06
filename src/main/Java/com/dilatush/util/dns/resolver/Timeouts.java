@@ -13,10 +13,10 @@ public class Timeouts {
     final static private Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
 
     // The list of active timeouts, in order of their expiration times (earlier times first)...
-    private final List<Timeout> timeouts = new ArrayList<>();
+    private final List<AbstractTimeout> timeouts = new ArrayList<>();
 
 
-    public synchronized void add( final Timeout _newTimeout ) {
+    public synchronized void add( final AbstractTimeout _newTimeout ) {
 
         LOGGER.finest( "Adding timeout" );
 
@@ -51,6 +51,7 @@ public class Timeouts {
         for( i = 0; i < timeouts.size(); i++ ) {
             if( !timeouts.get( i ).hasExpired() )
                 break;
+            LOGGER.finest( "Timeout!" );
         }
 
         // clear all the expired timeouts off the beginning of the list...
