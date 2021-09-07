@@ -1,7 +1,10 @@
-package com.dilatush.util.dns.resolver;
+package com.dilatush.util.dns.agent;
 
 import com.dilatush.util.Outcome;
-import com.dilatush.util.dns.*;
+import com.dilatush.util.dns.message.DNSDomainName;
+import com.dilatush.util.dns.message.DNSMessage;
+import com.dilatush.util.dns.message.DNSQuestion;
+import com.dilatush.util.dns.message.DNSRRType;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -14,28 +17,36 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static com.dilatush.util.General.isNull;
-import static com.dilatush.util.dns.resolver.DNSTransport.TCP;
-import static com.dilatush.util.dns.resolver.DNSTransport.UDP;
+import static com.dilatush.util.dns.agent.DNSTransport.TCP;
+import static com.dilatush.util.dns.agent.DNSTransport.UDP;
 
 // TODO: implement iterative resolution...
 // TODO: implement delayed shutdown of TCP connection
 // TODO: implement logic to handle:
 // TODO:   - TCP-only recursive
-// TODO:   - normal UDP on truncation TCP incremental
-// TODO:   - TCP-only incremental
+// TODO:   - normal UDP on truncation TCP iterative
+// TODO:   - TCP-only iterative
+// TODO: Other:
+// TODO:   - create DNSResolver that:
+// TODO:     - has one instance of DNSResolverRunner (which should be renamed)
+// TODO:     - has any number of DNSResolverConnection instances
+// TODO:     - has an optional cache
+// TODO:     - has various ways of deciding which DNSResolverConnection to use
+// TODO: Move DNS Resolver into its own project
+
 /**
  * Implements an asynchronous resolver for DNS queries to a particular DNS server.  Any number of resolvers can be instantiated concurrently, but
  * only one resolver for each DNS server.  Each resolver can process any number of queries concurrently.  Each resolver can connect using either UDP
  * or TCP (normally UDP, but switching to TCP as needed).  All resolver I/O is performed by a single thread owned by the singleton
- * {@link DNSResolverRunner}, which is instantiated on demand (when any {@link DNSResolver} is instantiated).
+ * {@link DNSResolverRunner}, which is instantiated on demand (when any {@link DNSServerAgent} is instantiated).
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
-public class DNSResolver {
+public class DNSServerAgent {
 
     private static final Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
 
-    private   static final Outcome.Forge<DNSResolver> createOutcome = new Outcome.Forge<>();
+    private   static final Outcome.Forge<DNSServerAgent> createOutcome = new Outcome.Forge<>();
     private   static final Outcome.Forge<DNSQuery>    queryOutcome  = new Outcome.Forge<>();
 
     protected static       DNSResolverRunner          runner;  // the singleton instance of the resolver runner...
@@ -48,14 +59,14 @@ public class DNSResolver {
     private   final        DNSResolution              resolutionMode;
 
 
-    private DNSResolver( final DNSTransport _initialTransport, final DNSResolution _resolutionMode ) {
+    private DNSServerAgent( final DNSTransport _initialTransport, final DNSResolution _resolutionMode ) {
 
         initialTransport = _initialTransport;
         resolutionMode   = _resolutionMode;
     }
 
 
-    public static Outcome<DNSResolver> create( final InetSocketAddress _serverAddress, final DNSTransport _initialTransport, final DNSResolution _resolutionMode ) {
+    public static Outcome<DNSServerAgent> create( final InetSocketAddress _serverAddress, final DNSTransport _initialTransport, final DNSResolution _resolutionMode ) {
 
         if( isNull( _serverAddress, _initialTransport, _resolutionMode ) )
             return createOutcome.notOk( "Missing required parameter(s)" );
@@ -63,7 +74,7 @@ public class DNSResolver {
         try {
             ensureRunner();
 
-            DNSResolver resolver = new DNSResolver( _initialTransport, _resolutionMode );
+            DNSServerAgent resolver = new DNSServerAgent( _initialTransport, _resolutionMode );
 
             Outcome<DNSUDPChannel> udpOutcome = DNSUDPChannel.create( resolver, _serverAddress );
             if( udpOutcome.notOk() )
@@ -81,12 +92,12 @@ public class DNSResolver {
         }
 
         catch( IOException _e ) {
-            return createOutcome.notOk( "Problem creating DNSResolver", _e );
+            return createOutcome.notOk( "Problem creating DNSServerAgent", _e );
         }
     }
 
 
-    public static Outcome<DNSResolver> create( final InetSocketAddress _serverAddress ) {
+    public static Outcome<DNSServerAgent> create( final InetSocketAddress _serverAddress ) {
         return create( _serverAddress, UDP, DNSResolution.RECURSIVE );
     }
 

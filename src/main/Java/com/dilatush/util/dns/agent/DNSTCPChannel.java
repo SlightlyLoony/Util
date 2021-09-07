@@ -1,4 +1,4 @@
-package com.dilatush.util.dns.resolver;
+package com.dilatush.util.dns.agent;
 
 import com.dilatush.util.Outcome;
 
@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
-import java.nio.channels.DatagramChannel;
 import java.nio.channels.SocketChannel;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -27,7 +26,7 @@ public class DNSTCPChannel extends DNSChannel {
     private       DNSTCPLingerTimeout  timeout;
 
 
-    private DNSTCPChannel( final DNSResolver _resolver, final SocketChannel _channel, final InetSocketAddress _socketAddress ) {
+    private DNSTCPChannel( final DNSServerAgent _resolver, final SocketChannel _channel, final InetSocketAddress _socketAddress ) {
         super( _resolver, _channel );
 
         tcpChannel = _channel;
@@ -35,7 +34,7 @@ public class DNSTCPChannel extends DNSChannel {
     }
 
 
-    public static Outcome<DNSTCPChannel> create( final DNSResolver _resolver, final InetSocketAddress _serverAddress ) {
+    public static Outcome<DNSTCPChannel> create( final DNSServerAgent _resolver, final InetSocketAddress _serverAddress ) {
 
         try {
             SocketChannel tcp = SocketChannel.open();
@@ -69,7 +68,7 @@ public class DNSTCPChannel extends DNSChannel {
         if( !(tcpChannel.isConnected() || tcpChannel.isConnectionPending()) ) {
             try {
                 tcpChannel.connect( socketAddress );
-                DNSResolver.runner.register( this, channel, OP_WRITE | OP_READ | OP_CONNECT );
+                DNSServerAgent.runner.register( this, channel, OP_WRITE | OP_READ | OP_CONNECT );
                 return outcome.ok();
             }
             catch( ClosedChannelException _e ) {
@@ -86,7 +85,7 @@ public class DNSTCPChannel extends DNSChannel {
 
 
     @Override
-    public synchronized void write() {
+    public void write() {
 
         ByteBuffer buffer = sendData.peekLast();
 
@@ -111,7 +110,7 @@ public class DNSTCPChannel extends DNSChannel {
 
         if( sendData.isEmpty() ) {
             try {
-                DNSResolver.runner.register( this, channel, OP_READ );
+                DNSServerAgent.runner.register( this, channel, OP_READ );
             } catch( ClosedChannelException _e ) {
                 _e.printStackTrace();
             }
@@ -120,7 +119,7 @@ public class DNSTCPChannel extends DNSChannel {
 
 
     @Override
-    protected synchronized void read() {
+    protected void read() {
 
         try {
             if( prefix.hasRemaining() ) {
@@ -142,7 +141,8 @@ public class DNSTCPChannel extends DNSChannel {
                 if( !message.hasRemaining() ) {
                     message.flip();
                     LOGGER.finest( "Got message: " + message.limit() );
-                    resolver.handleReceivedData( message, DNSTransport.TCP );
+                    ByteBuffer msg = message;
+                    DNSServerAgent.runner.executor.submit( () -> resolver.handleReceivedData( msg, DNSTransport.TCP ) );
                     message = null;
                     prefix.clear();
                 }
@@ -163,7 +163,7 @@ public class DNSTCPChannel extends DNSChannel {
         if( timeout != null )
             timeout.cancel();
         timeout = new DNSTCPLingerTimeout( LINGER_MILLIS, this::handleLingerTimeout );
-        DNSResolver.runner.addTimeout( timeout );
+        DNSServerAgent.runner.addTimeout( timeout );
     }
 
 

@@ -1,4 +1,4 @@
-package com.dilatush.util.dns.resolver;
+package com.dilatush.util.dns.agent;
 
 import java.util.ArrayList;
 import java.util.List;

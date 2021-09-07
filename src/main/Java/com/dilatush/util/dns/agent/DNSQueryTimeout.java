@@ -1,4 +1,4 @@
-package com.dilatush.util.dns.resolver;
+package com.dilatush.util.dns.agent;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;

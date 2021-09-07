@@ -1,4 +1,4 @@
-package com.dilatush.util.dns.resolver;
+package com.dilatush.util.dns.agent;
 
 import com.dilatush.util.Outcome;
 
@@ -21,14 +21,14 @@ public class DNSUDPChannel extends DNSChannel {
     public final DatagramChannel udpChannel;
 
 
-    private DNSUDPChannel( final DNSResolver _resolver, final DatagramChannel _channel ) {
+    private DNSUDPChannel( final DNSServerAgent _resolver, final DatagramChannel _channel ) {
         super( _resolver, _channel );
 
         udpChannel = _channel;
     }
 
 
-    public static Outcome<DNSUDPChannel> create( final DNSResolver _resolver, final InetSocketAddress _serverAddress ) {
+    public static Outcome<DNSUDPChannel> create( final DNSServerAgent _resolver, final InetSocketAddress _serverAddress ) {
 
         try {
             DatagramChannel udp = DatagramChannel.open();
@@ -57,7 +57,7 @@ public class DNSUDPChannel extends DNSChannel {
         // if we just added the first data, set write interest on...
         if( sendData.size() == 1 ) {
             try {
-                DNSResolver.runner.register( this, channel, OP_WRITE | OP_READ );
+                DNSServerAgent.runner.register( this, channel, OP_WRITE | OP_READ );
                 return outcome.ok();
             }
             catch( ClosedChannelException _e ) {
@@ -72,7 +72,7 @@ public class DNSUDPChannel extends DNSChannel {
     // TODO: error handling needed...
 
     @Override
-    public synchronized void write() {
+    public void write() {
 
         ByteBuffer buffer = sendData.pollLast();
 
@@ -86,7 +86,7 @@ public class DNSUDPChannel extends DNSChannel {
 
         if( sendData.isEmpty() ) {
             try {
-                DNSResolver.runner.register( this, channel, OP_READ );
+                DNSServerAgent.runner.register( this, channel, OP_READ );
             } catch( ClosedChannelException _e ) {
                 _e.printStackTrace();
             }
@@ -104,7 +104,7 @@ public class DNSUDPChannel extends DNSChannel {
                 return;
 
             readData.flip();
-            resolver.handleReceivedData( readData, DNSTransport.UDP );
+            DNSServerAgent.runner.executor.submit( () -> resolver.handleReceivedData( readData, DNSTransport.UDP ) );
         }
 
         catch( IOException _e ) {

@@ -5,9 +5,9 @@ package com.dilatush.util.dns.rr;
 //   +---------------------------+
 
 import com.dilatush.util.Outcome;
-import com.dilatush.util.dns.DNSDomainName;
-import com.dilatush.util.dns.DNSRRClass;
-import com.dilatush.util.dns.DNSRRType;
+import com.dilatush.util.dns.message.DNSDomainName;
+import com.dilatush.util.dns.message.DNSRRClass;
+import com.dilatush.util.dns.message.DNSRRType;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;

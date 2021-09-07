@@ -1,4 +1,4 @@
-package com.dilatush.util.dns;
+package com.dilatush.util.dns.message;
 
 import com.dilatush.util.Outcome;
 import com.dilatush.util.dns.rr.DNSResourceRecord;

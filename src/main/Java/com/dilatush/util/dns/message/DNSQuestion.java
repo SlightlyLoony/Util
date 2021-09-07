@@ -1,4 +1,4 @@
-package com.dilatush.util.dns;
+package com.dilatush.util.dns.message;
 
 //   +---------------------------+
 //   | See RFC 1035 for details. |

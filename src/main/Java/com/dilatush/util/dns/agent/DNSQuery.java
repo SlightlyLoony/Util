@@ -1,18 +1,16 @@
-package com.dilatush.util.dns.resolver;
+package com.dilatush.util.dns.agent;
 
 import com.dilatush.util.Outcome;
-import com.dilatush.util.dns.DNSMessage;
-import com.dilatush.util.dns.DNSOpCode;
-import com.dilatush.util.dns.DNSQuestion;
+import com.dilatush.util.dns.message.DNSMessage;
+import com.dilatush.util.dns.message.DNSOpCode;
+import com.dilatush.util.dns.message.DNSQuestion;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 import static com.dilatush.util.General.isNull;
-import static com.dilatush.util.dns.resolver.DNSResolver.runner;
-import static com.dilatush.util.dns.resolver.DNSTransport.TCP;
-import static com.dilatush.util.dns.resolver.DNSTransport.UDP;
+import static com.dilatush.util.dns.agent.DNSServerAgent.runner;
 
 /**
  * Instances of this class contain the elements and state of a DNS query, and provide methods that implement the resolution of that query.
@@ -22,7 +20,7 @@ public class DNSQuery {
     private static final Outcome.Forge<DNSQuery> queryOutcome = new Outcome.Forge<>();
 
 
-    private final DNSResolver                  resolver;
+    private final DNSServerAgent resolver;
 
     private final DNSResolution                resolution;
 
@@ -45,7 +43,7 @@ public class DNSQuery {
     private       long                         endTime;
 
 
-    private DNSQuery( final DNSResolver _resolver, final DNSResolution _resolution, final DNSQuestion _question, final long _timeoutMillis, final DNSTransport _transport,
+    private DNSQuery( final DNSServerAgent _resolver, final DNSResolution _resolution, final DNSQuestion _question, final long _timeoutMillis, final DNSTransport _transport,
                       final Consumer<Outcome<DNSQuery>> _handler, final DNSMessage _queryMessage ) {
 
         resolver        = _resolver;
@@ -61,7 +59,7 @@ public class DNSQuery {
     }
 
 
-    protected static Outcome<DNSQuery> initiate( final DNSResolver _resolver, final DNSResolution _resolution, final DNSQuestion _question, final long _timeoutMillis,
+    protected static Outcome<DNSQuery> initiate( final DNSServerAgent _resolver, final DNSResolution _resolution, final DNSQuestion _question, final long _timeoutMillis,
                                                  final DNSTransport _transport, final Consumer<Outcome<DNSQuery>> _handler, final int _id ) {
 
         if( isNull( _resolver, _resolution, _question, _transport, _handler ) )

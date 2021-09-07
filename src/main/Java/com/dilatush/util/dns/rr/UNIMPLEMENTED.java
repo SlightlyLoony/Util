@@ -5,16 +5,14 @@ package com.dilatush.util.dns.rr;
 //   +---------------------------+
 
 import com.dilatush.util.Outcome;
-import com.dilatush.util.dns.DNSDomainName;
-import com.dilatush.util.dns.DNSRRClass;
-import com.dilatush.util.dns.DNSRRType;
+import com.dilatush.util.dns.message.DNSDomainName;
+import com.dilatush.util.dns.message.DNSRRClass;
+import com.dilatush.util.dns.message.DNSRRType;
 
 import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.Map;
-
-import static com.dilatush.util.General.isNull;
 
 /**
  * Instances of this class represent a DNS Resource Record for any type not represented by a resource record class in this package.

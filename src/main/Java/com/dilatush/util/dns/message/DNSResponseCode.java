@@ -1,4 +1,4 @@
-package com.dilatush.util.dns;
+package com.dilatush.util.dns.message;
 
 import java.util.HashMap;
 import java.util.Map;

@@ -1,6 +1,5 @@
-package com.dilatush.util.dns.resolver;
+package com.dilatush.util.dns.agent;
 
-import com.dilatush.util.ExecutorService;
 import com.dilatush.util.Outcome;
 
 import java.net.InetAddress;
@@ -29,20 +28,21 @@ public class Test {
 
         LOGGER.info( "Test start..." );
 
-        DNSResolverRunner.alternateExecutor = new ExecutorService( 10, 100 );
+        //DNSResolverRunner.alternateExecutor = new ExecutorService( 10, 100 );
 
         // OpenDNS: 208.67.220.220  (secondary)
         // Beast: 10.2.5.200
         InetSocketAddress address = new InetSocketAddress( InetAddress.getByName( "10.2.5.200" ), 53 );
-        Outcome<DNSResolver> ro1 = DNSResolver.create( address );
-        Outcome<DNSResolver> ro3 = DNSResolver.create( address, DNSTransport.UDP, DNSResolution.INCREMENTAL );
-        address = new InetSocketAddress( InetAddress.getByName( "8.8.8.8" ), 53 );
-        Outcome<DNSResolver> ro2 = DNSResolver.create( address );
+        Outcome<DNSServerAgent> ro1 = DNSServerAgent.create( address );
+        address = new InetSocketAddress( InetAddress.getByName( "1.1.1.1" ), 53 );
+        Outcome<DNSServerAgent> ro2 = DNSServerAgent.create( address );
+        address = new InetSocketAddress( InetAddress.getByName( "10.2.5.200" ), 53 );
+        Outcome<DNSServerAgent> ro3 = DNSServerAgent.create( address, DNSTransport.UDP, DNSResolution.ITERATIVE );
         if( ro1.ok() && ro2.ok() && ro3.ok() ) {
 
-            DNSResolver r1 = ro1.info();
-            DNSResolver r2 = ro2.info();
-            DNSResolver r3 = ro3.info();
+            DNSServerAgent r1 = ro1.info();
+            DNSServerAgent r2 = ro2.info();
+            DNSServerAgent r3 = ro3.info();
 //            r2.queryIPv4( "www.cnn.com",  Test::handler2, 500);
 //            r2.queryIPv4( "www.foxnews.com",  Test::handler2, 500);
 //            r2.queryIPv4( "paradiseweather.info",  Test::handler2, 500);

@@ -1,7 +1,6 @@
-package com.dilatush.util.dns;
+package com.dilatush.util.dns.message;
 
 import com.dilatush.util.Outcome;
-import com.dilatush.util.dns.rr.UNIMPLEMENTED;
 
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;

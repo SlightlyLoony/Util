@@ -1,4 +1,4 @@
-package com.dilatush.util.dns.resolver;
+package com.dilatush.util.dns.agent;
 
 import com.dilatush.util.ExecutorService;
 
@@ -22,7 +22,7 @@ class DNSResolverRunner {
     private static final long             defaultTimeoutCheckIntervalMillis = 50;
 
     private        final long             timeoutCheckIntervalMillis;
-    private        final ExecutorService  executor;
+    protected      final ExecutorService  executor;
     private        final Selector         selector;
     private        final Thread           ioRunner;
     private        final Timeouts         timeouts;
@@ -33,7 +33,7 @@ class DNSResolverRunner {
     /**
      * Creates a new instance of this class.  The new instance will start a daemon thread that does the bulk of the work of this class, which is to handle the low-level (UDP and
      * TCP) I/O for the DNS resolver.  By default, received data and timeout handlers are called through a single-threaded {@link ExecutorService} instance (with a daemon thread
-     * and a queue of 100).  However, an alternate {@link ExecutorService} can be used by setting {@link #alternateExecutor} prior to calling {@link DNSResolver#create} for the
+     * and a queue of 100).  However, an alternate {@link ExecutorService} can be used by setting {@link #alternateExecutor} prior to calling {@link DNSServerAgent#create} for the
      * first time in any given process.
      *
      * @throws IOException if the selector can't be opened for some reason.
@@ -79,7 +79,7 @@ class DNSResolverRunner {
 
 
     /**
-     * The main I/O loop for {@link DNSResolver}s.
+     * The main I/O loop for {@link DNSServerAgent}s.
      */
     private void ioLoop() {
 
@@ -101,12 +101,12 @@ class DNSResolverRunner {
                     if( key.isValid() && key.isWritable() ) {
 
                         DNSChannel channel = (DNSChannel) key.attachment();  // TODO: more safely here...
-                        executor.submit( channel::write );
+                        channel.write();
                     }
 
                     if( key.isValid() && key.isReadable() ) {
                         DNSChannel channel = (DNSChannel) key.attachment();  // TODO: more safely here...
-                        executor.submit( channel::read );
+                        channel.read();
                     }
 
                     if( key.isValid() && key.isConnectable() ) {
