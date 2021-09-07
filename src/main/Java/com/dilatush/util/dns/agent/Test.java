@@ -28,7 +28,7 @@ public class Test {
 
         LOGGER.info( "Test start..." );
 
-        //DNSResolverRunner.alternateExecutor = new ExecutorService( 10, 100 );
+        //DNSNIO.alternateExecutor = new ExecutorService( 10, 100 );
 
         // OpenDNS: 208.67.220.220  (secondary)
         // Beast: 10.2.5.200

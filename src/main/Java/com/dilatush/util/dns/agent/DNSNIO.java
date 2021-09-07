@@ -12,7 +12,7 @@ import java.util.logging.Logger;
 import static java.lang.System.currentTimeMillis;
 import static java.nio.channels.SelectionKey.OP_READ;
 
-class DNSResolverRunner {
+public class DNSNIO {
 
     final static private Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
 
@@ -38,7 +38,7 @@ class DNSResolverRunner {
      *
      * @throws IOException if the selector can't be opened for some reason.
      */
-    protected DNSResolverRunner() throws IOException {
+    public DNSNIO() throws IOException {
 
         // get our timeouts manager...
         timeouts = new Timeouts();
@@ -63,8 +63,8 @@ class DNSResolverRunner {
     protected void register( final DNSUDPChannel _udp, final DNSTCPChannel _tcp ) throws ClosedChannelException {
 
         // TODO: safety checks
-        _udp.channel.register( selector, OP_READ, _udp );
-        _tcp.channel.register( selector, OP_READ, _tcp );
+        _udp.udpChannel.register( selector, OP_READ, _udp );
+        _tcp.tcpChannel.register( selector, OP_READ, _tcp );
     }
 
 
@@ -97,21 +97,19 @@ class DNSResolverRunner {
                 while( keyIterator.hasNext() ) {
 
                     SelectionKey key = keyIterator.next();
+                    DNSTCPChannel tcp  = (key.attachment() instanceof DNSTCPChannel)     ? (DNSTCPChannel) key.attachment() : null;
+                    DNSChannel channel = (key.attachment() instanceof SelectableChannel) ? (DNSChannel) key.attachment()    : null;
 
                     if( key.isValid() && key.isWritable() ) {
-
-                        DNSChannel channel = (DNSChannel) key.attachment();  // TODO: more safely here...
-                        channel.write();
+                        if( channel != null) channel.write();
                     }
 
                     if( key.isValid() && key.isReadable() ) {
-                        DNSChannel channel = (DNSChannel) key.attachment();  // TODO: more safely here...
-                        channel.read();
+                        if( channel != null ) channel.read();
                     }
 
                     if( key.isValid() && key.isConnectable() ) {
-                        DNSChannel channel = (DNSChannel) key.attachment();  // TODO: more safely here...
-                        ((SocketChannel) channel.channel).finishConnect();
+                        if( tcp != null ) tcp.tcpChannel.finishConnect();
                     }
 
                     // get rid the key we just processed...

@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
+import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -15,7 +16,6 @@ import static java.nio.channels.SelectionKey.*;
 public class DNSTCPChannel extends DNSChannel {
 
     private static final Logger                       LOGGER        = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
-    private static final Outcome.Forge<DNSTCPChannel> createOutcome = new Outcome.Forge<>();
     private static final long                         LINGER_MILLIS = 3000;   // allow TCP connection to linger for 3 seconds after last data sent or received...
 
     public  final SocketChannel        tcpChannel;
@@ -26,26 +26,14 @@ public class DNSTCPChannel extends DNSChannel {
     private       DNSTCPLingerTimeout  timeout;
 
 
-    private DNSTCPChannel( final DNSServerAgent _resolver, final SocketChannel _channel, final InetSocketAddress _socketAddress ) {
-        super( _resolver, _channel );
+    protected DNSTCPChannel( final DNSServerAgent _agent, final DNSNIO _nio, final InetSocketAddress _socketAddress ) throws IOException {
+        super( _agent, _nio );
 
-        tcpChannel = _channel;
         socketAddress = _socketAddress;
-    }
 
-
-    public static Outcome<DNSTCPChannel> create( final DNSServerAgent _resolver, final InetSocketAddress _serverAddress ) {
-
-        try {
-            SocketChannel tcp = SocketChannel.open();
-            tcp.configureBlocking( false );
-            tcp.bind( null );
-            return createOutcome.ok( new DNSTCPChannel( _resolver, tcp, _serverAddress ));
-        }
-
-        catch( IOException _e ) {
-            return createOutcome.notOk( "Program creating SocketChannel", _e );
-        }
+        tcpChannel = SocketChannel.open();
+        tcpChannel.configureBlocking( false );
+        tcpChannel.bind( null );
     }
 
 
@@ -68,7 +56,7 @@ public class DNSTCPChannel extends DNSChannel {
         if( !(tcpChannel.isConnected() || tcpChannel.isConnectionPending()) ) {
             try {
                 tcpChannel.connect( socketAddress );
-                DNSServerAgent.runner.register( this, channel, OP_WRITE | OP_READ | OP_CONNECT );
+                nio.register( this, tcpChannel, OP_WRITE | OP_READ | OP_CONNECT );
                 return outcome.ok();
             }
             catch( ClosedChannelException _e ) {
@@ -81,6 +69,11 @@ public class DNSTCPChannel extends DNSChannel {
         linger();
 
         return outcome.ok();
+    }
+
+    @Override
+    protected void register( final Selector _selector, final int _operations, final Object _attachment ) throws ClosedChannelException {
+        tcpChannel.register( _selector, _operations, _attachment );
     }
 
 
@@ -110,7 +103,7 @@ public class DNSTCPChannel extends DNSChannel {
 
         if( sendData.isEmpty() ) {
             try {
-                DNSServerAgent.runner.register( this, channel, OP_READ );
+                nio.register( this, tcpChannel, OP_READ );
             } catch( ClosedChannelException _e ) {
                 _e.printStackTrace();
             }
@@ -142,7 +135,7 @@ public class DNSTCPChannel extends DNSChannel {
                     message.flip();
                     LOGGER.finest( "Got message: " + message.limit() );
                     ByteBuffer msg = message;
-                    DNSServerAgent.runner.executor.submit( () -> resolver.handleReceivedData( msg, DNSTransport.TCP ) );
+                    agent.executor.submit( () -> agent.handleReceivedData( msg, DNSTransport.TCP ) );
                     message = null;
                     prefix.clear();
                 }
@@ -156,14 +149,11 @@ public class DNSTCPChannel extends DNSChannel {
 
     private void linger() {
 
-        if( "IO Runner".equals( Thread.currentThread().getName() ) )
-            "".hashCode();
-
         LOGGER.log( Level.FINEST, "Setting TCP linger timeout" );
         if( timeout != null )
             timeout.cancel();
         timeout = new DNSTCPLingerTimeout( LINGER_MILLIS, this::handleLingerTimeout );
-        DNSServerAgent.runner.addTimeout( timeout );
+        agent.addTimeout( timeout );
     }
 
 

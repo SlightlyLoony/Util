@@ -7,6 +7,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.DatagramChannel;
+import java.nio.channels.Selector;
 import java.util.logging.Logger;
 
 import static java.nio.channels.SelectionKey.OP_READ;
@@ -16,31 +17,16 @@ public class DNSUDPChannel extends DNSChannel {
 
     private static final Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
 
-    private static final Outcome.Forge<DNSUDPChannel> createOutcome = new Outcome.Forge<>();
-
     public final DatagramChannel udpChannel;
 
 
-    private DNSUDPChannel( final DNSServerAgent _resolver, final DatagramChannel _channel ) {
-        super( _resolver, _channel );
+    protected DNSUDPChannel( final DNSServerAgent _agent, final DNSNIO _nio, final InetSocketAddress _serverAddress ) throws IOException {
+        super( _agent, _nio );
 
-        udpChannel = _channel;
-    }
-
-
-    public static Outcome<DNSUDPChannel> create( final DNSServerAgent _resolver, final InetSocketAddress _serverAddress ) {
-
-        try {
-            DatagramChannel udp = DatagramChannel.open();
-            udp.configureBlocking( false );
-            udp.bind( null );
-            udp.connect( _serverAddress );
-            return createOutcome.ok( new DNSUDPChannel( _resolver, udp ));
-        }
-
-        catch( IOException _e ) {
-            return createOutcome.notOk( "Problem creating DatagramChannel", _e );
-        }
+        udpChannel = DatagramChannel.open();
+        udpChannel.configureBlocking( false );
+        udpChannel.bind( null );
+        udpChannel.connect( _serverAddress );
     }
 
 
@@ -57,7 +43,7 @@ public class DNSUDPChannel extends DNSChannel {
         // if we just added the first data, set write interest on...
         if( sendData.size() == 1 ) {
             try {
-                DNSServerAgent.runner.register( this, channel, OP_WRITE | OP_READ );
+                nio.register( this, udpChannel, OP_WRITE | OP_READ );
                 return outcome.ok();
             }
             catch( ClosedChannelException _e ) {
@@ -66,6 +52,11 @@ public class DNSUDPChannel extends DNSChannel {
         }
 
         return outcome.ok();
+    }
+
+    @Override
+    protected void register( final Selector _selector, final int _operations, final Object _attachment ) throws ClosedChannelException {
+        udpChannel.register( _selector, _operations, _attachment );
     }
 
 
@@ -86,7 +77,7 @@ public class DNSUDPChannel extends DNSChannel {
 
         if( sendData.isEmpty() ) {
             try {
-                DNSServerAgent.runner.register( this, channel, OP_READ );
+                nio.register( this, udpChannel, OP_READ );
             } catch( ClosedChannelException _e ) {
                 _e.printStackTrace();
             }
@@ -104,7 +95,7 @@ public class DNSUDPChannel extends DNSChannel {
                 return;
 
             readData.flip();
-            DNSServerAgent.runner.executor.submit( () -> resolver.handleReceivedData( readData, DNSTransport.UDP ) );
+            agent.executor.submit( () -> agent.handleReceivedData( readData, DNSTransport.UDP ) );
         }
 
         catch( IOException _e ) {

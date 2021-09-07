@@ -10,7 +10,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 import static com.dilatush.util.General.isNull;
-import static com.dilatush.util.dns.agent.DNSServerAgent.runner;
 
 /**
  * Instances of this class contain the elements and state of a DNS query, and provide methods that implement the resolution of that query.
@@ -20,7 +19,7 @@ public class DNSQuery {
     private static final Outcome.Forge<DNSQuery> queryOutcome = new Outcome.Forge<>();
 
 
-    private final DNSServerAgent resolver;
+    private final DNSServerAgent               agent;
 
     private final DNSResolution                resolution;
 
@@ -43,10 +42,10 @@ public class DNSQuery {
     private       long                         endTime;
 
 
-    private DNSQuery( final DNSServerAgent _resolver, final DNSResolution _resolution, final DNSQuestion _question, final long _timeoutMillis, final DNSTransport _transport,
+    private DNSQuery( final DNSServerAgent _agent, final DNSResolution _resolution, final DNSQuestion _question, final long _timeoutMillis, final DNSTransport _transport,
                       final Consumer<Outcome<DNSQuery>> _handler, final DNSMessage _queryMessage ) {
 
-        resolver        = _resolver;
+        agent           = _agent;
         resolution      = _resolution;
         question        = _question;
         timeout         = new DNSQueryTimeout( _timeoutMillis, this::onTimeout );
@@ -59,10 +58,10 @@ public class DNSQuery {
     }
 
 
-    protected static Outcome<DNSQuery> initiate( final DNSServerAgent _resolver, final DNSResolution _resolution, final DNSQuestion _question, final long _timeoutMillis,
+    protected static Outcome<DNSQuery> initiate( final DNSServerAgent _agent, final DNSResolution _resolution, final DNSQuestion _question, final long _timeoutMillis,
                                                  final DNSTransport _transport, final Consumer<Outcome<DNSQuery>> _handler, final int _id ) {
 
-        if( isNull( _resolver, _resolution, _question, _transport, _handler ) )
+        if( isNull( _agent, _resolution, _question, _transport, _handler ) )
             return queryOutcome.notOk( "Missing required parameter" );
 
         DNSMessage.Builder builder = new DNSMessage.Builder();
@@ -73,9 +72,9 @@ public class DNSQuery {
 
         DNSMessage queryMsg = builder.getMessage();
 
-        DNSQuery query = new DNSQuery( _resolver, _resolution, _question, _timeoutMillis, _transport, _handler, queryMsg );
+        DNSQuery query = new DNSQuery( _agent, _resolution, _question, _timeoutMillis, _transport, _handler, queryMsg );
 
-        _resolver.setQueryMapping( query );
+        _agent.setQueryMapping( query );
 
         Outcome<ByteBuffer> encodeOutcome = queryMsg.encode();
         if( encodeOutcome.notOk() )
@@ -88,7 +87,7 @@ public class DNSQuery {
         if( sendOutcome.notOk() )
             return queryOutcome.notOk( sendOutcome.msg(), sendOutcome.cause() );
 
-        runner.addTimeout( query.timeout );
+        _agent.addTimeout( query.timeout );
 
         return queryOutcome.ok( query );
     }
@@ -102,8 +101,8 @@ public class DNSQuery {
 
     protected Outcome<?> sendQuery() {
         return switch( transport ) {
-            case UDP -> resolver.udpChannel.send( encodedQueryMessage );
-            case TCP -> resolver.tcpChannel.send( encodedQueryMessage );
+            case UDP -> agent.udpChannel.send( encodedQueryMessage );
+            case TCP -> agent.tcpChannel.send( encodedQueryMessage );
         };
     }
 
@@ -131,19 +130,19 @@ public class DNSQuery {
 
 
     protected void onCompletion() {
-        resolver.removeQueryMapping( queryMessage.id );
+        agent.removeQueryMapping( queryMessage.id );
         handler.accept( queryOutcome.ok( this ) );
     }
 
 
     protected void onProblem( final String _msg, final Throwable _cause ) {
-        resolver.removeQueryMapping( getID() );
+        agent.removeQueryMapping( getID() );
         handler.accept( queryOutcome.notOk( _msg, _cause, this ) );
     }
 
 
     private void onTimeout() {
-        resolver.removeQueryMapping( queryMessage.id );
+        agent.removeQueryMapping( queryMessage.id );
         handler.accept( queryOutcome.notOk( "Timeout", new TimeoutException(), this ) );
     }
 

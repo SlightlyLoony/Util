@@ -1,6 +1,8 @@
 package com.dilatush.util.dns.agent;
 
+import com.dilatush.util.ExecutorService;
 import com.dilatush.util.Outcome;
+import com.dilatush.util.dns.DNSResolver;
 import com.dilatush.util.dns.message.DNSDomainName;
 import com.dilatush.util.dns.message.DNSMessage;
 import com.dilatush.util.dns.message.DNSQuestion;
@@ -20,25 +22,12 @@ import static com.dilatush.util.General.isNull;
 import static com.dilatush.util.dns.agent.DNSTransport.TCP;
 import static com.dilatush.util.dns.agent.DNSTransport.UDP;
 
-// TODO: implement iterative resolution...
-// TODO: implement delayed shutdown of TCP connection
-// TODO: implement logic to handle:
-// TODO:   - TCP-only recursive
-// TODO:   - normal UDP on truncation TCP iterative
-// TODO:   - TCP-only iterative
-// TODO: Other:
-// TODO:   - create DNSResolver that:
-// TODO:     - has one instance of DNSResolverRunner (which should be renamed)
-// TODO:     - has any number of DNSResolverConnection instances
-// TODO:     - has an optional cache
-// TODO:     - has various ways of deciding which DNSResolverConnection to use
-// TODO: Move DNS Resolver into its own project
 
 /**
  * Implements an asynchronous resolver for DNS queries to a particular DNS server.  Any number of resolvers can be instantiated concurrently, but
  * only one resolver for each DNS server.  Each resolver can process any number of queries concurrently.  Each resolver can connect using either UDP
  * or TCP (normally UDP, but switching to TCP as needed).  All resolver I/O is performed by a single thread owned by the singleton
- * {@link DNSResolverRunner}, which is instantiated on demand (when any {@link DNSServerAgent} is instantiated).
+ * {@link DNSNIO}, which is instantiated on demand (when any {@link DNSServerAgent} is instantiated).
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
@@ -47,46 +36,44 @@ public class DNSServerAgent {
     private static final Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
 
     private   static final Outcome.Forge<DNSServerAgent> createOutcome = new Outcome.Forge<>();
-    private   static final Outcome.Forge<DNSQuery>    queryOutcome  = new Outcome.Forge<>();
+    private   static final Outcome.Forge<DNSQuery>       queryOutcome  = new Outcome.Forge<>();
 
-    protected static       DNSResolverRunner          runner;  // the singleton instance of the resolver runner...
+    protected        final DNSUDPChannel                 udpChannel;
+    protected        final DNSTCPChannel                 tcpChannel;
+    protected        final ExecutorService               executor;
+    private          final Map<Integer,DNSQuery>         queryMap           = new ConcurrentHashMap<>();
+    private          final AtomicInteger                 nextID             = new AtomicInteger();
+    private          final DNSTransport                  initialTransport;
+    private          final DNSResolution                 resolutionMode;
+    private          final DNSResolver                   resolver;
+    private          final DNSNIO                        nio;
 
-    protected              DNSUDPChannel              udpChannel;
-    protected              DNSTCPChannel              tcpChannel;
-    private   final        Map<Integer,DNSQuery>      queryMap           = new ConcurrentHashMap<>();
-    private   final        AtomicInteger              nextID             = new AtomicInteger();
-    private   final        DNSTransport               initialTransport;
-    private   final        DNSResolution              resolutionMode;
 
+    private DNSServerAgent( final DNSResolver _resolver, final DNSNIO _nio, final ExecutorService _executor,
+                            final InetSocketAddress _serverAddress, final DNSTransport _initialTransport, final DNSResolution _resolutionMode ) throws IOException {
 
-    private DNSServerAgent( final DNSTransport _initialTransport, final DNSResolution _resolutionMode ) {
-
+        resolver         = _resolver;
+        nio              = _nio;
+        executor         = _executor;
         initialTransport = _initialTransport;
         resolutionMode   = _resolutionMode;
+
+        udpChannel = new DNSUDPChannel( this, nio, _serverAddress );
+        tcpChannel = new DNSTCPChannel( this, nio, _serverAddress );
+
+        nio.register( udpChannel, tcpChannel );
     }
 
 
-    public static Outcome<DNSServerAgent> create( final InetSocketAddress _serverAddress, final DNSTransport _initialTransport, final DNSResolution _resolutionMode ) {
+    public static Outcome<DNSServerAgent> create( final DNSResolver _resolver, final DNSNIO _nio, final ExecutorService _executor, final InetSocketAddress _serverAddress,
+                                                  final DNSTransport _initialTransport, final DNSResolution _resolutionMode ) {
 
         if( isNull( _serverAddress, _initialTransport, _resolutionMode ) )
             return createOutcome.notOk( "Missing required parameter(s)" );
 
         try {
-            ensureRunner();
 
-            DNSServerAgent resolver = new DNSServerAgent( _initialTransport, _resolutionMode );
-
-            Outcome<DNSUDPChannel> udpOutcome = DNSUDPChannel.create( resolver, _serverAddress );
-            if( udpOutcome.notOk() )
-                return createOutcome.notOk( udpOutcome.msg(), udpOutcome.cause() );
-            resolver.udpChannel = udpOutcome.info();
-
-            Outcome<DNSTCPChannel> tcpOutcome = DNSTCPChannel.create( resolver, _serverAddress );
-            if( tcpOutcome.notOk() )
-                return createOutcome.notOk( tcpOutcome.msg(), tcpOutcome.cause() );
-            resolver.tcpChannel = tcpOutcome.info();
-
-            runner.register( resolver.udpChannel, resolver.tcpChannel );
+            DNSServerAgent resolver = new DNSServerAgent( _resolver, _nio, _executor, _serverAddress, _initialTransport, _resolutionMode );
 
             return createOutcome.ok( resolver );
         }
@@ -97,8 +84,8 @@ public class DNSServerAgent {
     }
 
 
-    public static Outcome<DNSServerAgent> create( final InetSocketAddress _serverAddress ) {
-        return create( _serverAddress, UDP, DNSResolution.RECURSIVE );
+    public static Outcome<DNSServerAgent> create( DNSResolver _resolver, final DNSNIO _nio, final ExecutorService _executor, final InetSocketAddress _serverAddress ) {
+        return create( _resolver, _nio, _executor, _serverAddress, UDP, DNSResolution.RECURSIVE );
     }
 
 
@@ -124,6 +111,12 @@ public class DNSServerAgent {
 
         return query( questionOutcome.info(), _handler, _timeoutMillis );
     }
+
+
+    protected void addTimeout( final AbstractTimeout _timeout ) {
+        nio.addTimeout( _timeout );
+    }
+
 
     /**
      * Query asynchronously for resource records, using recursive resolution and starting with a UDP query.
@@ -212,20 +205,5 @@ public class DNSServerAgent {
             return;
         }
         query.onCompletion();
-    }
-
-
-    private static void ensureRunner() throws IOException {
-
-        if( runner != null )
-            return;
-
-        synchronized( DNSResolverRunner.class ) {
-
-            if( runner != null )
-                return;
-
-            runner = new DNSResolverRunner();
-        }
     }
 }
