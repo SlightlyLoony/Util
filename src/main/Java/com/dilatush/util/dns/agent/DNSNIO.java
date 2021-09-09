@@ -1,6 +1,7 @@
 package com.dilatush.util.dns.agent;
 
 import com.dilatush.util.ExecutorService;
+import com.dilatush.util.dns.DNSException;
 
 import java.io.IOException;
 import java.nio.channels.*;
@@ -33,18 +34,22 @@ public class DNSNIO {
     /**
      * Creates a new instance of this class.  The new instance will start a daemon thread that does the bulk of the work of this class, which is to handle the low-level (UDP and
      * TCP) I/O for the DNS resolver.  By default, received data and timeout handlers are called through a single-threaded {@link ExecutorService} instance (with a daemon thread
-     * and a queue of 100).  However, an alternate {@link ExecutorService} can be used by setting {@link #alternateExecutor} prior to calling {@link DNSServerAgent#create} for the
-     * first time in any given process.
+     * and a queue of 100).
      *
-     * @throws IOException if the selector can't be opened for some reason.
+     * @throws DNSException if the selector can't be opened for some reason.
      */
-    public DNSNIO() throws IOException {
+    public DNSNIO() throws DNSException {
 
         // get our timeouts manager...
         timeouts = new Timeouts();
 
         // open the selector we're going to use for all our I/O...
-        selector = Selector.open();
+        try {
+            selector = Selector.open();
+        }
+        catch( IOException _e ) {
+            throw new DNSException( "Problem opening selector", _e );
+        }
 
         // use the alternate executor if it was supplied; otherwise, use a default executor...
         executor = (alternateExecutor != null) ? alternateExecutor : new ExecutorService();
@@ -57,14 +62,6 @@ public class DNSNIO {
         ioRunner.setDaemon( true );
         ioRunner.setName( "IO Runner" );
         ioRunner.start();
-    }
-
-
-    protected void register( final DNSUDPChannel _udp, final DNSTCPChannel _tcp ) throws ClosedChannelException {
-
-        // TODO: safety checks
-        _udp.udpChannel.register( selector, OP_READ, _udp );
-        _tcp.tcpChannel.register( selector, OP_READ, _tcp );
     }
 
 
@@ -97,8 +94,8 @@ public class DNSNIO {
                 while( keyIterator.hasNext() ) {
 
                     SelectionKey key = keyIterator.next();
-                    DNSTCPChannel tcp  = (key.attachment() instanceof DNSTCPChannel)     ? (DNSTCPChannel) key.attachment() : null;
-                    DNSChannel channel = (key.attachment() instanceof SelectableChannel) ? (DNSChannel) key.attachment()    : null;
+                    DNSTCPChannel tcp  = (key.attachment() instanceof DNSTCPChannel) ? (DNSTCPChannel) key.attachment() : null;
+                    DNSChannel channel = (key.attachment() instanceof DNSChannel)    ? (DNSChannel)    key.attachment() : null;
 
                     if( key.isValid() && key.isWritable() ) {
                         if( channel != null) channel.write();

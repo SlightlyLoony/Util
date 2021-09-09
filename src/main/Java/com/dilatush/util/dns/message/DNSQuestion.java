@@ -34,16 +34,31 @@ public class DNSQuestion {
 
 
     /**
-     * Creates a new instance of this class.  Note that this is a private constructor, used only by factory methods and decoders.
+     * Creates a new instance of this class with the given argument(s).
      *
      * @param _qname  The domain name to ask a question about.
      * @param _qtype  The type of resource records wanted that pertain to the queried domain name.
      * @param _qclass  The class of resource records wanted that pertain to the queried domain name.
      */
-    private DNSQuestion( final DNSDomainName _qname, final DNSRRType _qtype, final DNSRRClass _qclass ) {
+    public DNSQuestion( final DNSDomainName _qname, final DNSRRType _qtype, final DNSRRClass _qclass ) {
+
+        if( isNull( _qname, _qtype, _qclass ) )
+            throw new IllegalArgumentException( "Missing required argument(s)" );
+
         qname  = _qname;
         qtype  = _qtype;
         qclass = _qclass;
+    }
+
+
+    /**
+     * Creates a new instance of this class with the given argument(s) and a {@link DNSRRClass} of {@code IN}.
+     *
+     * @param _qname  The domain name to ask a question about.
+     * @param _qtype  The type of resource records wanted that pertain to the queried domain name.
+     */
+    public DNSQuestion( final DNSDomainName _qname, final DNSRRType _qtype ) {
+        this( _qname, _qtype, DNSRRClass.IN );
     }
 
 
@@ -79,38 +94,6 @@ public class DNSQuestion {
      */
     public String toString() {
         return "DNS Question: " + qname.text + ", type: " + qtype.text + ", class: " + qclass.text;
-    }
-
-
-    /**
-     * Attempts to create a new instance of this class with the given parameters.  If successful, an ok outcome containing the new instance is
-     * returned.  Otherwise, a not ok outcome is returned with a message explaining the problem.
-     *
-     * @param _qname  The domain name to ask a question about.
-     * @param _qtype  The type of resource records wanted that pertain to the queried domain name.
-     * @param _qclass  The class of resource records wanted that pertain to the queried domain name.
-     * @return The {@link Outcome Outcome&lt;DNSQuestion&gt;} with the results of the attempt.
-     */
-    public static Outcome<DNSQuestion> create(  final DNSDomainName _qname, final DNSRRType _qtype, final DNSRRClass _qclass ) {
-
-        if( isNull( _qname, _qtype, _qclass ) )
-            return outcome.notOk( "Required parameters not supplied" );
-
-        return outcome.ok( new DNSQuestion( _qname, _qtype, _qclass ) );
-    }
-
-
-    /**
-     * Attempts to create a new instance of this class with the given parameters and a resource record class of {@link DNSRRClass#IN} (Internet class
-     * records, which are nearly always what is desired).  If successful, an ok outcome containing the new instance is
-     * returned.  Otherwise, a not ok outcome is returned with a message explaining the problem.
-     *
-     * @param _qname  The domain name to ask a question about.
-     * @param _qtype  The type of resource records wanted that pertain to the queried domain name.
-     * @return The {@link Outcome Outcome&lt;DNSQuestion&gt;} with the results of the attempt.
-     */
-    public static Outcome<DNSQuestion> create(  final DNSDomainName _qname, final DNSRRType _qtype ) {
-        return create( _qname, _qtype, DNSRRClass.IN );
     }
 
 

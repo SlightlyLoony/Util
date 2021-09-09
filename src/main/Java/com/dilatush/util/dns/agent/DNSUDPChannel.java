@@ -1,6 +1,8 @@
 package com.dilatush.util.dns.agent;
 
+import com.dilatush.util.ExecutorService;
 import com.dilatush.util.Outcome;
+import com.dilatush.util.dns.message.DNSMessage;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -8,8 +10,10 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.Selector;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import static com.dilatush.util.General.isNull;
 import static java.nio.channels.SelectionKey.OP_READ;
 import static java.nio.channels.SelectionKey.OP_WRITE;
 
@@ -17,37 +21,41 @@ public class DNSUDPChannel extends DNSChannel {
 
     private static final Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
 
-    public final DatagramChannel udpChannel;
+    private DatagramChannel udpChannel;
 
 
-    protected DNSUDPChannel( final DNSServerAgent _agent, final DNSNIO _nio, final InetSocketAddress _serverAddress ) throws IOException {
-        super( _agent, _nio );
-
-        udpChannel = DatagramChannel.open();
-        udpChannel.configureBlocking( false );
-        udpChannel.bind( null );
-        udpChannel.connect( _serverAddress );
+    public DNSUDPChannel( final DNSServerAgent _agent, final DNSNIO _nio, final ExecutorService _executor, final InetSocketAddress _serverAddress ) {
+        super( _agent, _nio, _executor, _serverAddress );
     }
 
 
     @Override
-    protected synchronized Outcome<?> send( final ByteBuffer _data ) {
+    protected synchronized Outcome<?> send( final DNSMessage _msg ) {
 
-        if( _data.position() != 0 )
-            _data.flip();
+        if( isNull( _msg) )
+            throw new IllegalArgumentException( "Required message argument is missing" );
 
-        boolean wasAdded = sendData.offerFirst( _data );
+        Outcome<ByteBuffer> emo = _msg.encode();
+        if( emo.notOk() )
+            return outcome.notOk( "Could not encode message: " + emo.msg(), emo.cause() );
+
+        boolean wasAdded = sendData.offerFirst( emo.info() );
         if( !wasAdded )
             return outcome.notOk( "Send data queue full" );
 
-        // if we just added the first data, set write interest on...
+        // if we just added the first data, open the UDP socket, bind, connect, and set write interest on...
         if( sendData.size() == 1 ) {
+
             try {
+                udpChannel = DatagramChannel.open();
+                udpChannel.configureBlocking( false );
+                udpChannel.bind( null );
+                udpChannel.connect( serverAddress );
                 nio.register( this, udpChannel, OP_WRITE | OP_READ );
                 return outcome.ok();
             }
-            catch( ClosedChannelException _e ) {
-                return outcome.notOk( "Problem registering write interest", _e );
+            catch( IOException _e ) {
+                return outcome.notOk( "Could not send message via UDP", _e );
             }
         }
 
@@ -95,11 +103,24 @@ public class DNSUDPChannel extends DNSChannel {
                 return;
 
             readData.flip();
-            agent.executor.submit( () -> agent.handleReceivedData( readData, DNSTransport.UDP ) );
+            executor.submit( () -> agent.handleReceivedData( readData, DNSTransport.UDP ) );
         }
 
         catch( IOException _e ) {
             _e.printStackTrace();
+        }
+    }
+
+
+    @Override
+    protected void close() {
+
+        try {
+            if( udpChannel != null )
+                udpChannel.close();
+        }
+        catch( IOException _e ) {
+            LOGGER.log( Level.WARNING, "Exception when closing UDP channel", _e );
         }
     }
 }
