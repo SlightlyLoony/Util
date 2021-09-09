@@ -78,8 +78,6 @@ public class DNSTCPChannel extends DNSChannel {
             }
         }
 
-        linger();
-
         return outcome.ok();
     }
 
@@ -175,6 +173,7 @@ public class DNSTCPChannel extends DNSChannel {
             return;
 
         LOGGER.log( Level.FINEST, "TCP linger timeout" );
+        timeout.cancel();
         timeout = null;
         try {
             tcpChannel.close();
@@ -187,13 +186,13 @@ public class DNSTCPChannel extends DNSChannel {
     @Override
     protected void close() {
 
-
         try {
-            if( tcpChannel != null )
+            if( (tcpChannel != null) && tcpChannel.isOpen() )
                 tcpChannel.close();
         }
         catch( IOException _e ) {
             LOGGER.log( Level.WARNING, "Exception when closing TCP channel", _e );
         }
+        tcpChannel = null;
     }
 }

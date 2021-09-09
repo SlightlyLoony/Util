@@ -17,7 +17,9 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import static com.dilatush.util.dns.DNSServerSelectionStrategy.*;
 import static com.dilatush.util.dns.agent.DNSQuery.*;
+import static com.dilatush.util.dns.agent.DNSTransport.*;
 import static java.lang.Thread.sleep;
 
 public class Test {
@@ -49,24 +51,18 @@ public class Test {
 
         DNSResolver resolver = ro.info();
 
-        DNSQuestion q1 = new DNSQuestion( DNSDomainName.fromString( "state.gov" ).info(), DNSRRType.ANY );
-        resolver.query( q1, Test::handler, DNSTransport.UDP, DNSServerSelectionStrategy.ROUND_ROBIN, null );
-
-        //DNSNIO.alternateExecutor = new ExecutorService( 10, 100 );
-
-        // OpenDNS: 208.67.220.220  (secondary)
-        // Beast: 10.2.5.200
-//            r2.queryIPv4( "www.cnn.com",  Test::handler2, 500);
-//            r2.queryIPv4( "www.foxnews.com",  Test::handler2, 500);
-//            r2.queryIPv4( "paradiseweather.info",  Test::handler2, 500);
-//            r2.queryIPv4( "beast.dilatush.com", Test::handler2, 500 );
-//            r1.queryAny( "state.gov", Test::handler1, 2000 );
-//            r1.queryAny( "usda.gov", Test::handler1, 2000 );
-//            r1.queryAny( "fda.gov", Test::handler1, 2000 );
-//            r3.queryIPv4( "www.state.com", Test::handler3, 1000 );
+        resolver.queryIPv4( "www.cnn.com",          Test::handler, UDP, SPEED, null );
+        resolver.queryIPv4( "www.foxnews.com",      Test::handler, UDP, SPEED, null );
+        resolver.queryIPv4( "paradiseweather.info", Test::handler, UDP, SPEED, null );
+        resolver.queryIPv4( "beast.dilatush.com",   Test::handler, UDP, SPEED, null );
+        resolver.queryIPv4( "www.state.gov",        Test::handler, UDP, SPEED, null );
+        resolver.queryIPv4( "www.usda.gov",         Test::handler, UDP, SPEED, null );
+        resolver.queryIPv4( "www.fda.gov",          Test::handler, UDP, SPEED, null );
+        resolver.queryIPv4( "www.state.com",        Test::handler, UDP, SPEED, null );
 
 
-        sleep(10000);
+
+        sleep(3000);
         "".hashCode();
 
     }

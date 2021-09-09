@@ -126,10 +126,12 @@ public class DNSQuery {
             transport = TCP;
             Outcome<?> sendOutcome = agent.sendQuery( queryMessage, TCP );
             if( sendOutcome.notOk() ) {
+                agent.close();
                 handler.accept( queryOutcome.notOk( sendOutcome.msg(), sendOutcome.cause() ) );
             }
         }
         else {
+            agent.close();
             handler.accept( queryOutcome.ok( new QueryResult( queryMessage, responseMessage, System.currentTimeMillis() - startTime )) );
         }
     }
