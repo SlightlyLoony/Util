@@ -51,14 +51,14 @@ public class Test {
 
         DNSResolver resolver = ro.info();
 
-        resolver.queryIPv4( "www.cnn.com",          Test::handler, UDP, SPEED, null );
-        resolver.queryIPv4( "www.foxnews.com",      Test::handler, UDP, SPEED, null );
-        resolver.queryIPv4( "paradiseweather.info", Test::handler, UDP, SPEED, null );
-        resolver.queryIPv4( "beast.dilatush.com",   Test::handler, UDP, SPEED, null );
-        resolver.queryIPv4( "www.state.gov",        Test::handler, UDP, SPEED, null );
-        resolver.queryIPv4( "www.usda.gov",         Test::handler, UDP, SPEED, null );
-        resolver.queryIPv4( "www.fda.gov",          Test::handler, UDP, SPEED, null );
-        resolver.queryIPv4( "www.state.com",        Test::handler, UDP, SPEED, null );
+        resolver.queryIPv4( "www.cnn.com",          Test::handler, TCP, SPEED, null );
+        resolver.queryIPv4( "www.foxnews.com",      Test::handler, TCP, SPEED, null );
+        resolver.queryIPv4( "paradiseweather.info", Test::handler, TCP, SPEED, null );
+        resolver.queryIPv4( "beast.dilatush.com",   Test::handler, TCP, SPEED, null );
+        resolver.queryIPv4( "www.state.gov",        Test::handler, TCP, SPEED, null );
+        resolver.queryIPv4( "www.usda.gov",         Test::handler, TCP, SPEED, null );
+        resolver.queryIPv4( "www.fda.gov",          Test::handler, TCP, SPEED, null );
+        resolver.queryIPv4( "www.state.com",        Test::handler, TCP, SPEED, null );
 
 
 
