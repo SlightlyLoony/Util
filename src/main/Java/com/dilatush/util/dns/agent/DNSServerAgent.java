@@ -54,6 +54,11 @@ public class DNSServerAgent {
     public           final String                        name;
 
 
+    public DNSServerAgent( final DNSResolver _resolver, final DNSQuery _query, final DNSNIO _nio, final ExecutorService _executor, final DNSResolver.AgentParams _params ) {
+        this( _resolver, _query, _nio, _executor, _params.timeoutMillis(), _params.priority(), _params.name(), _params.serverAddress() );
+    }
+
+
     public DNSServerAgent( final DNSResolver _resolver, final DNSQuery _query, final DNSNIO _nio, final ExecutorService _executor,
                            final long _timeoutMillis, final int _priority, final String _name, final InetSocketAddress _serverAddress ) {
 

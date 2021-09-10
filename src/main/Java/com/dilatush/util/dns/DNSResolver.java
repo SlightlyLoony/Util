@@ -4,7 +4,7 @@ package com.dilatush.util.dns;
 // TODO:   - read root hints
 // TODO:   - synchronized cache with map of cache entries in array, sorted map of expirations
 // TODO:   - add "useCache" argument to DNSQuery
-// TODO: handle query response codes other than OK
+// TODO: add log to query, messages and times...
 // TODO: handle timeouts by retrying the next server
 // TODO: if not enough servers, handle timeouts by retries
 // TODO: implement delayed shutdown of TCP connection

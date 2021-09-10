@@ -38,8 +38,9 @@ public class Test {
         LOGGER.info( "Test start..." );
 
         DNSResolver.Builder builder = new DNSResolver.Builder();
-//        builder.addDNSServer( new InetSocketAddress( InetAddress.getByName( "10.2.5.200" ),     53 ), 1000, 0, "Beast"      );
-        builder.addDNSServer( new InetSocketAddress( InetAddress.getByName( "8.8.8.8" ),        53 ), 1000, 0, "Google"     );
+        builder.addDNSServer( new InetSocketAddress( InetAddress.getByName( "10.2.5.201" ),     53 ), 100,  0, "Bogus"      );
+        builder.addDNSServer( new InetSocketAddress( InetAddress.getByName( "10.2.5.200" ),     53 ), 2500, 0, "Beast"      );
+        builder.addDNSServer( new InetSocketAddress( InetAddress.getByName( "8.8.8.8" ),        53 ), 2000, 0, "Google"     );
 //        builder.addDNSServer( new InetSocketAddress( InetAddress.getByName( "208.67.220.220" ), 53 ), 1000, 0, "OpenDNS"    );
 //        builder.addDNSServer( new InetSocketAddress( InetAddress.getByName( "1.1.1.1" ),        53 ), 1000, 0, "CloudFlare" );
 
@@ -51,14 +52,14 @@ public class Test {
 
         DNSResolver resolver = ro.info();
 
-        resolver.queryIPv4( "www.cnn.com",          Test::handler, TCP, SPEED, null );
-        resolver.queryIPv4( "www.foxnews.com",      Test::handler, TCP, SPEED, null );
-        resolver.queryIPv4( "paradiseweather.info", Test::handler, TCP, SPEED, null );
-        resolver.queryIPv4( "beast.dilatush.com",   Test::handler, TCP, SPEED, null );
-        resolver.queryIPv4( "www.state.gov",        Test::handler, TCP, SPEED, null );
-        resolver.queryIPv4( "www.usda.gov",         Test::handler, TCP, SPEED, null );
-        resolver.queryIPv4( "www.fda.gov",          Test::handler, TCP, SPEED, null );
-        resolver.queryIPv4( "www.state.com",        Test::handler, TCP, SPEED, null );
+        resolver.queryIPv4( "www.cnn.com",          Test::handler, UDP, SPEED, null );
+        resolver.queryIPv4( "www.foxnews.com",      Test::handler, UDP, SPEED, null );
+        resolver.queryIPv4( "paradiseweather.info", Test::handler, UDP, SPEED, null );
+        resolver.queryIPv4( "beast.dilatush.com",   Test::handler, UDP, SPEED, null );
+        resolver.queryIPv4( "www.state.gov",        Test::handler, UDP, SPEED, null );
+        resolver.queryIPv4( "www.usda.gov",         Test::handler, UDP, SPEED, null );
+        resolver.queryIPv4( "www.fda.gov",          Test::handler, UDP, SPEED, null );
+        resolver.queryIPv4( "www.state.com",        Test::handler, UDP, SPEED, null );
 
 
 
