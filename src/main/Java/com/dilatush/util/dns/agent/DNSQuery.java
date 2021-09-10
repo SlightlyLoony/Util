@@ -11,6 +11,7 @@ import com.dilatush.util.dns.message.DNSQuestion;
 import javax.management.Query;
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -30,12 +31,13 @@ public class DNSQuery {
     private static final Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
 
     private static final Outcome.Forge<QueryResult> queryOutcome = new Outcome.Forge<>();
-    private static final AtomicInteger              nextID       = new AtomicInteger();
 
 
     private final DNSResolver                     resolver;
     private final DNSNIO                          nio;
     private final ExecutorService                 executor;
+    private final Map<Short,DNSQuery>             activeQueries;
+    private final int                             id;
     private final DNSQuestion                     question;
     private final Consumer<Outcome<QueryResult>>  handler;
     private final DNSResolution                   resolutionMode;
@@ -49,10 +51,10 @@ public class DNSQuery {
     private       DNSMessage                      responseMessage;
 
 
-    public DNSQuery( final DNSResolver _resolver, final DNSNIO _nio, final ExecutorService _executor, final DNSQuestion _question, final List<AgentParams> _agents,
-                     final Consumer<Outcome<QueryResult>> _handler, final DNSResolution _resolutionMode ) {
+    public DNSQuery( final DNSResolver _resolver, final DNSNIO _nio, final ExecutorService _executor, final Map<Short,DNSQuery> _activeQueries, final DNSQuestion _question,
+                     final int _id, final List<AgentParams> _agents, final Consumer<Outcome<QueryResult>> _handler, final DNSResolution _resolutionMode ) {
 
-        if( isNull( _resolver, _nio, _executor, _question, _handler, _resolutionMode ) )
+        if( isNull( _resolver, _nio, _executor, _activeQueries, _question, _handler, _resolutionMode ) )
             throw new IllegalArgumentException( "Required argument(s) are missing" );
         if( (_agents == null) && (_resolutionMode == DNSResolution.RECURSIVE) )
             throw new IllegalArgumentException( "Agents argument missing; required in recursive resolution mode" );
@@ -60,15 +62,18 @@ public class DNSQuery {
         resolver        = _resolver;
         nio             = _nio;
         executor        = _executor;
+        activeQueries   = _activeQueries;
         question        = _question;
+        id              = _id;
         agents          = _agents;
         handler         = _handler;
         resolutionMode  = _resolutionMode;
         startTime       = System.currentTimeMillis();
+        activeQueries.put( (short) id, this );
     }
 
 
-    protected Outcome<QueryResult> initiate() {
+    public Outcome<QueryResult> initiate() {
         return initiate( UDP );
     }
 
@@ -96,7 +101,7 @@ public class DNSQuery {
         DNSMessage.Builder builder = new DNSMessage.Builder();
         builder.setOpCode( DNSOpCode.QUERY );
         builder.setRecurse( resolutionMode == DNSResolution.RECURSIVE );
-        builder.setId( nextID.getAndIncrement() & 0xFFFF );
+        builder.setId( id & 0xFFFF );
         builder.addQuestion( question );
 
         queryMessage = builder.getMessage();
@@ -117,6 +122,7 @@ public class DNSQuery {
             LOGGER.log( Level.WARNING, msg );
             agent.close();
             handler.accept( queryOutcome.notOk( msg ) );
+            activeQueries.remove( (short) id );
             return;
         }
 
@@ -128,17 +134,20 @@ public class DNSQuery {
             if( sendOutcome.notOk() ) {
                 agent.close();
                 handler.accept( queryOutcome.notOk( sendOutcome.msg(), sendOutcome.cause() ) );
+                activeQueries.remove( (short) id );
             }
         }
         else {
             agent.close();
             handler.accept( queryOutcome.ok( new QueryResult( queryMessage, responseMessage, System.currentTimeMillis() - startTime )) );
+            activeQueries.remove( (short) id );
         }
     }
 
 
     protected void handleResponseProblem( final String _msg, final Throwable _cause ) {
         handler.accept( queryOutcome.notOk( _msg, _cause ) );
+        activeQueries.remove( (short) id );
     }
 
 

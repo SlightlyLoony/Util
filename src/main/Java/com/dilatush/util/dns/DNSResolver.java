@@ -2,18 +2,16 @@ package com.dilatush.util.dns;
 
 // TODO: implement iterative resolution...
 // TODO:   - read root hints
+// TODO:   - synchronized cache with map of cache entries in array, sorted map of expirations
+// TODO:   - add "useCache" argument to DNSQuery
 // TODO: handle query response codes other than OK
+// TODO: handle timeouts by retrying the next server
+// TODO: if not enough servers, handle timeouts by retries
 // TODO: implement delayed shutdown of TCP connection
 // TODO: implement logic to handle:
 // TODO:   - TCP-only recursive
 // TODO:   - normal UDP on truncation TCP iterative
 // TODO:   - TCP-only iterative
-// TODO: Other:
-// TODO:   - create DNSResolver that:
-// TODO:     - has one instance of DNSNIO (which should be renamed)
-// TODO:     - has any number of DNSResolverConnection instances
-// TODO:     - has an optional cache
-// TODO:     - has various ways of deciding which DNSResolverConnection to use
 // TODO: Move DNS Resolver into its own project
 
 import com.dilatush.util.ExecutorService;
@@ -26,6 +24,8 @@ import com.dilatush.util.dns.message.DNSRRType;
 
 import java.net.InetSocketAddress;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import static com.dilatush.util.General.isNull;
@@ -45,13 +45,17 @@ public class DNSResolver {
     private final Map<String,AgentParams> agentsByName;
     private final List<AgentParams>       agentsByPriority;
     private final List<AgentParams>       agentsBySpeed;
+    private final Map<Short,DNSQuery>     activeQueries;
+    private final AtomicInteger           nextQueryID;
 
 
     private DNSResolver( final ExecutorService _executor, final List<AgentParams> _agentParams ) throws DNSException {
 
-        executor    = _executor;
-        nio         = new DNSNIO();
-        agentParams = _agentParams;
+        executor      = _executor;
+        nio           = new DNSNIO();
+        agentParams   = _agentParams;
+        activeQueries = new ConcurrentHashMap<>();
+        nextQueryID   = new AtomicInteger();
 
         // map our agent parameters by name...
         Map<String,AgentParams> byName = new HashMap<>();
@@ -95,10 +99,10 @@ public class DNSResolver {
 
         List<AgentParams> agents = getAgents( _strategy, _name );
 
-        DNSQuery query = new DNSQuery( this, nio, executor, _question, agents, _handler, resolutionMode );
+        DNSQuery query = new DNSQuery( this, nio, executor, activeQueries, _question, nextQueryID.getAndIncrement(), agents, _handler, resolutionMode );
+        int id = nextQueryID.getAndIncrement();
 
         query.initiate( _initialTransport );
-        // TODO: there's no reference left to query after this exits - problem?
     }
 
 
