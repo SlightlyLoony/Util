@@ -107,7 +107,7 @@ public class A extends DNSResourceRecord {
         byte[] addrBytes = new byte[4];
         _msgBuffer.get( addrBytes );
         try {
-            Inet4Address addr = (Inet4Address)InetAddress.getByAddress( addrBytes );
+            Inet4Address addr = (Inet4Address)InetAddress.getByAddress( _init.name().text, addrBytes );
             return outcome.ok( new A(_init.name(), _init.klass(), _init.ttl(), _init.dataLength(), addr ) );
         }
 

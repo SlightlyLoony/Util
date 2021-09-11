@@ -4,15 +4,14 @@ package com.dilatush.util.dns;
 // TODO:   - read root hints
 // TODO:   - synchronized cache with map of cache entries in array, sorted map of expirations
 // TODO:   - add "useCache" argument to DNSQuery
-// TODO: add log to query, messages and times...
-// TODO: handle timeouts by retrying the next server
 // TODO: if not enough servers, handle timeouts by retries
-// TODO: implement delayed shutdown of TCP connection
 // TODO: implement logic to handle:
-// TODO:   - TCP-only recursive
 // TODO:   - normal UDP on truncation TCP iterative
 // TODO:   - TCP-only iterative
+// TODO: Handle responses with no answers (see RFC 2308)
+// TODO: Get rid of protected everywhere
 // TODO: Move DNS Resolver into its own project
+// TODO: Comments and Javadocs...
 
 import com.dilatush.util.ExecutorService;
 import com.dilatush.util.Outcome;
@@ -35,9 +34,6 @@ public class DNSResolver {
     private static final Outcome.Forge<DNSResolver> outcomeResolver = new Outcome.Forge<>();
     private static final Outcome.Forge<DNSQuestion> outcomeQuestion = new Outcome.Forge<>();
     private static final Outcome.Forge<?>           outcome         = new Outcome.Forge<>();
-
-    private static final long MIN_TIMEOUT_MILLIS = 5;
-    private static final long MAX_TIMEOUT_MILLIS = 15000;
 
     private final ExecutorService         executor;
     private final DNSNIO                  nio;

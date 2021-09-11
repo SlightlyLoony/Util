@@ -182,8 +182,8 @@ public class DNSDomainName {
     public static Outcome<DNSDomainName> fromLabels( final List<DNSLabel> _labels ) {
 
         // we must have at least one label...
-        if( (_labels == null) || (_labels.size() == 0) )
-            return outcome.notOk( "Labels are missing or empty" );
+        if( _labels == null )
+            return outcome.notOk( "Labels are missing" );
 
         // sum the lengths of all our labels...
         int sum = 0;

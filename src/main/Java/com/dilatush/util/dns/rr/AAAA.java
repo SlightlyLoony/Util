@@ -106,7 +106,7 @@ public class AAAA extends DNSResourceRecord {
         byte[] addrBytes = new byte[16];
         _msgBuffer.get( addrBytes );
         try {
-            Inet6Address addr = (Inet6Address)InetAddress.getByAddress( addrBytes );
+            Inet6Address addr = (Inet6Address)InetAddress.getByAddress( _init.name().text, addrBytes );
             return outcome.ok( new AAAA(_init.name(), _init.klass(), _init.ttl(), _init.dataLength(), addr ) );
         }
 

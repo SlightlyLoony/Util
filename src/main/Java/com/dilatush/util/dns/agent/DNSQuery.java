@@ -8,23 +8,20 @@ import com.dilatush.util.dns.message.DNSMessage;
 import com.dilatush.util.dns.message.DNSOpCode;
 import com.dilatush.util.dns.message.DNSQuestion;
 
-import javax.management.Query;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static com.dilatush.util.General.isNull;
-import static com.dilatush.util.dns.agent.DNSResolution.*;
+import static com.dilatush.util.dns.agent.DNSResolution.ITERATIVE;
+import static com.dilatush.util.dns.agent.DNSResolution.RECURSIVE;
 import static com.dilatush.util.dns.agent.DNSTransport.TCP;
 import static com.dilatush.util.dns.agent.DNSTransport.UDP;
 
+// TODO: add internal handlers as needed, get rid of external handler (do that in DNSResolver)
 /**
  * Instances of this class contain the elements and state of a DNS query, and provide methods that implement the resolution of that query.
  */

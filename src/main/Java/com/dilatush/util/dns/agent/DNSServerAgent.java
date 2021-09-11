@@ -35,6 +35,9 @@ import static com.dilatush.util.dns.agent.DNSTransport.UDP;
  */
 public class DNSServerAgent {
 
+    private static final long MIN_TIMEOUT_MILLIS = 5;
+    private static final long MAX_TIMEOUT_MILLIS = 15000;
+
     private static final Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
 
     private   static final Outcome.Forge<DNSServerAgent> createOutcome = new Outcome.Forge<>();
@@ -64,6 +67,9 @@ public class DNSServerAgent {
 
         if( isNull( _resolver, _query, _nio, _executor, _name, _serverAddress ) )
             throw new IllegalArgumentException( "Required argument(s) are missing" );
+
+        if( (_timeoutMillis < MIN_TIMEOUT_MILLIS) || (_timeoutMillis > MAX_TIMEOUT_MILLIS) )
+            throw new IllegalArgumentException( "Timeout outside permissible range of [" + MIN_TIMEOUT_MILLIS + ".." + MAX_TIMEOUT_MILLIS + "] milliseconds: " + _timeoutMillis );
 
         resolver         = _resolver;
         query            = _query;
