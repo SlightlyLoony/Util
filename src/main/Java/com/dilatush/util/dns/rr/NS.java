@@ -127,6 +127,19 @@ public class NS extends DNSResourceRecord {
 
 
     /**
+     * Returns {@code true} if the given {@link DNSResourceRecord} has the same resource data as this record.
+     *
+     * @param _rr the {@link DNSResourceRecord} to compare with this one.
+     * @return {@code true} if this record's resource data is the same as the given record's resource data.
+     */
+    @Override
+    protected boolean sameResourceData( final DNSResourceRecord _rr ) {
+
+        return nameServer.text.equals( ((NS)_rr).nameServer.text );
+    }
+
+
+    /**
      * Return a string representing this instance.
      *
      * @return a string representing this instance.

@@ -45,6 +45,11 @@ public abstract class DNSResourceRecord {
      */
     public final int dataLength;
 
+    /**
+     * The system time (based on {@link System#currentTimeMillis()}).
+     */
+    public final long createTime;
+
 
     /**
      * Constructor used only by child classes.
@@ -56,6 +61,7 @@ public abstract class DNSResourceRecord {
         type       = _init.type;
         klass      = _init.klass;
         ttl        = _init.ttl;
+        createTime = System.currentTimeMillis();
         dataLength = _init.dataLength;
     }
 
@@ -201,6 +207,43 @@ public abstract class DNSResourceRecord {
         // whew - we made it!
         return result;
     }
+
+
+    /**
+     * Returns {@code true} if the given {@link DNSResourceRecord} is the same subclass as this record, and the resource data is the same.
+     *
+     * @param _rr the {@link DNSResourceRecord} to compare with this one.
+     * @return {@code true} if this record is the same as the given record.
+     */
+    public boolean sameAs( final DNSResourceRecord _rr ) {
+
+        // if the given resource record isn't the same class as this one, then we know it's not a match...
+        if( getClass() != _rr.getClass() )
+            return false;
+
+        // now it's up to the subclass to determine whether it matches...
+        return sameResourceData( _rr );
+    }
+
+
+    /**
+     * Return the system time that this resource record will expire.  This is computed as 1000 times the time-to-live (ttl) field, plus the system time (based on
+     * {@link System#currentTimeMillis()}.
+     *
+     * @return the system time that this resource record will expire.
+     */
+    public long expirationMillis() {
+        return createTime + (1000L * ttl);
+    }
+
+
+    /**
+     * Returns {@code true} if the given {@link DNSResourceRecord} has the same resource data as this record.
+     *
+     * @param _rr the {@link DNSResourceRecord} to compare with this one.
+     * @return {@code true} if this record's resource data is the same as the given record's resource data.
+     */
+    protected abstract boolean sameResourceData( final DNSResourceRecord _rr );
 
 
     /**

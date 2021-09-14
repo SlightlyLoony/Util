@@ -33,10 +33,10 @@ public class DNSRootHints {
     private static final Pattern DATE_PATTERN = compile( ".*last update: +([A-Z][a-z]+ +[1-9][0-9]?, +20[0-9][0-9]).*", DOTALL    );
     private static final Pattern RR_PATTERN   = compile( "^((?:[A-Z-]*\\.)+) +([1-9][0-9]+) +([A-Z]+) +([^ ]*)$",       MULTILINE );
 
-    private static final Outcome.Forge<?>                   outcome       = new Outcome.Forge<>();
-    private static final Outcome.Forge<String>              stringOutcome = new Outcome.Forge<>();
-    private static final Outcome.Forge<List<DNSCacheEntry>> rrlOutcome    = new Outcome.Forge<>();
-    private static final Outcome.Forge<DNSResourceRecord>   rrOutcome     = new Outcome.Forge<>();
+    private static final Outcome.Forge<?>                       outcome       = new Outcome.Forge<>();
+    private static final Outcome.Forge<String>                  stringOutcome = new Outcome.Forge<>();
+    private static final Outcome.Forge<List<DNSResourceRecord>> rrlOutcome    = new Outcome.Forge<>();
+    private static final Outcome.Forge<DNSResourceRecord>       rrOutcome     = new Outcome.Forge<>();
 
     private DNSRootHints(){}  // prevent instantiation...
 
@@ -77,7 +77,7 @@ public class DNSRootHints {
     }
 
 
-    public static Outcome<List<DNSCacheEntry>> decode( final String _rootHints ) {
+    public static Outcome<List<DNSResourceRecord>> decode( final String _rootHints ) {
 
         Matcher mat = DATE_PATTERN.matcher( _rootHints );
         if( mat.matches() ) {
@@ -94,7 +94,7 @@ public class DNSRootHints {
             }
             long updatedMillis = updated.toEpochSecond() * 1000;
 
-            List<DNSCacheEntry> entries = new ArrayList<>();
+            List<DNSResourceRecord> entries = new ArrayList<>();
 
             mat = RR_PATTERN.matcher( _rootHints );
             while( mat.find() ) {
@@ -108,7 +108,8 @@ public class DNSRootHints {
                 if( dno.notOk() )
                     return rrlOutcome.notOk( dno.msg(), dno.cause() );
                 DNSDomainName dn = dno.info();
-                int ttl = Integer.parseInt( ttlStr );  // should be impossible to throw NumberFormatException...
+                int ttlBase = Integer.parseInt( ttlStr );  // should be impossible to throw NumberFormatException...
+                int ttl = (int)((updatedMillis + (ttlBase * 1000L) - System.currentTimeMillis()) / 1000);
 
                 Outcome<DNSResourceRecord> rro = switch( rrtStr ) {
 
@@ -158,8 +159,7 @@ public class DNSRootHints {
                 if( rro.notOk() )
                     return rrlOutcome.notOk( rro.msg(), rro.cause() );
 
-                DNSResourceRecord rr = rro.info();
-                entries.add( new DNSCacheEntry( rr, updatedMillis + rr.ttl * 1000 ) );
+                entries.add( rro.info() );
             }
             return rrlOutcome.ok( entries );
         }
@@ -172,7 +172,7 @@ public class DNSRootHints {
         Outcome<String> ruo = readURL( "http://www.internic.net/domain/named.root" );
         Outcome<?> wo = writeFile( ruo.info(), "." );
         Outcome<String> ro = readFile( "." );
-        Outcome<List<DNSCacheEntry>> rro = decode( ro.info() );
+        Outcome<List<DNSResourceRecord>> rro = decode( ro.info() );
 
         "".hashCode();
     }

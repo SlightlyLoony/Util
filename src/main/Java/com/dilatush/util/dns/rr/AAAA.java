@@ -14,6 +14,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Map;
 
 import static com.dilatush.util.General.isNull;
@@ -137,6 +138,19 @@ public class AAAA extends DNSResourceRecord {
 
         _msgBuffer.put( address.getAddress() );
         return encodeOutcome.ok();
+    }
+
+
+    /**
+     * Returns {@code true} if the given {@link DNSResourceRecord} has the same resource data as this record.
+     *
+     * @param _rr the {@link DNSResourceRecord} to compare with this one.
+     * @return {@code true} if this record's resource data is the same as the given record's resource data.
+     */
+    @Override
+    protected boolean sameResourceData( final DNSResourceRecord _rr ) {
+
+        return Arrays.equals( address.getAddress(), ((A)_rr).address.getAddress() );
     }
 
 
