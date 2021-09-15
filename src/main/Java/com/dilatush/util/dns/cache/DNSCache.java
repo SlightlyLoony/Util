@@ -58,15 +58,19 @@ public class DNSCache {
      * <p>Creates a new instance of this class using the given arguments:</p>
      * <ul>
      *     <li>_maxCacheSize - the maximum number of DNS resource records that may be stored in this cache.  If adding a record would cause the cache to exceed this size, the
-     *     resource record closest to expiration is removed before adding the new resource record, thus capping the cache's size.</li>
+     *     resource record closest to expiration is removed before adding the new resource record, thus capping the cache's size.  Any value less than 1 disables the cache.</li>
      *     <li>_maxAllowableTTLMillis - the maximum time, in milliseconds, that a resource record may remain cached - no matter what the TTL on the resource record is.  To
-     *     prevent capping the TTL, set this value to {@link Long#MAX_VALUE}.</li>
+     *     prevent capping the TTL, set this value to {@link Long#MAX_VALUE}.  Values must be greater than zero.</li>
      * </ul>
      *
      * @param _maxCacheSize The maximum number of DNS resource records that may be stored in this cache.
      * @param _maxAllowableTTLMillis The maximum time, in milliseconds, that any resource record is allowed to exist before expiring.
      */
     public DNSCache( final int _maxCacheSize, final long _maxAllowableTTLMillis ) {
+
+        // sanity check...
+        if( _maxAllowableTTLMillis < 1 )
+            throw new IllegalArgumentException( "Invalid max allowable timeout: " + _maxAllowableTTLMillis );
 
         maxCacheSize          = _maxCacheSize;
         maxAllowableTTLMillis = _maxAllowableTTLMillis;
@@ -106,6 +110,10 @@ public class DNSCache {
             LOGGER.log( Level.WARNING, "DNSCache.add() called with null resource record" );
             return;
         }
+
+        // if the cache is disabled (max size < 1), just leave...
+        if( maxCacheSize < 1 )
+            return;
 
         // we aren't going to add unimplemented resource records...
         if( _rr instanceof UNIMPLEMENTED )
@@ -203,6 +211,10 @@ public class DNSCache {
      * @param _rr The {@link DNSResourceRecord} to be added to this cache.
      */
     public void add( final DNSResourceRecord _rr ) {
+
+        if( isNull( _rr ) )
+            throw new IllegalArgumentException( "Required argument missing" );
+
         add( _rr, System.currentTimeMillis() + (_rr.ttl * 1000) );
     }
 
@@ -215,6 +227,14 @@ public class DNSCache {
      * @return The (possibly empty) list of retrieved records.
      */
     public synchronized List<DNSResourceRecord> get( final String _dn ) {
+
+        // sanity check...
+        if( isNull( _dn ) )
+            throw new IllegalArgumentException( "Required argument missing" );
+
+        // if the cache is disabled, just leave with an empty list...
+        if( maxCacheSize < 1 )
+            return new ArrayList<>( 0 );
 
         // get the entries for this FQDN, or null if there are none...
         DNSCacheEntry[] entries = entryMap.get( _dn );
