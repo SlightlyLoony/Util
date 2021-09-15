@@ -1,11 +1,37 @@
 package com.dilatush.util;
 
+import java.util.logging.Logger;
+
 import static com.dilatush.util.Strings.isEmpty;
 
 /**
  * @author Tom Dilatush  tom@dilatush.com
  */
 public class General {
+
+
+    /**
+     * Return a {@link Logger} instance whose name is the canonical name of the caller's class.  If the caller's class cannot be determined, a default logger is returned.
+     *
+     * @return a new logger.
+     */
+    public static Logger getLogger() {
+
+        Logger result = null;
+
+        // walk the stack looking for the call to this method, then the next entry is our caller...
+        StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+        for( int i = 0; i < elements.length; i++ ) {
+            StackTraceElement element = elements[i];
+            if( "getLogger".equals( element.getMethodName() ) && "com.dilatush.util.General".equals( element.getClassName() ) ) {
+                result = Logger.getLogger( elements[i+1].getClassName() );  // create a logger using the next element's class name...
+            }
+        }
+        if( result == null)
+            result = Logger.getLogger( "DEFAULT" );
+
+        return result;
+    }
 
 
     /**

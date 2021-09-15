@@ -14,22 +14,27 @@ package com.dilatush.util.dns;
 // TODO: resolver follow CNAME chains when building answers from cache or iterative query
 // TODO: resolver only queries upon cache failure; always builds answer from cache?
 
+import com.dilatush.util.Checks;
 import com.dilatush.util.ExecutorService;
 import com.dilatush.util.Outcome;
 import com.dilatush.util.dns.agent.*;
 import com.dilatush.util.dns.cache.DNSCache;
-import com.dilatush.util.dns.message.DNSDomainName;
+import com.dilatush.util.dns.message.DNSMessage;
 import com.dilatush.util.dns.message.DNSQuestion;
-import com.dilatush.util.dns.message.DNSRRClass;
 import com.dilatush.util.dns.message.DNSRRType;
+import com.dilatush.util.dns.rr.CNAME;
+import com.dilatush.util.dns.rr.DNSResourceRecord;
 
 import java.net.InetSocketAddress;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import static com.dilatush.util.General.isNull;
+import static com.dilatush.util.dns.agent.DNSQuery.QueryResult;
+import static com.dilatush.util.dns.message.DNSRRType.*;
 
 
 /**
@@ -55,7 +60,6 @@ import static com.dilatush.util.General.isNull;
 public class DNSResolver {
 
     private static final Outcome.Forge<DNSResolver> outcomeResolver = new Outcome.Forge<>();
-    private static final Outcome.Forge<DNSQuestion> outcomeQuestion = new Outcome.Forge<>();
     private static final Outcome.Forge<?>           outcome         = new Outcome.Forge<>();
 
     private final ExecutorService         executor;
@@ -105,51 +109,82 @@ public class DNSResolver {
     }
 
 
-    public Outcome<?> queryIPv4( final String _domainName, final Consumer<Outcome<DNSQuery.QueryResult>> _handler, final DNSTransport _initialTransport,
-                                 final DNSServerSelectionStrategy _strategy, final String _name  ) {
+    public void query( final DNSQuestion _question, final Consumer<Outcome<QueryResult>> _handler, final DNSTransport _initialTransport,
+                       final DNSServerSelectionStrategy _strategy, final String _agentName ) {
 
-        Outcome<DNSQuestion> dqo = getQuestion( _domainName, DNSRRType.A );
-        if( dqo.notOk() )
-            return outcome.notOk( dqo.msg(), dqo.cause() );
+        Checks.required( _question, _handler, _initialTransport, _strategy );
 
-        query( dqo.info(), _handler, _initialTransport, _strategy, _name );
-        return outcome.ok();
-    }
-
-
-    public void query( final DNSQuestion _question, final Consumer<Outcome<DNSQuery.QueryResult>> _handler, final DNSTransport _initialTransport,
-                       final DNSServerSelectionStrategy _strategy, final String _name ) {
-
-        if( isNull( _question, _handler, _initialTransport, _strategy ) )
-            throw new IllegalArgumentException( "Missing required query argument(s)" );
-
-        if( (_strategy == DNSServerSelectionStrategy.NAMED) && (_name == null) )
+        if( (_strategy == DNSServerSelectionStrategy.NAMED) && (_agentName == null) )
             throw new IllegalArgumentException( "Missing DNS server name when using NAMED strategy" );
+
+        if( resolveFromCache( _question, _handler ) )
+            return;
 
         DNSResolution resolutionMode = (_strategy == DNSServerSelectionStrategy.ITERATIVE) ? DNSResolution.ITERATIVE : DNSResolution.RECURSIVE;
 
-        List<AgentParams> agents = getAgents( _strategy, _name );
+        List<AgentParams> agents = getAgents( _strategy, _agentName );
 
-        DNSQuery query = new DNSQuery( this, nio, executor, activeQueries, _question, nextQueryID.getAndIncrement(), agents, _handler, resolutionMode );
+        DNSQuery query = new DNSQuery( this, cache, nio, executor, activeQueries, _question, nextQueryID.getAndIncrement(), agents, _handler, resolutionMode );
         int id = nextQueryID.getAndIncrement();
 
         query.initiate( _initialTransport );
     }
 
 
-    private Outcome<DNSQuestion> getQuestion( final String _domainName, final DNSRRType _type, final DNSRRClass _class ) {
+    /**
+     * Attempts to resolve the given question from the DNS cache, return {@code true} if it resolved successfully.  To be resolved from the cache, the given {@link DNSQuestion}
+     * must be for a discrete record type, not {@link DNSRRType#ANY} or {@link DNSRRType#UNIMPLEMENTED}.  There must be at least one result matching the question.  This method
+     * will follow CNAME record chains to see if the terminus of the chain is a record matching the type in the question.  If the resolution is successful, this method synthesizes
+     * a {@link DNSMessage} containing the answers retrieved from the cache and passes it to the given handler.  If the handler is called, the outcome it passes will always be ok.
+     * This method does not add any resource records to the authorities or additional records sections to the synthesized response message.
+     *
+     * @param _question The {@link DNSQuestion} to attempt to resolve from the DNSCache.
+     * @param _handler The {@link Consumer Consumer&lt;Outcome&lt;QueryResult&gt;&gt;} handler to call if the question is successfully resolved from the cache.
+     * @return {@code true} if the question was resolved from the cache.
+     */
+    private boolean resolveFromCache( final DNSQuestion _question, final Consumer<Outcome<QueryResult>> _handler ) {
 
-        Outcome<DNSDomainName> dno = DNSDomainName.fromString( _domainName );
-        if( dno.notOk() )
-            return outcomeQuestion.notOk( dno.msg(), dno.cause() );
+        // we don't want to attempt resolving ANY queries from cache, because we can't tell if the cache has everything...
+        // we don't want to attempt resolving UNIMPLEMENTED queries from cache because, well, they're unimplemented...
+        if( (_question.qtype == ANY) || (_question.qtype == UNIMPLEMENTED) )
+            return false;
 
-        DNSQuestion question = new DNSQuestion( dno.info(), _type, _class );
-        return outcomeQuestion.ok( new DNSQuestion( dno.info(), _type, _class ) );
-    }
+        // get anything the cache might have from the domain we're looking for...
+        List<DNSResourceRecord> cached = cache.get( _question.qname );
 
+        // if we got nothing at all back, bail out negatively...
+        if( cached.size() == 0 )
+            return false;
 
-    private Outcome<DNSQuestion> getQuestion( final String _domainName, final DNSRRType _type ) {
-        return getQuestion( _domainName, _type, DNSRRClass.IN );
+        // we got something back from the cache, so it's possible we can resolve the question...
+        // make a place to stuff our answers...
+        List<DNSResourceRecord> answers = new ArrayList<>();
+
+        // iterate over the cached records to see if any of them match what we're looking for, or match a CNAME that might point to what we need...
+        cached.forEach( (rr) -> {
+
+            if( (rr.klass == _question.qclass) && (rr.type == _question.qtype) )
+                answers.add( rr );
+
+            else if( rr.type == CNAME ) {
+                int beforeSize = answers.size();
+                List<DNSResourceRecord> crr = new ArrayList<>();
+                crr.add( rr );
+                while( (crr.size() == 1) && (crr.get(0).type == CNAME) ) {
+                    answers.add( crr.get( 0 ) );
+                    crr = cache.get( ((com.dilatush.util.dns.rr.CNAME)crr.get( 0 )).cname );
+                }
+                AtomicBoolean gotOne = new AtomicBoolean( false );
+                crr.forEach( (cnrr) -> {
+                    if( (cnrr.klass == _question.qclass) && (cnrr.type == _question.qtype) ) {
+                        answers.add( rr );
+                        gotOne.set( true );
+                    }
+                } );
+                if( !gotOne.get() )
+                    answers.subList( beforeSize, answers.size() ).clear();
+            }
+        } );
     }
 
 

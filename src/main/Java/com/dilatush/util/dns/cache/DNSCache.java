@@ -1,15 +1,17 @@
 package com.dilatush.util.dns.cache;
 
+import com.dilatush.util.Checks;
+import com.dilatush.util.General;
+import com.dilatush.util.dns.DNSUtil;
 import com.dilatush.util.dns.message.DNSDomainName;
 import com.dilatush.util.dns.rr.DNSResourceRecord;
 import com.dilatush.util.dns.rr.UNIMPLEMENTED;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import static com.dilatush.util.General.isNull;
+import static java.util.logging.Level.FINE;
 
 
 /**
@@ -25,7 +27,7 @@ import static com.dilatush.util.General.isNull;
  */
 public class DNSCache {
 
-    private static final Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
+    private static final Logger LOGGER = General.getLogger();
 
     private static final int  DEFAULT_MAX_CACHE_SIZE           = 1000;
     private static final long DEFAULT_MAX_ALLOWABLE_TTL_MILLIS = 2 * 60 * 60 * 1000;  // 2 hours...
@@ -77,12 +79,15 @@ public class DNSCache {
         entryMap              = new HashMap<>( maxCacheSize );
         ttlMap                = new TreeMap<>();
         uniqueInteger         = new AtomicLong();
+
+        LOGGER.log( FINE, "Created DNSCache, max size " + maxCacheSize + " DNS resource records" );
     }
 
 
     /**
      * Creates a new instance of this class with a maximum of 1,000 cached resource records and a maximum allowable TTL of two hours.
      */
+    @SuppressWarnings( "unused" )
     public DNSCache() {
         this( DEFAULT_MAX_CACHE_SIZE, DEFAULT_MAX_ALLOWABLE_TTL_MILLIS );
     }
@@ -105,11 +110,7 @@ public class DNSCache {
      */
     public synchronized void add( final DNSResourceRecord _rr, final long _expires ) {
 
-        // sanity check...
-        if( isNull( _rr ) ) {
-            LOGGER.log( Level.WARNING, "DNSCache.add() called with null resource record" );
-            return;
-        }
+        Checks.required( _rr );
 
         // if the cache is disabled (max size < 1), just leave...
         if( maxCacheSize < 1 )
@@ -122,6 +123,8 @@ public class DNSCache {
         // if the given resource record is already expired, just leave - we don't want it in the cache...
         if( _expires <= System.currentTimeMillis() )
             return;
+
+        LOGGER.log( FINE, "Adding to cache: " + _rr + "(" + ttlMap.size() + " resource records cached before this addition)" );
 
         // if the expiration time is too far into the future, truncate it...
         long expires = Math.min( _expires, System.currentTimeMillis() + maxAllowableTTLMillis );
@@ -147,6 +150,8 @@ public class DNSCache {
             // if we get here, then the current entry is the same as the added record...
             // that means we need to overwrite this entry with the (presumably "fresher") record we're adding...
 
+            LOGGER.log( FINE, "Overwriting: " + entry.resourceRecord );
+
             // remove the to-be-overwritten record's mapping in ttlMap...
             ttlMap.remove( entry.ttlKey );
 
@@ -165,7 +170,7 @@ public class DNSCache {
         }
 
         // if the entryIndex >= entries.length, then we don't already have a record that same as the one we're adding...
-        // that means we have to actuall add a new one after making room for it...
+        // that means we have to actually add a new one after making room for it...
         if( entryIndex >= entries.length ) {
 
             // if our cache would have too many entries with this addition, trim it down...
@@ -181,7 +186,7 @@ public class DNSCache {
             // make a key for the new mapping we need to make in ttlMap...
             DNSTTLCacheKey ttlKey = new DNSTTLCacheKey( expires, uniqueInteger.getAndIncrement() );
 
-            // calculate the index to where we'll be stuffin our new record...
+            // calculate the index to where we'll be stuffing our new record...
             int newEntryIndex = newEntries.length - 1;
 
             // create the new cache entry and stuff it away...
@@ -212,10 +217,32 @@ public class DNSCache {
      */
     public void add( final DNSResourceRecord _rr ) {
 
-        if( isNull( _rr ) )
-            throw new IllegalArgumentException( "Required argument missing" );
+        Checks.required( _rr );
 
         add( _rr, System.currentTimeMillis() + (_rr.ttl * 1000) );
+    }
+
+
+    /**
+     * <p>Adds the given {@link DNSResourceRecord}s to this cache with the expiration time calculated from each resource record's TTL.  Any attempt to add a {@code null} resource
+     * record is logged and ignored.  Attempts to add expired or {@link UNIMPLEMENTED} resource records are silently ignored.  The actual expiration time used in the cache is
+     * calculated as the earlier of the calculated expiration time or the current time plus the maximum allowable TTL.  </p>
+     * <p>If the cache already contains the maximum number of cache entries allowed, then the cached record with the earliest expiration time is purged before adding each new
+     * resource record, thus capping the cache's size. </p>
+     * <p>If there is already an entry in the cache that is of the same type as an entry to be added, with the same resource record data, then the existing entry is overwritten
+     * with the new entry.  For instance, if the cache of resource records for "www.bogus.com" already had an A record with "141.2.3.76", and a new matching A record was added,
+     * the new record will overwrite the existing on.  The main significance of this behavior is that it is possible for the TTL of a resource record in the cache to be updated.
+     * </p>
+     * <p>If the cache does not contain any resource records that are the same type with the same resource record data as a resource record being added, then the new resource
+     * record is added to the cache.</p>
+     *
+     * @param _rrs The list of {@link DNSResourceRecord}s to be added to this cache.
+     */
+    public void add( final List<DNSResourceRecord> _rrs ) {
+
+        Checks.required( _rrs );
+
+        _rrs.forEach( this::add );
     }
 
 
@@ -228,9 +255,7 @@ public class DNSCache {
      */
     public synchronized List<DNSResourceRecord> get( final String _dn ) {
 
-        // sanity check...
-        if( isNull( _dn ) )
-            throw new IllegalArgumentException( "Required argument missing" );
+        Checks.required( _dn );
 
         // if the cache is disabled, just leave with an empty list...
         if( maxCacheSize < 1 )
@@ -240,8 +265,10 @@ public class DNSCache {
         DNSCacheEntry[] entries = entryMap.get( _dn );
 
         // if we have no entries for this FQDN, then we just return an empty list...
-        if( entries == null )
-            return new ArrayList<>(0);
+        if( entries == null ) {
+            LOGGER.log( FINE, "Cache miss for " + _dn );
+            return new ArrayList<>( 0 );
+        }
 
         // we have some candidate entries, so long as they haven't expired, so make a list to hold the results...
         List<DNSResourceRecord> result = new ArrayList<>( entries.length );
@@ -263,6 +290,7 @@ public class DNSCache {
         }
 
         // at last, at last!  we're done; return with the results (which could be empty if all the records we had were expired)...
+        LOGGER.log( FINE, "Cache hit for " + _dn + "\n" + DNSUtil.toString( result ) );
         return result;
     }
 
@@ -306,6 +334,8 @@ public class DNSCache {
      */
     private void remove( final DNSCacheEntry _dce ) {
 
+        LOGGER.log( FINE, "Removing from cache: " + _dce.resourceRecord );
+
         // first remove the entry from the ttl map, using the handy-dandy key that we squirreled away...
         ttlMap.remove( _dce.ttlKey );
 
@@ -327,7 +357,7 @@ public class DNSCache {
             // if the entry is the same object (not equal to, but the object identity), then we've found the one we want to purge...
             if( entry == _dce ) {
 
-                // if this was the last entry for this FQDN, then we'll just remove this mapping from the entryMap and we're done...
+                // if this was the last entry for this FQDN, then we'll just remove this mapping from the entryMap, and we're done...
                 if( entries.length == 1 ) {
                     entryMap.remove( _dce.resourceRecord.name.text );
                     return;
@@ -346,7 +376,7 @@ public class DNSCache {
                 if( entryIndex < (entries.length - 1) )
                     System.arraycopy( entries, entryIndex + 1, newEntries, entryIndex, newEntries.length - entryIndex );
 
-                // map our new entries into place and we're finished...
+                // map our new entries into place, and we're finished...
                 entryMap.put( _dce.resourceRecord.name.text, newEntries );
                 return;
             }
@@ -451,6 +481,9 @@ public class DNSCache {
 
 
         public DNSCacheEntry( final DNSResourceRecord _resourceRecord, final DNSTTLCacheKey _ttlKey ) {
+
+            Checks.required( _resourceRecord, _ttlKey );
+
             resourceRecord = _resourceRecord;
             expiration     = System.currentTimeMillis() + (_resourceRecord.ttl * 1000);
             ttlKey         = _ttlKey;

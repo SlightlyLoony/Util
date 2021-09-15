@@ -4,6 +4,7 @@ import com.dilatush.util.ExecutorService;
 import com.dilatush.util.Outcome;
 import com.dilatush.util.dns.DNSResolver;
 import com.dilatush.util.dns.DNSResolver.AgentParams;
+import com.dilatush.util.dns.cache.DNSCache;
 import com.dilatush.util.dns.message.DNSMessage;
 import com.dilatush.util.dns.message.DNSOpCode;
 import com.dilatush.util.dns.message.DNSQuestion;
@@ -33,6 +34,7 @@ public class DNSQuery {
 
 
     private final DNSResolver                     resolver;
+    private final DNSCache                        cache;
     private final DNSNIO                          nio;
     private final ExecutorService                 executor;
     private final Map<Short,DNSQuery>             activeQueries;
@@ -52,15 +54,18 @@ public class DNSQuery {
 
 
 
-    public DNSQuery( final DNSResolver _resolver, final DNSNIO _nio, final ExecutorService _executor, final Map<Short,DNSQuery> _activeQueries, final DNSQuestion _question,
-                     final int _id, final List<AgentParams> _agents, final Consumer<Outcome<QueryResult>> _handler, final DNSResolution _resolutionMode ) {
+    public DNSQuery( final DNSResolver _resolver, final DNSCache _cache, final DNSNIO _nio, final ExecutorService _executor,
+                     final Map<Short,DNSQuery> _activeQueries, final DNSQuestion _question, final int _id,
+                     final List<AgentParams> _agents, final Consumer<Outcome<QueryResult>> _handler, final DNSResolution _resolutionMode ) {
 
-        if( isNull( _resolver, _nio, _executor, _activeQueries, _question, _handler, _resolutionMode ) )
+        // sanity checks...
+        if( isNull( _resolver, _cache, _nio, _executor, _activeQueries, _question, _handler, _resolutionMode ) )
             throw new IllegalArgumentException( "Required argument(s) are missing" );
         if( (_agents == null) && (_resolutionMode == RECURSIVE) )
             throw new IllegalArgumentException( "Agents argument missing; required in recursive resolution mode" );
 
         resolver        = _resolver;
+        cache           = _cache;
         nio             = _nio;
         executor        = _executor;
         activeQueries   = _activeQueries;
@@ -70,8 +75,10 @@ public class DNSQuery {
         handler         = _handler;
         resolutionMode  = _resolutionMode;
         startTime       = System.currentTimeMillis();
-        activeQueries.put( (short) id, this );
         queryLog        = new ArrayList<>();
+
+        activeQueries.put( (short) id, this );
+
         logQuery("New instance " + question );
     }
 
@@ -129,9 +136,7 @@ public class DNSQuery {
 
     protected void handleResponse( final DNSMessage _responseMsg, final DNSTransport _transport ) {
 
-
         logQuery("Received response via " + _transport );
-
 
         // no matter what happens next, we need to shut down the agent...
         agent.close();
@@ -160,13 +165,18 @@ public class DNSQuery {
             return;
         }
 
-
         // handle appropriately according to the response code...
         switch( responseMessage.responseCode ) {
 
             // the question was answered; the response is valid...
             case OK -> {
                 logQuery("Response was ok, " + responseMessage.answers.size() + " answers" );
+
+                // add our results to the cache...
+                cache.add( responseMessage.answers );
+                cache.add( responseMessage.authorities );
+                cache.add( responseMessage.additionalRecords );
+
                 handler.accept( queryOutcome.ok( new QueryResult( queryMessage, responseMessage, queryLog )) );
             }
 

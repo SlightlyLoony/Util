@@ -2,23 +2,20 @@ package com.dilatush.util.dns.examples;
 
 import com.dilatush.util.Outcome;
 import com.dilatush.util.dns.DNSResolver;
-import com.dilatush.util.dns.agent.DNSQuery;
-import com.dilatush.util.dns.rr.DNSResourceRecord;
+import com.dilatush.util.dns.DNSResolverAPI;
 
+import java.net.Inet4Address;
 import java.net.InetSocketAddress;
-import java.util.concurrent.Semaphore;
-
-import static com.dilatush.util.dns.DNSServerSelectionStrategy.NAMED;
-import static com.dilatush.util.dns.agent.DNSTransport.UDP;
+import java.util.List;
 
 /**
  * Create a very simple DNS resolver that can use Google's recursive DNS server to resolve IP addresses.
  */
 public class Basic {
 
-    private static final Semaphore waiter = new Semaphore( 0 );
-
     public static void main( final String[] _args ) throws InterruptedException {
+
+        System.getProperties().setProperty( "java.util.logging.config.file", "logging.properties" );
 
         // create a DNS resolver that knows about Google's recursive DNS server...
         DNSResolver.Builder builder = new DNSResolver.Builder();
@@ -29,36 +26,16 @@ public class Basic {
             return;
         }
         DNSResolver resolver = ro.info();
+        DNSResolverAPI api = new DNSResolverAPI( resolver );
 
         // now get the IP address of some host names
-        resolver.queryIPv4( "www.state.gov", Basic::handler, UDP, NAMED, "Google" );
-        resolver.queryIPv4( "www.cnn.com", Basic::handler, UDP, NAMED, "Google" );
-        resolver.queryIPv4( "www.paradiseweather.info", Basic::handler, UDP, NAMED, "Google" );
-        resolver.queryIPv4( "www.aa.com", Basic::handler, UDP, NAMED, "Google" );
-        resolver.queryIPv4( "www.paris.info", Basic::handler, UDP, NAMED, "Google" );
-        resolver.queryIPv4( "www.hamburger.com", Basic::handler, UDP, NAMED, "Google" );
+        List<Inet4Address> r1 = api.resolveIPv4( "www.state.gov" );
+        List<Inet4Address> r2 = api.resolveIPv4( "www.cnn.com" );
+        List<Inet4Address> r3 = api.resolveIPv4( "www.paradiseweather.info" );
+        List<Inet4Address> r4 = api.resolveIPv4( "www.aa.com" );
+        List<Inet4Address> r5 = api.resolveIPv4( "www.paris.info" );
+        List<Inet4Address> r6 = api.resolveIPv4( "www.hamburger.com" );
 
-        // wait for completion...
-        waiter.acquire(6);
-    }
-
-    private static void handler( final Outcome<DNSQuery.QueryResult> _result ) {
-
-        if( _result.notOk() ) {
-            System.out.println( "Query failed: " + _result.msg() );
-            return;
-        }
-        System.out.println( "Query successful" );
-
-        for( DNSResourceRecord rr : _result.info().response().answers ) {
-            System.out.println( rr );
-        }
-
-        System.out.println( "Query log:" );
-        for( DNSQuery.QueryLogEntry entry : _result.info().log() ) {
-            System.out.println( entry );
-        }
-        System.out.println( "" );
-        waiter.release();
+        "breakpoint".hashCode();
     }
 }
