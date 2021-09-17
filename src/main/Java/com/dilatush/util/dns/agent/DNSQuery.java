@@ -244,18 +244,18 @@ public class DNSQuery {
 
 
     private void logQuery( final String _message ) {
-        queryLog.add( new QueryLogEntry( _message ) );
+        queryLog.add( new QueryLogEntry( _message, startTime ) );
     }
 
 
-    public class QueryLogEntry {
+    public static class QueryLogEntry {
 
         public final String msg;
         public final long timeMillis;
 
-        public QueryLogEntry( final String _msg ) {
+        public QueryLogEntry( final String _msg, final long _startTime ) {
             msg = _msg;
-            timeMillis = System.currentTimeMillis() - startTime;
+            timeMillis = System.currentTimeMillis() - _startTime;
         }
 
         @Override

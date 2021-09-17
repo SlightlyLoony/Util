@@ -1,5 +1,6 @@
 package com.dilatush.util.dns.message;
 
+import com.dilatush.util.Checks;
 import com.dilatush.util.Outcome;
 import com.dilatush.util.dns.rr.DNSResourceRecord;
 
@@ -117,6 +118,27 @@ public class DNSMessage {
         answers             = Collections.unmodifiableList( _answers           );
         authorities         = Collections.unmodifiableList( _authorities       );
         additionalRecords   = Collections.unmodifiableList( _additionalRecords );
+    }
+
+
+    /**
+     * Synthesizes a response message with the given answers based on this message, which must be a query.
+     *
+     * @param _answers The answers for this response message.
+     * @return The synthetic response message.
+     */
+    public DNSMessage getSyntheticResponse( final List<DNSResourceRecord> _answers ) {
+
+        if( isResponse || (opCode != DNSOpCode.QUERY) )
+            throw new UnsupportedOperationException( "Can synthesize responses only for query messages" );
+
+        Checks.required( _answers );
+
+        List<DNSResourceRecord> empty = new ArrayList<>(0);
+
+        return new DNSMessage(
+                id, true, opCode, authoritativeAnswer, false, recurse, canRecurse, z, false, checkingDisabled, DNSResponseCode.OK,
+                questions, _answers, empty, empty );
     }
 
 

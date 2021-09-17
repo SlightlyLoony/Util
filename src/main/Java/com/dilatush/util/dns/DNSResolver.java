@@ -12,7 +12,6 @@ package com.dilatush.util.dns;
 
 // TODO: resolver have DNSRecursiveQuery and DNSIterativeQuery
 // TODO: resolver follow CNAME chains when building answers from cache or iterative query
-// TODO: resolver only queries upon cache failure; always builds answer from cache?
 
 import com.dilatush.util.Checks;
 import com.dilatush.util.ExecutorService;
@@ -20,9 +19,9 @@ import com.dilatush.util.Outcome;
 import com.dilatush.util.dns.agent.*;
 import com.dilatush.util.dns.cache.DNSCache;
 import com.dilatush.util.dns.message.DNSMessage;
+import com.dilatush.util.dns.message.DNSOpCode;
 import com.dilatush.util.dns.message.DNSQuestion;
 import com.dilatush.util.dns.message.DNSRRType;
-import com.dilatush.util.dns.rr.CNAME;
 import com.dilatush.util.dns.rr.DNSResourceRecord;
 
 import java.net.InetSocketAddress;
@@ -59,8 +58,9 @@ import static com.dilatush.util.dns.message.DNSRRType.*;
  */
 public class DNSResolver {
 
-    private static final Outcome.Forge<DNSResolver> outcomeResolver = new Outcome.Forge<>();
-    private static final Outcome.Forge<?>           outcome         = new Outcome.Forge<>();
+    private static final Outcome.Forge<DNSResolver> outcomeResolver    = new Outcome.Forge<>();
+    private static final Outcome.Forge<QueryResult> outcomeQueryResult = new Outcome.Forge<>();
+    private static final Outcome.Forge<?>           outcome            = new Outcome.Forge<>();
 
     private final ExecutorService         executor;
     private final DNSNIO                  nio;
@@ -79,7 +79,7 @@ public class DNSResolver {
      * @param _executor Specifies the executor that will be used to decode and process messages received from DNS servers.
      * @param _agentParams Specifies the parameters for recursive DNS server agents that may be used by this resolver.
      * @param _maxCacheSize Specifies the maximum DNS resource record cache size.
-     * @param _maxAllowableTTLMillis Specifies the maximum allowable TTL (in millisconds) for a resource record in the cache.
+     * @param _maxAllowableTTLMillis Specifies the maximum allowable TTL (in milliseconds) for a resource record in the cache.
      * @throws DNSException if there is a problem instantiating {@link DNSNIO}.
      */
     private DNSResolver( final ExecutorService _executor, final List<AgentParams> _agentParams,
@@ -109,6 +109,8 @@ public class DNSResolver {
     }
 
 
+    // only one question per query!
+    // https://stackoverflow.com/questions/4082081/requesting-a-and-aaaa-records-in-single-dns-query/4083071#4083071
     public void query( final DNSQuestion _question, final Consumer<Outcome<QueryResult>> _handler, final DNSTransport _initialTransport,
                        final DNSServerSelectionStrategy _strategy, final String _agentName ) {
 
@@ -125,7 +127,6 @@ public class DNSResolver {
         List<AgentParams> agents = getAgents( _strategy, _agentName );
 
         DNSQuery query = new DNSQuery( this, cache, nio, executor, activeQueries, _question, nextQueryID.getAndIncrement(), agents, _handler, resolutionMode );
-        int id = nextQueryID.getAndIncrement();
 
         query.initiate( _initialTransport );
     }
@@ -163,28 +164,62 @@ public class DNSResolver {
         // iterate over the cached records to see if any of them match what we're looking for, or match a CNAME that might point to what we need...
         cached.forEach( (rr) -> {
 
+            // if the cached record matches the class and type in the question, stuff it directly into the answers...
             if( (rr.klass == _question.qclass) && (rr.type == _question.qtype) )
                 answers.add( rr );
 
+            // if it's a CNAME, we need to resolve the chain (which could be arbitrarily long)...
             else if( rr.type == CNAME ) {
-                int beforeSize = answers.size();
-                List<DNSResourceRecord> crr = new ArrayList<>();
-                crr.add( rr );
-                while( (crr.size() == 1) && (crr.get(0).type == CNAME) ) {
-                    answers.add( crr.get( 0 ) );
-                    crr = cache.get( ((com.dilatush.util.dns.rr.CNAME)crr.get( 0 )).cname );
+
+                // resolve the CNAME chain, recording the elements into the list cnameChain...
+                List<DNSResourceRecord> cnameChain = new ArrayList<>();
+                cnameChain.add( rr );
+                while( (cnameChain.size() == 1) && (cnameChain.get(0).type == CNAME) ) {
+                    answers.add( cnameChain.get( 0 ) );
+                    cnameChain = cache.get( ((com.dilatush.util.dns.rr.CNAME)cnameChain.get( 0 )).cname );
                 }
+
+                // see if we got the record type we wanted after resolving the CNAME chain...
                 AtomicBoolean gotOne = new AtomicBoolean( false );
-                crr.forEach( (cnrr) -> {
-                    if( (cnrr.klass == _question.qclass) && (cnrr.type == _question.qtype) ) {
-                        answers.add( rr );
+                cnameChain.forEach( (cnameChainElement) -> {
+                    if( (cnameChainElement.klass == _question.qclass) && (cnameChainElement.type == _question.qtype) )
                         gotOne.set( true );
-                    }
                 } );
-                if( !gotOne.get() )
-                    answers.subList( beforeSize, answers.size() ).clear();
+
+                // if we got at least one, then dump the CNAME resolution chain into our answers...
+                if( gotOne.get() )
+                    answers.addAll( cnameChain );
             }
         } );
+
+        // if we got no answers, then we leave, sadly, with a negative answer...
+        if( answers.isEmpty() )
+            return false;
+
+        // get our synthesized query results, as we have some answers...
+
+        // first our query message...
+        DNSMessage.Builder builder = new DNSMessage.Builder();
+        builder.addQuestion( _question );
+        builder.setOpCode( DNSOpCode.QUERY );
+        builder.setRecurse( true );
+        builder.setCanRecurse( true );
+        DNSMessage query = builder.getMessage();
+
+        // then our response message...
+        DNSMessage response = query.getSyntheticResponse( answers );
+
+        // then our log...
+        List<DNSQuery.QueryLogEntry> log = new ArrayList<>();
+        log.add( new DNSQuery.QueryLogEntry( "Query resolved from cache", System.currentTimeMillis() ) );
+
+        // finally, we have our query result...
+        QueryResult queryResult = new QueryResult( query, response, log );
+
+        // call the handler with the result, for we are done...
+        _handler.accept( outcomeQueryResult.ok( queryResult ) );
+
+        return true;
     }
 
 
@@ -217,6 +252,11 @@ public class DNSResolver {
                 yield result;
             }
         };
+    }
+
+
+    public void clear() {
+        cache.clear();
     }
 
 
@@ -276,7 +316,7 @@ public class DNSResolver {
 
 
         /**
-         * Specifies the maximum allowable TTL (in millisconds) for a resource record in the cache.  The default is two hours.
+         * Specifies the maximum allowable TTL (in milliseconds) for a resource record in the cache.  The default is two hours.
          *
          * @param _maxAllowableTTLMillis  the maximum allowable TTL for a resource record in the cache.
          */
@@ -291,7 +331,7 @@ public class DNSResolver {
          * recursive DNS servers that the {@link DNSResolver} instance will be able to use.
          *
          * @param _serverAddress The IP address of the recursive DNS server.
-         * @param _timeoutMillis The maximum time (in millisconds) to wait for responses from the recursive DNS server.
+         * @param _timeoutMillis The maximum time (in milliseconds) to wait for responses from the recursive DNS server.
          * @param _priority The priority of this recursive DNS server, with larger numbers meaning higher priority.  The priority is used with
          * {@link DNSServerSelectionStrategy#PRIORITY}.
          * @param _name The human-readable name for this recursive DNS server, used in log entries.
@@ -309,5 +349,5 @@ public class DNSResolver {
     /**
      * A simple record to hold the parameters required to construct a {@link DNSServerAgent} instance.
      */
-    public record AgentParams( long timeoutMillis, int priority, String name, InetSocketAddress serverAddress ){};
+    public record AgentParams( long timeoutMillis, int priority, String name, InetSocketAddress serverAddress ){}
 }
