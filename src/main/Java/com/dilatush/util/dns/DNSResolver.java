@@ -226,7 +226,7 @@ public class DNSResolver {
     /**
      * Returns a mutable list of {@link AgentParams} ordered according to the given {@link DNSServerSelectionStrategy}.  In the case of the {@code NAMED} strategy, the list will
      * have a single element, corresponding to the agent with the given name.  If the name is not found, the list will be empty.  In the case of the {@code ITERATIVE} strategy,
-     * this method returns a {@code null}.
+     * this method returns an empty list.
      *
      * @param _strategy
      * @param _name
@@ -239,7 +239,7 @@ public class DNSResolver {
             case PRIORITY    -> new ArrayList<>( agentsByPriority );
             case SPEED       -> new ArrayList<>( agentsBySpeed );
             case ROUND_ROBIN -> new ArrayList<>( agentParams );
-            case ITERATIVE   -> null;
+            case ITERATIVE   -> new ArrayList<>();
             case RANDOM      -> {
                 ArrayList<AgentParams> result = new ArrayList<>( agentParams );
                 Collections.shuffle( result );

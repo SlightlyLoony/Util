@@ -8,9 +8,12 @@ import java.net.Inet4Address;
 import java.net.InetSocketAddress;
 import java.util.List;
 
+import static com.dilatush.util.General.breakpoint;
+
 /**
  * Create a very simple DNS resolver that can use Google's recursive DNS server to resolve IP addresses.
  */
+@SuppressWarnings( "unused" )
 public class Basic {
 
     public static void main( final String[] _args ) throws InterruptedException {
@@ -62,7 +65,6 @@ public class Basic {
 
         System.out.println( "Cached resolution time (ms): " + (System.currentTimeMillis() - startTime));
 
-
-        "breakpoint".hashCode();
+        breakpoint();
     }
 }

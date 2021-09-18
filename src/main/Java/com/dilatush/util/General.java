@@ -81,6 +81,16 @@ public class General {
             return null;
         }
     }
+
+
+    /**
+     * Calls to this method may be placed in code to provide a place to set a breakpoint.  The call has no side effects and no return value, so the IDE and compiler won't
+     * complain about them.
+     */
+    @SuppressWarnings( "unused" )
+    public static void breakpoint() {
+        // naught to do...
+    }
 }
 
 

@@ -1,13 +1,13 @@
 package com.dilatush.util.dns.agent;
 
+import com.dilatush.util.Checks;
 import com.dilatush.util.ExecutorService;
 import com.dilatush.util.Outcome;
 import com.dilatush.util.dns.DNSResolver;
 import com.dilatush.util.dns.DNSResolver.AgentParams;
 import com.dilatush.util.dns.cache.DNSCache;
-import com.dilatush.util.dns.message.DNSMessage;
-import com.dilatush.util.dns.message.DNSOpCode;
-import com.dilatush.util.dns.message.DNSQuestion;
+import com.dilatush.util.dns.message.*;
+import com.dilatush.util.dns.rr.DNSResourceRecord;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -15,6 +15,8 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.dilatush.util.General.isNull;
 import static com.dilatush.util.dns.agent.DNSResolution.ITERATIVE;
@@ -87,17 +89,41 @@ public class DNSQuery {
         return initiate( UDP );
     }
 
+
     public Outcome<QueryResult> initiate( final DNSTransport _initialTransport ) {
+
+        Checks.required( _initialTransport, "initialTransport");
 
         logQuery("Initial query" );
 
-        if( isNull( _initialTransport ) )
-            throw new IllegalArgumentException( "Required initial transport (TCP/UDP) argument is missing" );
-
         transport = _initialTransport;
 
-        if( agents.isEmpty() )
-            return queryOutcome.notOk( "No DNS servers" );
+        // if we're in recursive mode, then we'd better have at least one agent available...
+        if( resolutionMode == RECURSIVE ) {
+            if( agents.isEmpty() )
+                return queryOutcome.notOk( "No DNS servers" );
+        }
+
+        // if we're in iterative mode, we need to figure out the starting nameservers, and make agents for them...
+        if( resolutionMode == ITERATIVE ) {
+
+            // we know the actual question wasn't cached, as we wouldn't have queried at all if it was - so we start looking with its parent domain,
+            // unless we're already at the root domain...
+            DNSDomainName searchDomain = question.qname.isRoot() ? question.qname : question.qname.parent();
+
+            while() {
+
+                // check the cache for name server (NS) records...
+                List<DNSResourceRecord> ns = cache.get( searchDomain )
+                        .stream()
+                        .filter( ( rr ) -> rr.type == DNSRRType.NS )
+                        .collect( Collectors.toList());
+
+                // if we had at least one name server, let's see if we have an IP address for any name servers we got...
+
+            }
+
+        }
 
         return initiateImpl();
     }
@@ -105,9 +131,9 @@ public class DNSQuery {
 
     private Outcome<QueryResult> initiateImpl() {
 
-        // figure out what agent we're going to use...
         if( resolutionMode == RECURSIVE ) {
 
+            // figure out what agent we're going to use...
             agent = new DNSServerAgent( resolver, this, nio, executor, agents.remove( 0 ) );
         }
 

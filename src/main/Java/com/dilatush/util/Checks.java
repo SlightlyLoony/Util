@@ -3,7 +3,7 @@ package com.dilatush.util;
 import java.nio.ByteBuffer;
 
 /**
- * Static container class for functions related to checking parameters.
+ * Static container class for functions related to checking arguments.
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
@@ -20,6 +20,18 @@ public class Checks {
             if( arg == null )
                 throw new IllegalArgumentException( "At least one required argument is missing" );
         }
+    }
+
+
+    /**
+     * If the given arguent is null, throws an {@link IllegalArgumentException} with a message saying that the named argument is missing.
+     *
+     * @param _arg the argument to check
+     * @param _argName the name of the argument to check
+     */
+    static public void required( final Object _arg, final String _argName ) {
+        if( _arg == null )
+            throw new IllegalArgumentException( "Required argument " + _argName + " is missing" );
     }
 
 

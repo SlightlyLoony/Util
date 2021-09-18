@@ -1,5 +1,6 @@
 package com.dilatush.util.dns.message;
 
+import com.dilatush.util.Checks;
 import com.dilatush.util.Outcome;
 
 import java.nio.BufferOverflowException;
@@ -181,9 +182,7 @@ public class DNSDomainName {
      */
     public static Outcome<DNSDomainName> fromLabels( final List<DNSLabel> _labels ) {
 
-        // we must have at least one label...
-        if( _labels == null )
-            return outcome.notOk( "Labels are missing" );
+        Checks.required( _labels, "labels" );
 
         // sum the lengths of all our labels...
         int sum = 0;
@@ -210,9 +209,7 @@ public class DNSDomainName {
      */
     public static Outcome<DNSDomainName> fromLabels( final DNSLabel[] _labels ) {
 
-        // we must have at least one label...
-        if( (_labels == null) || (_labels.length == 0) )
-            return outcome.notOk( "Labels are missing or empty" );
+        Checks.required( _labels, "labels");
 
         return fromLabels( Arrays.asList( _labels ) );
     }
@@ -227,19 +224,69 @@ public class DNSDomainName {
      */
     public static Outcome<DNSDomainName> fromString( final String _text ) {
 
+        Checks.required( _text, "domain name string" );
+
+        // if we got an empty string, append a period so we can get the root domain...
+        String text = (_text.length() == 0) ? "." : _text;
+
         // get an array of label texts...
-        String[] labelTexts = _text.split( "\\." );
+        String[] labelTexts = text.split( "\\." );
 
         // convert the label texts to DNSLabel instances...
         List<DNSLabel> labels = new ArrayList<>();
-        for( String text : labelTexts ) {
-            Outcome<DNSLabel> result = DNSLabel.fromString( text );
+        for( String labelText : labelTexts ) {
+            Outcome<DNSLabel> result = DNSLabel.fromString( labelText );
             if( !result.ok() )
-                return outcome.notOk( "Couldn't create label from: " + text + "(" + result.msg() + ")" );
+                return outcome.notOk( "Couldn't create label from: " + labelText + "(" + result.msg() + ")" );
             labels.add( result.info() );
         }
 
         return fromLabels( labels );
+    }
+
+
+    /**
+     * Returns the parent domain name of this domain.  For instance, if this domain name is "www.bogus.com", this method returns the domain name
+     * "bogus.com".  If this domain name is the root domain, this method throws an {@link IllegalStateException}.
+     *
+     * @return the parent domain name of this domain.
+     */
+    public DNSDomainName parent() {
+
+        if( isRoot() )
+            throw new IllegalStateException( "Cannot get parent of the root domain name" );
+
+        return new DNSDomainName( labels.subList( 1, labels.size() ) );
+    }
+
+
+    /**
+     * Returns {@code true} if this domain name represents the root domain.
+     *
+     * @return {@code true} if this domain name represents the root domain.
+     */
+    public boolean isRoot() {
+        return labels.size() == 0;
+    }
+
+
+    /**
+     * Returns {@code true} if this domain name represents a top level domain (TLD).
+     *
+     * @return {@code true} if this domain name represents a top level domain (TLD).
+     */
+    public boolean isTLD() {
+        return labels.size() == 1;
+    }
+
+
+    /**
+     * Returns the number of labels in this domain name.
+     *
+     * @return the number of labels in this domain name.
+     */
+    public int size() {
+        return labels.size();
     }
 
 
