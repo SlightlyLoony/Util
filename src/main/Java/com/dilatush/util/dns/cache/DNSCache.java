@@ -2,6 +2,7 @@ package com.dilatush.util.dns.cache;
 
 import com.dilatush.util.Checks;
 import com.dilatush.util.General;
+import com.dilatush.util.Outcome;
 import com.dilatush.util.dns.DNSUtil;
 import com.dilatush.util.dns.message.DNSDomainName;
 import com.dilatush.util.dns.rr.DNSResourceRecord;
@@ -35,6 +36,7 @@ public class DNSCache {
     private        final int                                   maxCacheSize;
     private        final long                                  maxAllowableTTLMillis;
     private        final AtomicLong                            uniqueInteger;
+    private        final DNSRootHints                          rootHints;
 
     /****************************************************************************************************************************************************
      * The two maps below are the key data structures for the cache.
@@ -79,6 +81,7 @@ public class DNSCache {
         entryMap              = new HashMap<>( maxCacheSize );
         ttlMap                = new TreeMap<>();
         uniqueInteger         = new AtomicLong();
+        rootHints             = new DNSRootHints();
 
         LOGGER.log( FINE, "Created DNSCache, max size " + maxCacheSize + " DNS resource records" );
     }
@@ -384,6 +387,18 @@ public class DNSCache {
 
         // we really should never get here, but if we do it means we didn't find the resource record we're trying to remove...
         // in that case, we just hang our head and leave...
+    }
+
+
+    /**
+     * Returns a list of resource records in the current root hints file.  This method will first attempt to read the local root hints file.  If that fails, or if the entries have
+     * expired, it will read the latest root hints from the URL, update the local file, and return the fresh root hints from that.  If all of those efforts fail, it will return an
+     * error.
+     *
+     * @return the {@link Outcome Outcome&lt;List&lt;DNSResourceRecord&gt;&gt;} result of this operation.
+     */
+    public Outcome<List<DNSResourceRecord>> getRootHints() {
+        return rootHints.current();
     }
 
 

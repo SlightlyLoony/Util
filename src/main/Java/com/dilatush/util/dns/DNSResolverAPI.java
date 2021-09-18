@@ -68,11 +68,6 @@ public class DNSResolverAPI {
     }
 
 
-    private void resolveIPv4Handler( final Outcome<QueryResult> _qr ) {
-
-    }
-
-
     private static class SyncHandler {
 
         private Outcome<QueryResult> qr;
