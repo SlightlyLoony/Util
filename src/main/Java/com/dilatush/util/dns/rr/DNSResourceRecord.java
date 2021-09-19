@@ -192,6 +192,7 @@ public abstract class DNSResourceRecord {
                 case SOA   -> SOA.decode          ( _msgBuffer, init );
                 case TXT   -> TXT.decode          ( _msgBuffer, init );
                 case MX    -> MX.decode           ( _msgBuffer, init );
+                case PTR   -> PTR.decode          ( _msgBuffer, init );
                 default    -> UNIMPLEMENTED.decode( _msgBuffer, init, typeCodePos );
             };
 

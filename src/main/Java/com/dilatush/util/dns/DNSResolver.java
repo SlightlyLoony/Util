@@ -9,8 +9,6 @@ package com.dilatush.util.dns;
 // TODO: Get rid of protected everywhere
 // TODO: Move DNS Resolver into its own project
 // TODO: Comments and Javadocs...
-// TODO: implement PTR rr
-// TODO: implement SRV rr (https://en.wikipedia.org/wiki/SRV_record)
 // TODO: resolver follow CNAME chains when building answers from cache or iterative query
 
 import com.dilatush.util.Checks;
