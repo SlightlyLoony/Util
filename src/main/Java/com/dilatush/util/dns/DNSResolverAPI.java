@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.logging.Logger;
 
-import static com.dilatush.util.dns.DNSServerSelectionStrategy.SPEED;
 import static com.dilatush.util.dns.agent.DNSQuery.QueryResult;
 import static com.dilatush.util.dns.agent.DNSTransport.UDP;
 import static java.util.logging.Level.FINE;
@@ -49,7 +48,7 @@ public class DNSResolverAPI {
         SyncHandler handler = new SyncHandler();
         DNSDomainName dn = dno.info();
         DNSQuestion question = new DNSQuestion( dn, DNSRRType.A );
-        resolver.query( question, handler::handler, UDP, SPEED, null );
+        resolver.query( question, handler::handler, UDP, DNSServerSelection.speed() );
         handler.waitForCompletion();
 
         if( handler.qr == null )

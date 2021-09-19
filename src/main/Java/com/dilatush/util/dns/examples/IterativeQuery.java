@@ -10,7 +10,6 @@ import com.dilatush.util.dns.message.DNSRRType;
 import java.util.concurrent.Semaphore;
 
 import static com.dilatush.util.General.breakpoint;
-import static com.dilatush.util.dns.DNSServerSelectionStrategy.ITERATIVE;
 import static com.dilatush.util.dns.agent.DNSTransport.UDP;
 
 /**
@@ -36,7 +35,7 @@ public class IterativeQuery {
 
         DNSDomainName dn = DNSDomainName.fromString( "www.paradiseweather.info" ).info();
         DNSQuestion question = new DNSQuestion( dn, DNSRRType.A );
-        resolver.query( question, IterativeQuery::handler, UDP, ITERATIVE, null );
+        resolver.query( question, IterativeQuery::handler, UDP );
 
         waiter.acquire();
 

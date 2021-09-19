@@ -9,13 +9,8 @@ package com.dilatush.util.dns;
 // TODO: Get rid of protected everywhere
 // TODO: Move DNS Resolver into its own project
 // TODO: Comments and Javadocs...
-// TODO: rework, separate iterative/recursion and server selection strategy
-// TODO:    - DNSResolver.query should be split into two signatures, one for recursive, the other for iterative
-// TODO:    - recursive call should become iterative if no servers are available
-// TODO:    - get rid of DNSResolutionMode?
 // TODO: implement PTR rr
 // TODO: implement SRV rr (https://en.wikipedia.org/wiki/SRV_record)
-// TODO: resolver have DNSRecursiveQuery and DNSIterativeQuery
 // TODO: resolver follow CNAME chains when building answers from cache or iterative query
 
 import com.dilatush.util.Checks;
@@ -67,15 +62,15 @@ public class DNSResolver {
     private static final Outcome.Forge<QueryResult> outcomeQueryResult = new Outcome.Forge<>();
     private static final Outcome.Forge<?>           outcome            = new Outcome.Forge<>();
 
-    private final ExecutorService         executor;
-    private final DNSNIO                  nio;
-    private final List<AgentParams>       agentParams;
-    private final Map<String,AgentParams> agentsByName;
-    private final List<AgentParams>       agentsByPriority;
-    private final List<AgentParams>       agentsBySpeed;
-    private final Map<Short,DNSQuery>     activeQueries;
-    private final AtomicInteger           nextQueryID;
-    private final DNSCache                cache;
+    private final ExecutorService               executor;
+    private final DNSNIO                        nio;
+    private final List<AgentParams>             agentParams;
+    private final Map<String,AgentParams>       agentsByName;
+    private final List<AgentParams>             agentsByPriority;
+    private final List<AgentParams>             agentsBySpeed;
+    private final Map<Short,DNSQuery>           activeQueries;
+    private final AtomicInteger                 nextQueryID;
+    private final DNSCache                      cache;
 
 
     /**
@@ -114,24 +109,36 @@ public class DNSResolver {
     }
 
 
+    // recursive query...
     // only one question per query!
     // https://stackoverflow.com/questions/4082081/requesting-a-and-aaaa-records-in-single-dns-query/4083071#4083071
     public void query( final DNSQuestion _question, final Consumer<Outcome<QueryResult>> _handler, final DNSTransport _initialTransport,
-                       final DNSServerSelectionStrategy _strategy, final String _agentName ) {
+                       final DNSServerSelection _serverSelection ) {
 
-        Checks.required( _question, _handler, _initialTransport, _strategy );
-
-        if( (_strategy == DNSServerSelectionStrategy.NAMED) && (_agentName == null) )
-            throw new IllegalArgumentException( "Missing DNS server name when using NAMED strategy" );
+        Checks.required( _question, _handler, _initialTransport, _serverSelection );
 
         if( resolveFromCache( _question, _handler ) )
             return;
 
-        DNSResolution resolutionMode = (_strategy == DNSServerSelectionStrategy.ITERATIVE) ? DNSResolution.ITERATIVE : DNSResolution.RECURSIVE;
+        List<AgentParams> agents = getAgents( _serverSelection );
 
-        List<AgentParams> agents = getAgents( _strategy, _agentName );
+        DNSQuery query = new DNSRecursiveQuery( this, cache, nio, executor, activeQueries, _question, nextQueryID.getAndIncrement(), agents, _handler );
 
-        DNSQuery query = new DNSQuery( this, cache, nio, executor, activeQueries, _question, nextQueryID.getAndIncrement(), agents, _handler, resolutionMode );
+        query.initiate( _initialTransport );
+    }
+
+
+    // iterative query...
+    // only one question per query!
+    // https://stackoverflow.com/questions/4082081/requesting-a-and-aaaa-records-in-single-dns-query/4083071#4083071
+    public void query( final DNSQuestion _question, final Consumer<Outcome<QueryResult>> _handler, final DNSTransport _initialTransport ) {
+
+        Checks.required( _question, _handler, _initialTransport );
+
+        if( resolveFromCache( _question, _handler ) )
+            return;
+
+        DNSQuery query = new DNSIterativeQuery( this, cache, nio, executor, activeQueries, _question, nextQueryID.getAndIncrement(), _handler );
 
         query.initiate( _initialTransport );
     }
@@ -233,25 +240,23 @@ public class DNSResolver {
      * have a single element, corresponding to the agent with the given name.  If the name is not found, the list will be empty.  In the case of the {@code ITERATIVE} strategy,
      * this method returns an empty list.
      *
-     * @param _strategy
-     * @param _name
+     * @param _serverSelection
      * @return
      */
-    private List<AgentParams> getAgents( final DNSServerSelectionStrategy _strategy, final String _name ) {
+    private List<AgentParams> getAgents( final DNSServerSelection _serverSelection ) {
 
-        return switch( _strategy ) {
+        return switch( _serverSelection.strategy ) {
 
             case PRIORITY    -> new ArrayList<>( agentsByPriority );
             case SPEED       -> new ArrayList<>( agentsBySpeed );
             case ROUND_ROBIN -> new ArrayList<>( agentParams );
-            case ITERATIVE   -> new ArrayList<>();
             case RANDOM      -> {
                 ArrayList<AgentParams> result = new ArrayList<>( agentParams );
                 Collections.shuffle( result );
                 yield result;
             }
             case NAMED       -> {
-                AgentParams ap = agentsByName.get( _name );
+                AgentParams ap = agentsByName.get( _serverSelection.agentName );
                 ArrayList<AgentParams> result = new ArrayList<>( 1 );
                 if( ap != null ) result.add( ap );
                 yield result;
