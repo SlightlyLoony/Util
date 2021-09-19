@@ -10,6 +10,7 @@ package com.dilatush.util.dns;
 // TODO: Move DNS Resolver into its own project
 // TODO: Comments and Javadocs...
 // TODO: resolver follow CNAME chains when building answers from cache or iterative query
+// TODO: handle selectable IP version...
 
 import com.dilatush.util.Checks;
 import com.dilatush.util.ExecutorService;
@@ -62,6 +63,7 @@ public class DNSResolver {
 
     private final ExecutorService               executor;
     private final DNSNIO                        nio;
+    private final IPVersion                     ipVersion;
     private final List<AgentParams>             agentParams;
     private final Map<String,AgentParams>       agentsByName;
     private final List<AgentParams>             agentsByPriority;
@@ -80,11 +82,12 @@ public class DNSResolver {
      * @param _maxAllowableTTLMillis Specifies the maximum allowable TTL (in milliseconds) for a resource record in the cache.
      * @throws DNSException if there is a problem instantiating {@link DNSNIO}.
      */
-    private DNSResolver( final ExecutorService _executor, final List<AgentParams> _agentParams,
+    private DNSResolver( final ExecutorService _executor, final IPVersion _ipVersion, final List<AgentParams> _agentParams,
                          final int _maxCacheSize, final long _maxAllowableTTLMillis ) throws DNSException {
 
         executor      = _executor;
         nio           = new DNSNIO();
+        ipVersion     = _ipVersion;
         agentParams   = _agentParams;
         activeQueries = new ConcurrentHashMap<>();
         nextQueryID   = new AtomicInteger();
@@ -270,6 +273,16 @@ public class DNSResolver {
     }
 
 
+    public boolean useIPv4() {
+        return (ipVersion == IPVersion.IPv4) || (ipVersion == IPVersion.IPvBoth);
+    }
+
+
+    public boolean useIPv6() {
+        return (ipVersion == IPVersion.IPv6) || (ipVersion == IPVersion.IPvBoth);
+    }
+
+
     public void clear() {
         cache.clear();
     }
@@ -283,6 +296,7 @@ public class DNSResolver {
 
         private       ExecutorService      executor;
         private final List<AgentParams>    agentParams           = new ArrayList<>();
+        private       IPVersion            ipVersion             = IPVersion.IPv4;
         private       int                  maxCacheSize          = 1000;
         private       long                 maxAllowableTTLMillis = 2 * 3600 * 1000;  // two hours...
 
@@ -301,7 +315,7 @@ public class DNSResolver {
 
             // try to construct the new instance (it might fail if there's a problem starting up NIO)...
             try {
-                return outcomeResolver.ok( new DNSResolver( executor, agentParams, maxCacheSize, maxAllowableTTLMillis ) );
+                return outcomeResolver.ok( new DNSResolver( executor, ipVersion, agentParams, maxCacheSize, maxAllowableTTLMillis ) );
             }
             catch( DNSException _e ) {
                 return outcomeResolver.notOk( "Problem creating DNSResolver", _e );
@@ -316,6 +330,16 @@ public class DNSResolver {
          */
         public void setExecutor( final ExecutorService _executor ) {
             executor = _executor;
+        }
+
+
+        /**
+         * Specifies the versions of the Internet Protocol (IP) that the resolver will use.  The default is IP version 4 (IPv4) only.
+         *
+         * @param _ipVersion The {@link IPVersion} that the resolver will use.
+         */
+        public void setIPVersion( final IPVersion _ipVersion ) {
+            ipVersion = _ipVersion;
         }
 
 

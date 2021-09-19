@@ -115,9 +115,9 @@ public abstract class DNSQuery {
      */
     protected void addIPs( final List<InetAddress> _ips, final List<DNSResourceRecord> _rrs ) {
         _rrs.forEach( (rr) -> {
-            if( rr instanceof A )
+            if( resolver.useIPv4() && (rr instanceof A) )
                 _ips.add( ((A)rr).address );
-            else if( rr instanceof AAAA )
+            else if( resolver.useIPv6() && (rr instanceof AAAA) )
                 _ips.add( ((AAAA)rr).address );
         } );
     }

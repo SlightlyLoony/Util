@@ -171,7 +171,7 @@ public class DNSRecursiveQuery extends DNSQuery {
                 return;
         }
         logQuery("No more DNS servers to try" );
-        handler.accept( queryOutcome.notOk( _msg, _cause ) );
+        handler.accept( queryOutcome.notOk( _msg, _cause, new QueryResult( queryMessage, null, queryLog ) ) );
         activeQueries.remove( (short) id );
     }
 
