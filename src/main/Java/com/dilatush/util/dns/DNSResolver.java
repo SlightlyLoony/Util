@@ -9,7 +9,12 @@ package com.dilatush.util.dns;
 // TODO: Get rid of protected everywhere
 // TODO: Move DNS Resolver into its own project
 // TODO: Comments and Javadocs...
-
+// TODO: rework, separate iterative/recursion and server selection strategy
+// TODO:    - DNSResolver.query should be split into two signatures, one for recursive, the other for iterative
+// TODO:    - recursive call should become iterative if no servers are available
+// TODO:    - get rid of DNSResolutionMode?
+// TODO: implement PTR rr
+// TODO: implement SRV rr (https://en.wikipedia.org/wiki/SRV_record)
 // TODO: resolver have DNSRecursiveQuery and DNSIterativeQuery
 // TODO: resolver follow CNAME chains when building answers from cache or iterative query
 

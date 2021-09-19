@@ -19,7 +19,7 @@ public class DNSDomainName {
 
     private static final Outcome.Forge<DNSDomainName> outcome = new Outcome.Forge<>();
 
-    /** This domain name as a Java string.  */
+    /** This domain name as a Java string, in lower-case (for domain name case insensitivity.  */
     public final String         text;
 
     /** The length of the bytes representing this domain name. */
@@ -52,7 +52,7 @@ public class DNSDomainName {
                 sb.append( '.' );
             sb.append( label.text );
         }
-        text = sb.toString();
+        text = sb.toString().toLowerCase();
     }
 
 
@@ -226,8 +226,8 @@ public class DNSDomainName {
 
         Checks.required( _text, "domain name string" );
 
-        // if we got an empty string, append a period so we can get the root domain...
-        String text = (_text.length() == 0) ? "." : _text;
+        // if we got an empty string, append a period, so we can get the root domain; to lower case for case insensitivity...
+        String text = ((_text.length() == 0) ? "." : _text).toLowerCase();
 
         // get an array of label texts...
         String[] labelTexts = text.split( "\\." );

@@ -32,7 +32,7 @@ public class DNSLabel {
      * @param _text The text to create a new label from.
      */
     private DNSLabel( final String _text ) {
-        text = _text;
+        text = _text.toLowerCase();
         length = text.length() + 1;
     }
 
@@ -75,8 +75,8 @@ public class DNSLabel {
         if( (_text.charAt( 0 ) == '-') || (_text.charAt( _text.length() - 1 ) == '-') )
             return outcome.notOk( "Hyphens may not be either the first or last character in a label: " + _text );
 
-        // iterate over all the characters, checking them...
-        for( char c : _text.toCharArray() ) {
+        // to lower case for case insensitivity, then iterate over all the characters, checking them...
+        for( char c : _text.toLowerCase().toCharArray() ) {
             if( !(
                     ((c >= 'a') && (c <= 'z')) ||
                     ((c >= 'A') && (c <= 'Z')) ||
@@ -114,7 +114,7 @@ public class DNSLabel {
 
         byte[] b = new byte[length];
         _buffer.get( b );
-        String text = new String( b, StandardCharsets.US_ASCII );
+        String text = new String( b, StandardCharsets.US_ASCII ).toLowerCase();
 
         return outcome.ok( new DNSLabel( text ) );
     }

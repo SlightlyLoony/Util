@@ -265,11 +265,11 @@ public class DNSCache {
             return new ArrayList<>( 0 );
 
         // get the entries for this FQDN, or null if there are none...
-        DNSCacheEntry[] entries = entryMap.get( _dn );
+        DNSCacheEntry[] entries = entryMap.get( _dn.toLowerCase() );
 
         // if we have no entries for this FQDN, then we just return an empty list...
         if( entries == null ) {
-            LOGGER.log( FINE, "Cache miss for " + _dn );
+            LOGGER.log( FINE, "Cache miss for " + _dn.toLowerCase() );
             return new ArrayList<>( 0 );
         }
 
@@ -293,7 +293,7 @@ public class DNSCache {
         }
 
         // at last, at last!  we're done; return with the results (which could be empty if all the records we had were expired)...
-        LOGGER.log( FINE, "Cache hit for " + _dn + "\n" + DNSUtil.toString( result ) );
+        LOGGER.log( FINE, "Cache hit for " + _dn.toLowerCase() + "\n" + DNSUtil.toString( result ) );
         return result;
     }
 
