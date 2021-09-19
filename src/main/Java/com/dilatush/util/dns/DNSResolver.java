@@ -120,8 +120,9 @@ public class DNSResolver {
 
         List<AgentParams> agents = getAgents( _serverSelection );
 
-        DNSQuery query = new DNSRecursiveQuery( this, cache, nio, executor, activeQueries, _question, nextQueryID.getAndIncrement(), agents, _handler );
+        DNSQuery query = new DNSRecursiveQuery( this, cache, nio, executor, activeQueries, _question, getNextID(), agents, _handler );
 
+        // TODO: call handler on failure...
         query.initiate( _initialTransport );
     }
 
@@ -136,9 +137,15 @@ public class DNSResolver {
         if( resolveFromCache( _question, _handler ) )
             return;
 
-        DNSQuery query = new DNSIterativeQuery( this, cache, nio, executor, activeQueries, _question, nextQueryID.getAndIncrement(), _handler );
+        DNSQuery query = new DNSIterativeQuery( this, cache, nio, executor, activeQueries, _question, getNextID(), _handler );
 
+        // TODO: call handler on failure...
         query.initiate( _initialTransport );
+    }
+
+
+    public int getNextID() {
+        return nextQueryID.getAndIncrement();
     }
 
 
