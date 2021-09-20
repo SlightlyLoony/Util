@@ -1,7 +1,7 @@
 package com.dilatush.util.dns;
 
-// TODO: implement iterative resolution...
 // TODO: if not enough servers, handle timeouts by retries
+// TODO: iterative must resolve CNAMEs, like recursive servers do
 // TODO: implement logic to handle:
 // TODO:   - normal UDP on truncation TCP iterative
 // TODO:   - TCP-only iterative

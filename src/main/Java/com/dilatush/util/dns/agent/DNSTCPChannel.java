@@ -141,7 +141,7 @@ public class DNSTCPChannel extends DNSChannel {
                     message.flip();
                     LOGGER.finest( "Got message: " + message.limit() );
                     ByteBuffer msg = message;
-                    executor.submit( () -> agent.handleReceivedData( msg, DNSTransport.TCP ) );
+                    executor.submit( new Wrapper( () -> agent.handleReceivedData( msg, DNSTransport.TCP ) ) );
                     message = null;
                     prefix.clear();
                     close();

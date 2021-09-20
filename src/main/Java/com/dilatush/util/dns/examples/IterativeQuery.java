@@ -2,14 +2,18 @@ package com.dilatush.util.dns.examples;
 
 import com.dilatush.util.Outcome;
 import com.dilatush.util.dns.DNSResolver;
-import com.dilatush.util.dns.agent.DNSQuery;
 import com.dilatush.util.dns.message.DNSDomainName;
 import com.dilatush.util.dns.message.DNSQuestion;
 import com.dilatush.util.dns.message.DNSRRType;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
 import java.util.concurrent.Semaphore;
 
 import static com.dilatush.util.General.breakpoint;
+import static com.dilatush.util.dns.agent.DNSQuery.QueryResult;
 import static com.dilatush.util.dns.agent.DNSTransport.UDP;
 
 /**
@@ -19,6 +23,7 @@ import static com.dilatush.util.dns.agent.DNSTransport.UDP;
 public class IterativeQuery {
 
     private static Semaphore waiter = new Semaphore( 0 );
+    private static List<QueryResult> results = new ArrayList<>();
 
     public static void main( final String[] _args ) throws InterruptedException {
 
@@ -44,11 +49,23 @@ public class IterativeQuery {
         waiter.acquire();
         System.out.println( "Second time: " + (System.currentTimeMillis() - startTime) );
 
+        String[] domains = new String[] { "www.cnn.com", "www.hp.com", "www.servicenow.com", "www.paradiseweather.info",
+                "news.google.com", "www.qq.com", "www.burger.com", "www.hamburger.com" };
+        Iterator<String> it = Arrays.stream( domains ).iterator();
+        while( it.hasNext() ) {
+            dn = DNSDomainName.fromString( it.next() ).info();
+            question = new DNSQuestion( dn, DNSRRType.A );
+            resolver.query( question, IterativeQuery::handler, UDP );
+        }
+        waiter.acquire( domains.length );
+
         breakpoint();
     }
 
-    private static void handler( final Outcome<DNSQuery.QueryResult> _outcome ) {
-
+    private static void handler( final Outcome<QueryResult> _outcome ) {
+        if( _outcome.info() == null )
+            System.out.println( _outcome.msg() );
+        results.add( _outcome.info() );
         waiter.release();
         breakpoint();
     }

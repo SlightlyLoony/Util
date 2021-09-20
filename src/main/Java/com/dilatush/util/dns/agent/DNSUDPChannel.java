@@ -103,7 +103,7 @@ public class DNSUDPChannel extends DNSChannel {
                 return;
 
             readData.flip();
-            executor.submit( () -> agent.handleReceivedData( readData, DNSTransport.UDP ) );
+            executor.submit( new Wrapper( () -> agent.handleReceivedData( readData, DNSTransport.UDP ) ) );
         }
 
         catch( IOException _e ) {

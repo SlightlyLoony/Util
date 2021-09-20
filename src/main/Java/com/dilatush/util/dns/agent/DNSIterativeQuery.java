@@ -292,12 +292,6 @@ public class DNSIterativeQuery extends DNSQuery {
             return;
         }
 
-//        // if we have at least one resolved name servers, then we can just start the next query going...
-//        if( !resolvedNameServers.isEmpty() ) {
-//            startNextQuery();
-//            return;
-//        }
-
         // we DO have unresolved name servers, so blast out sub-queries to resolve them
 
         // send out the sub-queries...
@@ -364,7 +358,9 @@ public class DNSIterativeQuery extends DNSQuery {
     private void handleSubQuery( Outcome<QueryResult> _outcome ) {
 
         LOGGER.log( FINER, "Entered handleSubQuery, " + (_outcome.ok() ? "ok" : "not ok") );
-        LOGGER.log( FINEST, "Query " + _outcome.info().query().toString() + "\nResponse: " + _outcome.info().response().toString() );
+        String logMsg = "Query " + _outcome.info().query().toString()
+                + ((_outcome.info().response() != null) ? "\nResponse: " + _outcome.info().response().toString() : "");
+        LOGGER.log( FINEST, logMsg );
 
         synchronized( this ) {
 

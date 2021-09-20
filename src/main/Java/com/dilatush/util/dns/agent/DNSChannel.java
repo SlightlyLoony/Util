@@ -1,6 +1,7 @@
 package com.dilatush.util.dns.agent;
 
 import com.dilatush.util.ExecutorService;
+import com.dilatush.util.General;
 import com.dilatush.util.Outcome;
 import com.dilatush.util.dns.message.DNSMessage;
 
@@ -10,10 +11,14 @@ import java.nio.channels.ClosedChannelException;
 import java.nio.channels.Selector;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import static com.dilatush.util.General.isNull;
 
 public abstract class DNSChannel {
+
+    private static final Logger LOGGER = General.getLogger();
 
     protected static final Outcome.Forge<?> outcome = new Outcome.Forge<>();
 
@@ -45,4 +50,29 @@ public abstract class DNSChannel {
     protected abstract void write();
     protected abstract void read();
     protected abstract void close();
+
+
+    /**
+     * Instances of this class wrap other {@link Runnable} instances to provide exception catching and logging.
+     */
+    protected static class Wrapper implements Runnable {
+
+        private final Runnable task;
+
+        protected Wrapper( final Runnable _task ) {
+            task = _task;
+        }
+
+
+        @Override
+        public void run() {
+
+            try {
+                task.run();
+            }
+            catch( final Exception _e ) {
+                LOGGER.log( Level.SEVERE, "Exception thrown in ExecutorService task", _e );
+            }
+        }
+    }
 }
