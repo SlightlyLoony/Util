@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
 
 import static com.dilatush.util.dns.agent.DNSTransport.TCP;
 import static com.dilatush.util.dns.agent.DNSTransport.UDP;
-import static java.util.logging.Level.FINER;
+import static java.util.logging.Level.*;
 
 /**
  * Instances of this class contain the elements and state of a DNS query, and provide methods that implement the resolution of that query.
@@ -40,6 +40,8 @@ public class DNSIterativeQuery extends DNSQuery {
 
     private final List<InetAddress> nextIPs;
     private final AtomicInteger     subQueries;
+
+    private       DNSTransport      initialTransport;
 
 
 
@@ -60,8 +62,9 @@ public class DNSIterativeQuery extends DNSQuery {
         Checks.required( _initialTransport, "initialTransport");
 
         logQuery("Initial query" );
+        LOGGER.finer( "Initiating new iterative query - ID: " + id + ", " + question.toString() );
 
-        transport = _initialTransport;
+        initialTransport = _initialTransport;
 
         // we need to figure out the starting nameservers, and make agents for them...
         // we know the actual question wasn't cached, as we wouldn't have queried at all if it was - so we start looking with its parent domain,
@@ -122,10 +125,12 @@ public class DNSIterativeQuery extends DNSQuery {
 
     protected Outcome<QueryResult> query() {
 
+        transport = initialTransport;
+
         // figure out what agent we're going to use...
         agent = new DNSServerAgent( resolver, this, nio, executor, agents.remove( 0 ) );
 
-        LOGGER.finer( "Iterative query: " + id + " ID, " + question.toString() + ", using " + agent.name );
+        LOGGER.finer( "Iterative query - ID: " + id + ", " + question.toString() + ", using " + agent.name );
 
         DNSMessage.Builder builder = new DNSMessage.Builder();
         builder.setOpCode( DNSOpCode.QUERY );
@@ -149,11 +154,7 @@ public class DNSIterativeQuery extends DNSQuery {
     protected void handleResponse( final DNSMessage _responseMsg, final DNSTransport _transport ) {
 
         logQuery("Received response via " + _transport );
-        LOGGER.finer( "Entered handleResponse: "
-                + _responseMsg.id + " ID, "
-                + _responseMsg.answers.size() + " answers, "
-                + _responseMsg.authorities.size() + " authorities, "
-                + _responseMsg.additionalRecords.size() + " additional records" );
+        LOGGER.finer( "Entered handleResponse (" + _transport + "): " + _responseMsg.toString() );
 
         // no matter what happens next, we need to shut down the agent...
         agent.close();
@@ -162,7 +163,6 @@ public class DNSIterativeQuery extends DNSQuery {
             String msg = "Received message on " + _transport + ", expected it on " + transport;
             LOGGER.log( Level.WARNING, msg );
             logQuery( msg );
-            agent.close();
             handler.accept( queryOutcome.notOk( msg ) );
             activeQueries.remove( (short) id );
             return;
@@ -173,8 +173,9 @@ public class DNSIterativeQuery extends DNSQuery {
         // if our UDP response was truncated, retry it with TCP...
         if( (transport == UDP) && _responseMsg.truncated ) {
             logQuery("UDP response was truncated; retrying with TCP" );
+            LOGGER.finest( "UDP response was truncated, retrying with TCP" );
             transport = TCP;
-            Outcome<?> sendOutcome = agent.sendQuery( queryMessage, TCP );
+            Outcome<?> sendOutcome = agent.sendQuery( queryMessage, transport );
             if( sendOutcome.notOk() ) {
                 handler.accept( queryOutcome.notOk( "Could not send query via TCP: " + sendOutcome.msg(), sendOutcome.cause() ) );
                 activeQueries.remove( (short) id );
@@ -225,6 +226,8 @@ public class DNSIterativeQuery extends DNSQuery {
 
     private void handleOK() {
 
+        LOGGER.finest( "handleOK() - ID: " + id );
+
         logQuery("Response was ok: "
                 + responseMessage.answers.size() + " answers, "
                 + responseMessage.authorities.size() + " authorities, "
@@ -237,6 +240,7 @@ public class DNSIterativeQuery extends DNSQuery {
 
         // if we have some answers, then we're done...
         if( !responseMessage.answers.isEmpty() ) {
+            LOGGER.finest( "Got answers: " + responseMessage.answers.size() );
             handler.accept( queryOutcome.ok( new QueryResult( queryMessage, responseMessage, queryLog )) );
             activeQueries.remove( (short) id );
             return;
@@ -257,9 +261,14 @@ public class DNSIterativeQuery extends DNSQuery {
                 allNameServers.add( ((NS)rr).nameServer.text );
         });
 
-        // now check any IPs we got in additional records, building a list of IPs for name servers, and a set of resolved name servers...
+        // build a list of everything we know about the name servers we got in authorities...
+        List<DNSResourceRecord> nsInfo = new ArrayList<>( responseMessage.additionalRecords );
+        allNameServers.forEach( (ns) -> nsInfo.addAll( cache.get( ns ) ) );
+
+        // now check any IPs we got from the cache or in additional records, building a list of IPs for name servers, and a set of resolved name servers...
         Set<String> resolvedNameServers = new HashSet<>();
-        responseMessage.additionalRecords.forEach( (rr) -> {
+        nextIPs.clear();
+        nsInfo.forEach( (rr) -> {
             if( (rr instanceof A) || (rr instanceof AAAA) ) {
                 if( allNameServers.contains( rr.name.text ) ) {
                     if( resolver.useIPv4() && (rr instanceof A))
@@ -275,17 +284,21 @@ public class DNSIterativeQuery extends DNSQuery {
         Set<String> unresolvedNameServers = new HashSet<>( allNameServers );
         unresolvedNameServers.removeAll( resolvedNameServers );
 
+        LOGGER.finest( "Name servers (all, resolved, unresolved): " + allNameServers.size() + ", " + resolvedNameServers.size() + ", " + unresolvedNameServers.size() );
+
         // if we don't have any unresolved name servers, then we can just start the next query going...
         if( unresolvedNameServers.isEmpty() ) {
             startNextQuery();
             return;
         }
 
-        // we DO have unresolved name servers, so blast out sub-queries to resolve them
+//        // if we have at least one resolved name servers, then we can just start the next query going...
+//        if( !resolvedNameServers.isEmpty() ) {
+//            startNextQuery();
+//            return;
+//        }
 
-        // set up the count of sub-queries, so we can count down as we get responses, and know that we're done...
-        // there may be two sub-queries for each unresolved name server; one for A records, the other for AAAA records...
-        subQueries.set( unresolvedNameServers.size() * 2 );
+        // we DO have unresolved name servers, so blast out sub-queries to resolve them
 
         // send out the sub-queries...
         unresolvedNameServers.forEach( (unresolvedNameServer) -> {
@@ -295,6 +308,8 @@ public class DNSIterativeQuery extends DNSQuery {
 
             // fire off the query for the A record...
             if( resolver.useIPv4() ) {
+                subQueries.incrementAndGet();
+                LOGGER.finest( "Firing " + nsDomainName.text + " A record sub-query " + subQueries.get() + " from query " + id );
                 DNSQuestion aQuestion = new DNSQuestion( nsDomainName, DNSRRType.A );
                 DNSIterativeQuery iterativeQuery = new DNSIterativeQuery( resolver, cache, nio, executor, activeQueries, aQuestion, resolver.getNextID(), this::handleSubQuery );
                 iterativeQuery.initiate( UDP );
@@ -302,6 +317,8 @@ public class DNSIterativeQuery extends DNSQuery {
 
             // fire off the query for the AAAA record...
             if( resolver.useIPv6() ) {
+                subQueries.incrementAndGet();
+                LOGGER.finest( "Firing " + nsDomainName.text + " AAAA record sub-query " + subQueries.get() + " from query " + id );
                 DNSQuestion aQuestion = new DNSQuestion( nsDomainName, DNSRRType.AAAA );
                 DNSIterativeQuery iterativeQuery = new DNSIterativeQuery( resolver, cache, nio, executor, activeQueries, aQuestion, resolver.getNextID(), this::handleSubQuery );
                 iterativeQuery.initiate( UDP );
@@ -326,7 +343,10 @@ public class DNSIterativeQuery extends DNSQuery {
         // figure out what agent we're going to use...
         agent = new DNSServerAgent( resolver, this, nio, executor, agents.remove( 0 ) );
 
+        LOGGER.finer( "Subsequent iterative query - ID: " + id + ", " + question.toString() + ", using " + agent.name );
+
         // send the next level query...
+        transport = initialTransport;
         Outcome<?> sendOutcome = agent.sendQuery( queryMessage, transport );
         if( sendOutcome.notOk() ) {
             handler.accept( queryOutcome.notOk( "Could not send query: " + sendOutcome.msg(), sendOutcome.cause() ) );
@@ -343,7 +363,8 @@ public class DNSIterativeQuery extends DNSQuery {
      */
     private void handleSubQuery( Outcome<QueryResult> _outcome ) {
 
-        LOGGER.log( FINER, "Entered handleSubQuery" );
+        LOGGER.log( FINER, "Entered handleSubQuery, " + (_outcome.ok() ? "ok" : "not ok") );
+        LOGGER.log( FINEST, "Query " + _outcome.info().query().toString() + "\nResponse: " + _outcome.info().response().toString() );
 
         synchronized( this ) {
 
@@ -359,7 +380,9 @@ public class DNSIterativeQuery extends DNSQuery {
         }
 
         // decrement our counter, and if we're done, try sending the next query...
-        if( subQueries.decrementAndGet() == 0 )
+        int queryCount = subQueries.decrementAndGet();
+        LOGGER.fine( "Sub-query count: " + queryCount );
+        if( queryCount == 0 )
             startNextQuery();
     }
 

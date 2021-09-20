@@ -35,9 +35,14 @@ public class IterativeQuery {
 
         DNSDomainName dn = DNSDomainName.fromString( "www.paradiseweather.info" ).info();
         DNSQuestion question = new DNSQuestion( dn, DNSRRType.A );
+        long startTime = System.currentTimeMillis();
         resolver.query( question, IterativeQuery::handler, UDP );
-
         waiter.acquire();
+        System.out.println( "First time: " + (System.currentTimeMillis() - startTime) );
+        startTime = System.currentTimeMillis();
+        resolver.query( question, IterativeQuery::handler, UDP );
+        waiter.acquire();
+        System.out.println( "Second time: " + (System.currentTimeMillis() - startTime) );
 
         breakpoint();
     }

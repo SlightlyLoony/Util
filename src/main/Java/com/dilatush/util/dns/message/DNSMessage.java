@@ -314,6 +314,49 @@ public class DNSMessage {
     }
 
 
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append( "DNSMessage - ID: " );
+        sb.append( id );
+        if( isResponse ) sb.append( ", response" ); else sb.append( ", query" );
+        sb.append( ", OpCode: " );
+        sb.append( opCode );
+        if( authoritativeAnswer ) sb.append( ", authoritative" ); else sb.append( ", not authoritative" );
+        if( truncated ) sb.append( ", truncated" ); else sb.append( ", not truncated" );
+        if( recurse ) sb.append( ", recurse" ); else sb.append( ", no recurse" );
+        if( canRecurse ) sb.append( ", can recurse" ); else sb.append( ", can not recurse" );
+        if( authenticated ) sb.append( ", authenticated" ); else sb.append( ", not authenticated" );
+        if( checkingDisabled ) sb.append( ", checking disabled" ); else sb.append( ", checking enabled" );
+        sb.append( ", response code: " );
+        sb.append( responseCode );
+        sb.append( "\nQuestion: " );
+        sb.append( questions.get( 0 ).toString() );
+        if( !answers.isEmpty() ) {
+            sb.append( "\nAnswers:" );
+            answers.forEach( (rr) -> {
+                sb.append( "\n  " );
+                sb.append( rr.toString() );
+            } );
+        }
+        if( !authorities.isEmpty() ) {
+            sb.append( "\nAuthorities:" );
+            authorities.forEach( (rr) -> {
+                sb.append( "\n  " );
+                sb.append( rr.toString() );
+            } );
+        }
+        if( !additionalRecords.isEmpty() ) {
+            sb.append( "\nAdditional Records:" );
+            additionalRecords.forEach( (rr) -> {
+                sb.append( "\n  " );
+                sb.append( rr.toString() );
+            } );
+        }
+        return sb.toString();
+    }
+
+
     /**
      * Instances of this class are used to build instances of {@link DNSMessage}.  Instances of this class are <i>not</i> immutable and are
      * <i>not</i> threadsafe.

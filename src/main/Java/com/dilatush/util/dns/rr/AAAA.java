@@ -150,7 +150,7 @@ public class AAAA extends DNSResourceRecord {
     @Override
     protected boolean sameResourceData( final DNSResourceRecord _rr ) {
 
-        return Arrays.equals( address.getAddress(), ((A)_rr).address.getAddress() );
+        return Arrays.equals( address.getAddress(), ((AAAA)_rr).address.getAddress() );
     }
 
 
