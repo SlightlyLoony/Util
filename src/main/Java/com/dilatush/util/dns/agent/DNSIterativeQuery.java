@@ -8,23 +8,19 @@ import com.dilatush.util.dns.DNSResolver;
 import com.dilatush.util.dns.DNSResolver.AgentParams;
 import com.dilatush.util.dns.cache.DNSCache;
 import com.dilatush.util.dns.message.*;
-import com.dilatush.util.dns.rr.A;
-import com.dilatush.util.dns.rr.AAAA;
-import com.dilatush.util.dns.rr.DNSResourceRecord;
-import com.dilatush.util.dns.rr.NS;
+import com.dilatush.util.dns.rr.*;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
-import static com.dilatush.util.dns.agent.DNSTransport.TCP;
 import static com.dilatush.util.dns.agent.DNSTransport.UDP;
-import static java.util.logging.Level.*;
+import static java.util.logging.Level.FINER;
+import static java.util.logging.Level.FINEST;
 
 /**
  * Instances of this class contain the elements and state of a DNS query, and provide methods that implement the resolution of that query.
@@ -38,8 +34,9 @@ public class DNSIterativeQuery extends DNSQuery {
     private static final Outcome.Forge<QueryResult> queryOutcome = new Outcome.Forge<>();
 
 
-    private final List<InetAddress> nextIPs;
-    private final AtomicInteger     subQueries;
+    private final List<InetAddress>       nextIPs;
+    private final AtomicInteger           subQueries;
+    private final List<DNSResourceRecord> answers;
 
     private       DNSTransport      initialTransport;
 
@@ -52,12 +49,13 @@ public class DNSIterativeQuery extends DNSQuery {
 
         nextIPs    = new ArrayList<>();
         subQueries = new AtomicInteger();
+        answers    = new ArrayList<>();
 
         queryLog.log("New iterative query " + question );
     }
 
 
-    public Outcome<QueryResult> initiate( final DNSTransport _initialTransport ) {
+    public Outcome<?> initiate( final DNSTransport _initialTransport ) {
 
         Checks.required( _initialTransport, "initialTransport");
 
@@ -131,7 +129,7 @@ public class DNSIterativeQuery extends DNSQuery {
     }
 
 
-    protected Outcome<QueryResult> query() {
+    protected Outcome<?> query() {
 
         transport = initialTransport;
 
@@ -148,7 +146,7 @@ public class DNSIterativeQuery extends DNSQuery {
 
         queryMessage = builder.getMessage();
 
-        queryLog.log("Sending iterative query for " + question.toString() + " to " + agent.name + " via " + transport );
+        queryLog.log("Sending iterative query for " + question + " to " + agent.name + " via " + transport );
 
         Outcome<?> sendOutcome = agent.sendQuery( queryMessage, transport );
 
@@ -159,99 +157,53 @@ public class DNSIterativeQuery extends DNSQuery {
     }
 
 
-    protected void handleResponse( final DNSMessage _responseMsg, final DNSTransport _transport ) {
+    protected void handleOK() {
 
-        queryLog.log("Received response from " + agent.name + " via " + _transport );
-        LOGGER.finer( "Entered handleResponse (" + _transport + "): " + _responseMsg.toString() );
+        basicOK();
 
-        // no matter what happens next, we need to shut down the agent...
-        agent.close();
+        // if we have some answers, then let's see if we're done, or if we're resolving a CNAME chain...
+        if( !responseMessage.answers.isEmpty() ) {
 
-        if( _transport != transport ) {
-            String msg = "Received message on " + _transport + ", expected it on " + transport;
-            LOGGER.log( Level.WARNING, msg );
-            queryLog.log( msg );
-            handler.accept( queryOutcome.notOk( msg, null, new QueryResult( queryMessage, _responseMsg, queryLog ) ) );
-            activeQueries.remove( (short) id );
-            return;
-        }
+            LOGGER.finest( "Got some answers: " + responseMessage.answers.size() );
 
-        responseMessage = _responseMsg;
+            // There are several possible scenarios here, which must be checked in the order given:
+            // 1. There are one or more answers, and they're all the desired type (or the desired type is ANY).  In this case, we accumulate all the answers and we're done.
+            // 2. There are two or more answers, consisting of one or more CNAME records followed by one or more answers of the desired type.  In this case, we accumulate
+            //    all the answers, and we're done.
+            // 3. There are one or more answers, all of which are CNAME records.  In this case, the last CNAME is a referral, we accumulate all the answers, check for a CNAME
+            //    loop (which is an error, and then fire off a sub-query to resolve the referral.  The results of the sub-query are evaluated exactly as the results of the
+            //    first query.
+            // 4. There are one or more answers which are neither CNAME records nor the desired type.  This is an error.
 
-        // if our UDP response was truncated, retry it with TCP...
-        if( (transport == UDP) && _responseMsg.truncated ) {
-            queryLog.log("UDP response was truncated; retrying with TCP" );
-            LOGGER.finest( "UDP response was truncated, retrying with TCP" );
-            transport = TCP;
-            Outcome<?> sendOutcome = agent.sendQuery( queryMessage, transport );
-            if( sendOutcome.notOk() ) {
-                handler.accept( queryOutcome.notOk( "Could not send query via TCP: " + sendOutcome.msg(), sendOutcome.cause(),
-                        new QueryResult( queryMessage, responseMessage, queryLog ) ) );
+            // If the desired type is ANY, then this response is our answer.
+            if( question.qtype == DNSRRType.ANY ) {
+                handler.accept( queryOutcome.ok( new QueryResult( queryMessage, responseMessage, queryLog )) );
                 activeQueries.remove( (short) id );
-            }
-            return;
-        }
-
-        // handle appropriately according to the response code...
-        switch( responseMessage.responseCode ) {
-
-            // the question was answered; the response is valid...
-            case OK -> {
-                handleOK();
                 return;
             }
 
-            case REFUSED -> {
-                if( tryOtherServers( "REFUSED" ) )
-                    return;
-            }
-
-            case NAME_ERROR -> {
-                if( tryOtherServers( "NAME ERROR" ) )
-                    return;
-            }
-
-            // the question could not be interpreted by the server...
-            case FORMAT_ERROR -> {
-                if( tryOtherServers( "FORMAT ERROR" ) )
-                    return;
-            }
-
-            case SERVER_FAILURE -> {
-                if( tryOtherServers( "SERVER FAILURE" ) )
-                    return;
-            }
-
-            case NOT_IMPLEMENTED -> {
-                if( tryOtherServers( "NOT IMPLEMENTED" ) )
-                    return;
-            }
-        }
-
-        // if we get here, we need to show that this query is inactive...
-        activeQueries.remove( (short) id );
-    }
+            // do a little analysis, so we can figure out what to do...
+            final int[] cnameCount   = {0};
+            final int[] desiredCount = {0};
+            final int[] wrongCount   = {0};
+            final boolean[] bogus = {false};
+            responseMessage.answers.forEach( (rr) -> {
+                if( rr instanceof CNAME ) {
+                    cnameCount[ 0 ]++;
+                    if( desiredCount[0] > 0 ) {
+                        bogus[0] = true;
+                    }
+                }
+                else if( rr.type == question.qtype ) {
+                    desiredCount[0]++;
+                }
+                else {
+                    wrongCount[0]++;
+                    bogus[0] = true;
+                }
+            } );
 
 
-    private void handleOK() {
-
-        String logMsg = "Response was ok: "
-                + responseMessage.answers.size() + " answers, "
-                + responseMessage.authorities.size() + " authorities, "
-                + responseMessage.additionalRecords.size() + " additional records";
-        LOGGER.finest( logMsg );
-        queryLog.log( logMsg );
-
-        // add our results to the cache...
-        cache.add( responseMessage.answers );
-        cache.add( responseMessage.authorities );
-        cache.add( responseMessage.additionalRecords );
-
-        // if we have some answers, then we're done...
-        if( !responseMessage.answers.isEmpty() ) {
-            LOGGER.finest( "Got answers: " + responseMessage.answers.size() );
-            handler.accept( queryOutcome.ok( new QueryResult( queryMessage, responseMessage, queryLog )) );
-            activeQueries.remove( (short) id );
             return;
         }
 
@@ -269,7 +221,7 @@ public class DNSIterativeQuery extends DNSQuery {
         responseMessage.authorities.forEach( (rr) -> {
             if( rr instanceof NS ) {
                 allNameServers.add( ((NS)rr).nameServer.text );
-                nsDomain[0] = ((NS)rr).name.text;
+                nsDomain[0] = rr.name.text;
             }
         });
 
@@ -394,10 +346,9 @@ public class DNSIterativeQuery extends DNSQuery {
         synchronized( this ) {
 
             // if we got a good result, then add any IPs we got to the next IPs list...
-            if( _outcome.ok() ) {
-                DNSMessage response = _outcome.info().response();
+            DNSMessage response = _outcome.info().response();
+            if( _outcome.ok() && (response != null) )
                 addIPs( nextIPs, response.answers );
-            }
 
             // whatever happened, log the sub-query...
             queryLog.log( "Sub-query" );

@@ -8,6 +8,7 @@ import com.dilatush.util.dns.DNSResolver.AgentParams;
 import com.dilatush.util.dns.cache.DNSCache;
 import com.dilatush.util.dns.message.DNSMessage;
 import com.dilatush.util.dns.message.DNSQuestion;
+import com.dilatush.util.dns.message.DNSResponseCode;
 import com.dilatush.util.dns.rr.A;
 import com.dilatush.util.dns.rr.AAAA;
 import com.dilatush.util.dns.rr.DNSResourceRecord;
@@ -17,9 +18,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static com.dilatush.util.General.isNull;
+import static com.dilatush.util.dns.agent.DNSTransport.TCP;
+import static com.dilatush.util.dns.agent.DNSTransport.UDP;
 
 /**
  * Abstract base class for query implementations.
@@ -29,6 +33,7 @@ public abstract class DNSQuery {
     private static final Logger LOGGER                           = General.getLogger();
 
     protected static final Outcome.Forge<QueryResult> queryOutcome = new Outcome.Forge<>();
+    protected static final Outcome.Forge<?>           outcome      = new Outcome.Forge<>();
 
 
     protected final DNSResolver                     resolver;
@@ -100,9 +105,9 @@ public abstract class DNSQuery {
      * query is trying to resolve.
      *
      * @param _initialTransport The initial transport (UDP or TCP) to use when resolving this query.
-     * @return The {@link Outcome Outcome&lt;QueryResult&gt;} of this operation.
+     * @return The {@link Outcome Outcome&lt;?&gt;} of this operation.
      */
-    public abstract Outcome<QueryResult> initiate( final DNSTransport _initialTransport );
+    public abstract Outcome<?> initiate( final DNSTransport _initialTransport );
 
 
     /**
@@ -121,29 +126,97 @@ public abstract class DNSQuery {
     }
 
 
-    protected abstract Outcome<QueryResult> query();
+    protected abstract Outcome<?> query();
 
+    protected abstract void handleOK();
 
-    protected abstract void handleResponse( final DNSMessage _responseMsg, final DNSTransport _transport );
+    protected void handleResponse( final DNSMessage _responseMsg, final DNSTransport _transport ) {
 
-    protected boolean tryOtherServers( final String _errorName ) {
-        queryLog.log("Response message was not OK: " + _errorName );
-        while( !agents.isEmpty() ) {
-            Outcome<QueryResult> qo = query();
-            if( qo.ok() )
-                return true;
+        queryLog.log("Received response via " + _transport );
+        LOGGER.finer( "Received response via " + _transport + ": " + _responseMsg.toString() );
+
+        // no matter what happens next, we need to shut down the agent...
+        agent.close();
+
+        responseMessage = _responseMsg;
+
+        if( _transport != transport ) {
+            String msg = "Received message on " + _transport + ", expected it on " + transport;
+            LOGGER.log( Level.WARNING, msg );
+            queryLog.log( msg );
+            agent.close();
+            handler.accept( queryOutcome.notOk( msg, null, new QueryResult( queryMessage, _responseMsg, queryLog ) ) );
+            activeQueries.remove( (short) id );
+            return;
         }
+
+        // if our UDP response was truncated, retry it with TCP...
+        if( (transport == UDP) && _responseMsg.truncated ) {
+            queryLog.log("UDP response was truncated; retrying with TCP" );
+            transport = TCP;
+            Outcome<?> sendOutcome = agent.sendQuery( queryMessage, TCP );
+            if( sendOutcome.notOk() ) {
+                handler.accept( queryOutcome.notOk( "Could not send query via TCP: " + sendOutcome.msg(), sendOutcome.cause(),
+                        new QueryResult( queryMessage, responseMessage, queryLog )) );
+                activeQueries.remove( (short) id );
+            }
+            return;
+        }
+
+        handleResponseCode( responseMessage.responseCode );
+    }
+
+
+    protected void basicOK() {
+
+        String logMsg = "Response was ok: "
+                + responseMessage.answers.size() + " answers, "
+                + responseMessage.authorities.size() + " authorities, "
+                + responseMessage.additionalRecords.size() + " additional records";
+        LOGGER.finest( logMsg );
+        queryLog.log( logMsg );
+
+        // add our results to the cache...
+        cache.add( responseMessage.answers );
+        cache.add( responseMessage.authorities );
+        cache.add( responseMessage.additionalRecords );
+    }
+
+
+    /**
+     * Analyze the response code and take the appropriate action.  If the response code was ok, call the ok handler.  Otherwise, if there is another
+     */
+    protected void handleResponseCode( final DNSResponseCode _responseCode ) {
+
+        // if we got a valid response, call the subclass' handler for that...
+        if( _responseCode == DNSResponseCode.OK ) {
+            handleOK();
+            return;
+        }
+
+        // otherwise, if we have more servers to try, fire off queries until one of them works or we run out of servers to try...
+        else while( !agents.isEmpty() ) {
+
+            queryLog.log( "Response was " + _responseCode + "; trying another DNS server" );
+            Outcome<?> qo = query();
+            if( qo.ok() )
+                return;
+
+            queryLog.log( "Problem sending query to " + agent.name + ": " + qo.msg() );
+        }
+
+        // if we get here, we ran out of servers to try, so report a sad outcome and leave...
         queryLog.log("No more DNS servers to try" );
-        handler.accept( queryOutcome.notOk( "No more DNS servers to try; last one responded with " + _errorName, null,
+        handler.accept( queryOutcome.notOk( "No more DNS servers to try; last one responded with " + _responseCode, null,
                 new QueryResult( queryMessage, null, queryLog ) ) );
-        return false;
+        activeQueries.remove( (short) id );
     }
 
 
     protected void handleResponseProblem( final String _msg, final Throwable _cause ) {
         queryLog.log("Problem with response: " + _msg + ((_cause != null) ? " - " + _cause.getMessage() : "") );
         while( !agents.isEmpty() ) {
-            Outcome<QueryResult> qo = query();
+            Outcome<?> qo = query();
             if( qo.ok() )
                 return;
         }

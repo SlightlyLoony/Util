@@ -503,5 +503,11 @@ public class DNSCache {
             expiration     = System.currentTimeMillis() + (_resourceRecord.ttl * 1000);
             ttlKey         = _ttlKey;
         }
+
+
+        @Override
+        public String toString() {
+            return resourceRecord.toString();
+        }
     }
 }

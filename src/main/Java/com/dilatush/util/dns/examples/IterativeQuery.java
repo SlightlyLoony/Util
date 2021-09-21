@@ -1,5 +1,6 @@
 package com.dilatush.util.dns.examples;
 
+import com.dilatush.util.ExecutorService;
 import com.dilatush.util.Outcome;
 import com.dilatush.util.dns.DNSResolver;
 import com.dilatush.util.dns.message.DNSDomainName;
@@ -31,6 +32,7 @@ public class IterativeQuery {
 
         // create a DNS resolver that doesn't know about any other resolvers...
         DNSResolver.Builder builder = new DNSResolver.Builder();
+        builder.setExecutor( new ExecutorService( 10, 100 ) );
         Outcome<DNSResolver> ro = builder.getDNSResolver();
         if( ro.notOk() ) {
             System.out.println( "Could not build resolver: " + ro.msg() );

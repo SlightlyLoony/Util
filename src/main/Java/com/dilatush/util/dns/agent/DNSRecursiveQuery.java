@@ -14,11 +14,7 @@ import com.dilatush.util.dns.message.DNSQuestion;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
-import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import static com.dilatush.util.dns.agent.DNSTransport.TCP;
-import static com.dilatush.util.dns.agent.DNSTransport.UDP;
 
 /**
  * Instances of this class contain the elements and state of a DNS query, and provide methods that implement the resolution of that query.
@@ -39,11 +35,12 @@ public class DNSRecursiveQuery extends DNSQuery {
     }
 
 
-    public Outcome<QueryResult> initiate( final DNSTransport _initialTransport ) {
+    public Outcome<?> initiate( final DNSTransport _initialTransport ) {
 
         Checks.required( _initialTransport, "initialTransport");
 
         queryLog.log("Initial query" );
+        LOGGER.finer( "Initiating new recursive query - ID: " + id + ", " + question.toString() );
 
         transport = _initialTransport;
 
@@ -57,10 +54,11 @@ public class DNSRecursiveQuery extends DNSQuery {
     }
 
 
-    protected Outcome<QueryResult> query() {
+    protected Outcome<?> query() {
 
         // figure out what agent we're going to use...
         agent = new DNSServerAgent( resolver, this, nio, executor, agents.remove( 0 ) );
+        LOGGER.finer( "Recursive query - ID: " + id + ", " + question.toString() + ", using " + agent.name );
 
         DNSMessage.Builder builder = new DNSMessage.Builder();
         builder.setOpCode( DNSOpCode.QUERY );
@@ -77,90 +75,16 @@ public class DNSRecursiveQuery extends DNSQuery {
         if( sendOutcome.notOk() )
             return queryOutcome.notOk( sendOutcome.msg(), sendOutcome.cause() );
 
-        return queryOutcome.ok( new QueryResult( queryMessage, null, queryLog ) );
+        return queryOutcome.ok();
     }
 
 
-    protected void handleResponse( final DNSMessage _responseMsg, final DNSTransport _transport ) {
+    protected void handleOK() {
 
-        queryLog.log("Received response via " + _transport );
+        basicOK();
 
-        // no matter what happens next, we need to shut down the agent...
-        agent.close();
-
-        if( _transport != transport ) {
-            String msg = "Received message on " + _transport + ", expected it on " + transport;
-            LOGGER.log( Level.WARNING, msg );
-            queryLog.log( msg );
-            agent.close();
-            handler.accept( queryOutcome.notOk( msg, null, new QueryResult( queryMessage, _responseMsg, queryLog ) ) );
-            activeQueries.remove( (short) id );
-            return;
-        }
-
-        responseMessage = _responseMsg;
-
-        // if our UDP response was truncated, retry it with TCP...
-        if( (transport == UDP) && _responseMsg.truncated ) {
-            queryLog.log("UDP response was truncated; retrying with TCP" );
-            transport = TCP;
-            Outcome<?> sendOutcome = agent.sendQuery( queryMessage, TCP );
-            if( sendOutcome.notOk() ) {
-                handler.accept( queryOutcome.notOk( "Could not send query via TCP: " + sendOutcome.msg(), sendOutcome.cause(),
-                        new QueryResult( queryMessage, responseMessage, queryLog )) );
-                activeQueries.remove( (short) id );
-            }
-            return;
-        }
-
-        // handle appropriately according to the response code...
-        switch( responseMessage.responseCode ) {
-
-            // the question was answered; the response is valid...
-            case OK -> {
-                queryLog.log("Response was ok: "
-                        + responseMessage.answers.size() + " answers, "
-                        + responseMessage.authorities.size() + " authorities, "
-                        + responseMessage.additionalRecords.size() + " additional records" );
-
-                // add our results to the cache...
-                cache.add( responseMessage.answers );
-                cache.add( responseMessage.authorities );
-                cache.add( responseMessage.additionalRecords );
-
-                // send the results, and then we're done...
-                handler.accept( queryOutcome.ok( new QueryResult( queryMessage, responseMessage, queryLog )) );
-            }
-
-            case REFUSED -> {
-                if( tryOtherServers( "REFUSED" ) )
-                    return;
-            }
-
-            case NAME_ERROR -> {
-                if( tryOtherServers( "NAME ERROR" ) )
-                    return;
-            }
-
-            // the question could not be interpreted by the server...
-            case FORMAT_ERROR -> {
-                if( tryOtherServers( "FORMAT ERROR" ) )
-                    return;
-            }
-
-            case SERVER_FAILURE -> {
-                if( tryOtherServers( "SERVER FAILURE" ) )
-                    return;
-            }
-
-            case NOT_IMPLEMENTED -> {
-                if( tryOtherServers( "NOT IMPLEMENTED" ) )
-                    return;
-            }
-        }
-
-        // if we get here, we need to show that this query is inactive...
-        activeQueries.remove( (short) id );
+        // send the results, and then we're done...
+        handler.accept( queryOutcome.ok( new QueryResult( queryMessage, responseMessage, queryLog )) );
     }
 
 
