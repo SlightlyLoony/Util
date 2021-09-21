@@ -35,7 +35,7 @@ public class DNSRecursiveQuery extends DNSQuery {
 
         Checks.required( _agents );
 
-        logQuery("New recursive query " + question );
+        queryLog.log("New recursive query " + question );
     }
 
 
@@ -43,7 +43,7 @@ public class DNSRecursiveQuery extends DNSQuery {
 
         Checks.required( _initialTransport, "initialTransport");
 
-        logQuery("Initial query" );
+        queryLog.log("Initial query" );
 
         transport = _initialTransport;
 
@@ -70,7 +70,7 @@ public class DNSRecursiveQuery extends DNSQuery {
 
         queryMessage = builder.getMessage();
 
-        logQuery("Sending recursive query to " + agent.name + " via " + transport );
+        queryLog.log("Sending recursive query to " + agent.name + " via " + transport );
 
         Outcome<?> sendOutcome = agent.sendQuery( queryMessage, transport );
 
@@ -83,7 +83,7 @@ public class DNSRecursiveQuery extends DNSQuery {
 
     protected void handleResponse( final DNSMessage _responseMsg, final DNSTransport _transport ) {
 
-        logQuery("Received response via " + _transport );
+        queryLog.log("Received response via " + _transport );
 
         // no matter what happens next, we need to shut down the agent...
         agent.close();
@@ -91,9 +91,9 @@ public class DNSRecursiveQuery extends DNSQuery {
         if( _transport != transport ) {
             String msg = "Received message on " + _transport + ", expected it on " + transport;
             LOGGER.log( Level.WARNING, msg );
-            logQuery( msg );
+            queryLog.log( msg );
             agent.close();
-            handler.accept( queryOutcome.notOk( msg ) );
+            handler.accept( queryOutcome.notOk( msg, null, new QueryResult( queryMessage, _responseMsg, queryLog ) ) );
             activeQueries.remove( (short) id );
             return;
         }
@@ -102,11 +102,12 @@ public class DNSRecursiveQuery extends DNSQuery {
 
         // if our UDP response was truncated, retry it with TCP...
         if( (transport == UDP) && _responseMsg.truncated ) {
-            logQuery("UDP response was truncated; retrying with TCP" );
+            queryLog.log("UDP response was truncated; retrying with TCP" );
             transport = TCP;
             Outcome<?> sendOutcome = agent.sendQuery( queryMessage, TCP );
             if( sendOutcome.notOk() ) {
-                handler.accept( queryOutcome.notOk( "Could not send query via TCP: " + sendOutcome.msg(), sendOutcome.cause() ) );
+                handler.accept( queryOutcome.notOk( "Could not send query via TCP: " + sendOutcome.msg(), sendOutcome.cause(),
+                        new QueryResult( queryMessage, responseMessage, queryLog )) );
                 activeQueries.remove( (short) id );
             }
             return;
@@ -117,7 +118,7 @@ public class DNSRecursiveQuery extends DNSQuery {
 
             // the question was answered; the response is valid...
             case OK -> {
-                logQuery("Response was ok: "
+                queryLog.log("Response was ok: "
                         + responseMessage.answers.size() + " answers, "
                         + responseMessage.authorities.size() + " authorities, "
                         + responseMessage.additionalRecords.size() + " additional records" );
@@ -159,19 +160,6 @@ public class DNSRecursiveQuery extends DNSQuery {
         }
 
         // if we get here, we need to show that this query is inactive...
-        activeQueries.remove( (short) id );
-    }
-
-
-    protected void handleResponseProblem( final String _msg, final Throwable _cause ) {
-        logQuery("Problem with response: " + _msg + ((_cause != null) ? " - " + _cause.getMessage() : "") );
-        while( !agents.isEmpty() ) {
-            Outcome<QueryResult> qo = query();
-            if( qo.ok() )
-                return;
-        }
-        logQuery("No more DNS servers to try" );
-        handler.accept( queryOutcome.notOk( _msg, _cause, new QueryResult( queryMessage, null, queryLog ) ) );
         activeQueries.remove( (short) id );
     }
 

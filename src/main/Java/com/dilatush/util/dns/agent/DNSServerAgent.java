@@ -1,28 +1,19 @@
 package com.dilatush.util.dns.agent;
 
+import com.dilatush.util.Bytes;
 import com.dilatush.util.ExecutorService;
 import com.dilatush.util.Outcome;
-import com.dilatush.util.dns.DNSException;
 import com.dilatush.util.dns.DNSResolver;
-import com.dilatush.util.dns.message.DNSDomainName;
 import com.dilatush.util.dns.message.DNSMessage;
-import com.dilatush.util.dns.message.DNSQuestion;
-import com.dilatush.util.dns.message.DNSRRType;
 import com.dilatush.util.dns.rr.DNSTimeoutException;
 
-import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
+import java.util.Arrays;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static com.dilatush.util.General.isNull;
-import static com.dilatush.util.dns.agent.DNSTransport.TCP;
-import static com.dilatush.util.dns.agent.DNSTransport.UDP;
 
 
 /**
@@ -124,6 +115,14 @@ public class DNSServerAgent {
         if( messageOutcome.notOk() ) {
             close();
             query.handleResponseProblem( "Could not decode received DNS message", null );
+
+            // log the bytes we could not decode...
+            byte[] badBytes = Arrays.copyOfRange( _receivedData.array(), 0, _receivedData.limit() );
+            LOGGER.log( Level.WARNING, "Cannot decode received message:\n" + Bytes.bytesToString( badBytes) );
+
+            // the commented-out code below is a convenient way to debug messages that cannot be decoded...
+//            _receivedData.position( 0 );
+//            DNSMessage.decode( _receivedData );
             return;
         }
 

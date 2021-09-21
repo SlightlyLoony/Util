@@ -1,16 +1,15 @@
 package com.dilatush.util.dns;
 
-// TODO: if not enough servers, handle timeouts by retries
 // TODO: iterative must resolve CNAMEs, like recursive servers do
+// TODO: resolver follow CNAME chains when building answers from cache or iterative query
 // TODO: implement logic to handle:
-// TODO:   - normal UDP on truncation TCP iterative
-// TODO:   - TCP-only iterative
 // TODO: Handle responses with no answers (see RFC 2308)
 // TODO: Get rid of protected everywhere
 // TODO: Move DNS Resolver into its own project
 // TODO: Comments and Javadocs...
-// TODO: resolver follow CNAME chains when building answers from cache or iterative query
-// TODO: handle selectable IP version...
+// TODO: test with multiple threads
+// TODO: test that all state is correct after a query
+// TODO: refactor for clarity
 
 import com.dilatush.util.Checks;
 import com.dilatush.util.ExecutorService;
@@ -230,11 +229,11 @@ public class DNSResolver {
         DNSMessage response = query.getSyntheticResponse( answers );
 
         // then our log...
-        List<DNSQuery.QueryLogEntry> log = new ArrayList<>();
-        log.add( new DNSQuery.QueryLogEntry( "Query resolved from cache", System.currentTimeMillis() ) );
+        DNSQuery.QueryLog queryLog = new DNSQuery.QueryLog();
+        queryLog.log( "Query resolved from cache: " + _question );
 
         // finally, we have our query result...
-        QueryResult queryResult = new QueryResult( query, response, log );
+        QueryResult queryResult = new QueryResult( query, response, queryLog );
 
         // call the handler with the result, for we are done...
         _handler.accept( outcomeQueryResult.ok( queryResult ) );

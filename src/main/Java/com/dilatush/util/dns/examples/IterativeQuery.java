@@ -17,7 +17,7 @@ import static com.dilatush.util.dns.agent.DNSQuery.QueryResult;
 import static com.dilatush.util.dns.agent.DNSTransport.UDP;
 
 /**
- * Create a very simple DNS resolver that can use Google's recursive DNS server to resolve IP addresses.
+ * Create a very simple DNS resolver that uses iterative resolution.
  */
 @SuppressWarnings( "unused" )
 public class IterativeQuery {
@@ -50,7 +50,7 @@ public class IterativeQuery {
         System.out.println( "Second time: " + (System.currentTimeMillis() - startTime) );
 
         String[] domains = new String[] { "www.cnn.com", "www.hp.com", "www.servicenow.com", "www.paradiseweather.info",
-                "news.google.com", "www.qq.com", "www.burger.com", "www.hamburger.com" };
+                "news.google.com", "www.qq.com", "www.burger.com", "www.hamburger.com", "www.hp.co.uk" };
         Iterator<String> it = Arrays.stream( domains ).iterator();
         while( it.hasNext() ) {
             dn = DNSDomainName.fromString( it.next() ).info();

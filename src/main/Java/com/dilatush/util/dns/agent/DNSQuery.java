@@ -40,8 +40,7 @@ public abstract class DNSQuery {
     protected final DNSQuestion                     question;
     protected final Consumer<Outcome<QueryResult>>  handler;
     protected final List<AgentParams>               agents;
-    protected final long                            startTime;
-    protected final List<QueryLogEntry>             queryLog;
+    protected final QueryLog                        queryLog;
 
     protected       DNSServerAgent                  agent;
     protected       DNSTransport                    transport;
@@ -86,13 +85,12 @@ public abstract class DNSQuery {
         question        = _question;
         id              = _id;
         agents          = _agents;
-        handler         = _handler;
-        startTime       = System.currentTimeMillis();
-        queryLog        = new ArrayList<>();
-
+        handler         = (new LoggingHandlerWrapper( _handler ))::handler;
+        queryLog        = new QueryLog();
+        
         activeQueries.put( (short) id, this );
 
-        logQuery("New instance " + question );
+        queryLog.log("New query for " + question );
     }
 
 
@@ -129,27 +127,28 @@ public abstract class DNSQuery {
     protected abstract void handleResponse( final DNSMessage _responseMsg, final DNSTransport _transport );
 
     protected boolean tryOtherServers( final String _errorName ) {
-        logQuery("Response message was not OK: " + _errorName );
+        queryLog.log("Response message was not OK: " + _errorName );
         while( !agents.isEmpty() ) {
             Outcome<QueryResult> qo = query();
             if( qo.ok() )
                 return true;
         }
-        logQuery("No more DNS servers to try" );
-        handler.accept( queryOutcome.notOk( "No more DNS servers to try; last one responded with " + _errorName ) );
+        queryLog.log("No more DNS servers to try" );
+        handler.accept( queryOutcome.notOk( "No more DNS servers to try; last one responded with " + _errorName, null,
+                new QueryResult( queryMessage, null, queryLog ) ) );
         return false;
     }
 
 
     protected void handleResponseProblem( final String _msg, final Throwable _cause ) {
-        logQuery("Problem with response: " + _msg + ((_cause != null) ? " - " + _cause.getMessage() : "") );
+        queryLog.log("Problem with response: " + _msg + ((_cause != null) ? " - " + _cause.getMessage() : "") );
         while( !agents.isEmpty() ) {
             Outcome<QueryResult> qo = query();
             if( qo.ok() )
                 return;
         }
-        logQuery("No more DNS servers to try" );
-        handler.accept( queryOutcome.notOk( _msg, _cause ) );
+        queryLog.log("No more DNS servers to try" );
+        handler.accept( queryOutcome.notOk( _msg, _cause, new QueryResult( queryMessage, null, queryLog ) ) );
         activeQueries.remove( (short) id );
     }
 
@@ -159,26 +158,79 @@ public abstract class DNSQuery {
     }
 
 
-    protected void logQuery( final String _message ) {
-        queryLog.add( new QueryLogEntry( _message, startTime ) );
-    }
-
-
     public static class QueryLogEntry {
 
         public final String msg;
         public final long timeMillis;
+        public final int depth;
 
-        public QueryLogEntry( final String _msg, final long _startTime ) {
+        private QueryLogEntry( final String _msg ) {
             msg = _msg;
-            timeMillis = System.currentTimeMillis() - _startTime;
+            timeMillis = System.currentTimeMillis();
+            depth = 0;
         }
+
+
+        private QueryLogEntry( final long _timeMillis, final String _msg, final int _depth ) {
+            timeMillis = _timeMillis;
+            msg = _msg;
+            depth = _depth;
+        }
+
+
+        public String toString( final long _startTime ) {
+            String timeStr = String.format( "%5d", timeMillis - _startTime );
+            String depthStr = "| ".repeat( depth );
+            return timeStr + " " + depthStr + " " + msg + "\n";
+        }
+    }
+    
+    
+    public static class QueryLog {
+        
+        private final long startTime;
+        private final List<QueryLogEntry> entries;
+        
+        public QueryLog() {
+            startTime = System.currentTimeMillis();
+            entries = new ArrayList<>();
+        }
+
+
+        public void log( final String _msg ) {
+            entries.add( new QueryLogEntry( _msg ) );
+        }
+
+
+        public void addSubQueryLog( final QueryLog _log ) {
+            _log.entries.forEach( (e) -> entries.add( new QueryLogEntry( e.timeMillis, e.msg, e.depth + 1 ) ) );
+        }
+
 
         @Override
         public String toString() {
-            return "" + timeMillis + ": " + msg;
+            StringBuilder sb = new StringBuilder();
+            entries.forEach( (e) -> sb.append( e.toString( startTime ) ) );
+            return sb.toString();
         }
     }
 
-    public record QueryResult( DNSMessage query, DNSMessage response, List<QueryLogEntry> log ) {}
+    public record QueryResult( DNSMessage query, DNSMessage response, QueryLog log ) {}
+
+
+    private static class LoggingHandlerWrapper {
+
+        private final Consumer<Outcome<QueryResult>> actualHandler;
+
+        private LoggingHandlerWrapper( final Consumer<Outcome<QueryResult>> _actualHandler ) {
+            actualHandler = _actualHandler;
+        }
+
+        private void handler( final Outcome<QueryResult> _outcome ) {
+            if( _outcome.notOk() ) {
+                LOGGER.fine( "NOT OK query outcome: " + _outcome.msg() );
+            }
+            actualHandler.accept( _outcome );
+        }
+    }
 }
