@@ -321,8 +321,9 @@ public class DNSDomainName {
                 if( nextPos < 0)
                     nextPos = _buffer.position();
 
-                // now change our position to where the compression pointer sent us to...
+                // now change our position to where the compression pointer sent us to, and try again...
                 _buffer.position( offset );
+                continue;
             }
 
             // we get here for a directly encoded (i.e., not compressed) label and add it to our list...
