@@ -3,21 +3,18 @@ package com.dilatush.util.dns;
 import com.dilatush.util.Checks;
 import com.dilatush.util.General;
 import com.dilatush.util.Outcome;
-import com.dilatush.util.dns.message.DNSDomainName;
 import com.dilatush.util.dns.message.DNSQuestion;
 import com.dilatush.util.dns.message.DNSRRType;
-import com.dilatush.util.dns.rr.A;
 
 import java.net.Inet4Address;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
+import java.util.function.Consumer;
 import java.util.logging.Logger;
 
+import static com.dilatush.util.dns.DNSUtil.extractIPv4Addresses;
 import static com.dilatush.util.dns.agent.DNSQuery.QueryResult;
 import static com.dilatush.util.dns.agent.DNSTransport.UDP;
-import static java.util.logging.Level.FINE;
-import static java.util.logging.Level.WARNING;
 
 /**
  * Instances of this class wrap an instance of {@link DNSResolver} to provide a simpler API.
@@ -26,7 +23,9 @@ import static java.util.logging.Level.WARNING;
  */
 public class DNSResolverAPI {
 
-    private final Logger LOGGER = General.getLogger();
+    private static final Logger LOGGER = General.getLogger();
+    private static final Outcome.Forge<?> outcome = new Outcome.Forge<>();
+    private static final Outcome.Forge<List<Inet4Address>> ipv4Outcome = new Outcome.Forge<>();
 
     public final DNSResolver resolver;
 
@@ -37,33 +36,51 @@ public class DNSResolverAPI {
     }
 
 
-    public List<Inet4Address> resolveIPv4( final String _fqdn ) {
+    public Outcome<?> resolveIPv4Addresses( final Consumer<Outcome<List<Inet4Address>>> _handler, final String _fqdn  ) {
+
+        Checks.required( _fqdn, _handler );
+
+        Outcome<DNSQuestion> qo = DNSUtil.getQuestion( _fqdn, DNSRRType.A );
+        if( qo.notOk() )
+            return outcome.notOk( qo.msg(), qo.cause() );
+        DNSQuestion question = qo.info();
+        IPv4Handler handler = new IPv4Handler( _handler );
+        return resolver.query( question, handler::handler, UDP, DNSServerSelection.speed() );
+    }
+
+
+    public Outcome<List<Inet4Address>> resolveIPv4Addresses( final String _fqdn ) {
 
         Checks.required( _fqdn );
-        Outcome<DNSDomainName> dno = DNSDomainName.fromString( _fqdn );
-        if( dno.notOk() ) {
-            LOGGER.log( WARNING, "Invalid domain name: " + dno.msg() );
-            return null;
-        }
+
+        Outcome<DNSQuestion> qo = DNSUtil.getQuestion( _fqdn, DNSRRType.A );
+        if( qo.notOk() )
+            return ipv4Outcome.notOk( qo.msg(), qo.cause() );
+        DNSQuestion question = qo.info();
+
         SyncHandler handler = new SyncHandler();
-        DNSDomainName dn = dno.info();
-        DNSQuestion question = new DNSQuestion( dn, DNSRRType.A );
         resolver.query( question, handler::handler, UDP, DNSServerSelection.speed() );
         handler.waitForCompletion();
 
-        if( handler.qr == null )
-            return null;
+        if( handler.qr.notOk() )
+            return ipv4Outcome.notOk( handler.qr.msg(), handler.qr.cause() );
+        return ipv4Outcome.ok(extractIPv4Addresses( handler.qr.info().response().answers ) );
+    }
 
-        if( handler.qr.notOk() ) {
-            LOGGER.log( FINE, "Query failed: " + handler.qr.msg() );
-            return null;
+
+    private static class IPv4Handler {
+
+        private final Consumer<Outcome<List<Inet4Address>>> ipv4Handler;
+
+        private IPv4Handler( final Consumer<Outcome<List<Inet4Address>>> _ipv4Handler ) {
+            ipv4Handler = _ipv4Handler;
         }
-        List<Inet4Address> result = new ArrayList<>();
-        handler.qr.info().response().answers.forEach( (rr)->{
-            if( rr instanceof A )
-                result.add( ((A)rr).address );
-        } );
-        return result;
+
+        private void handler( final Outcome<QueryResult> _qr ) {
+
+            if( _qr.notOk() ) ipv4Handler.accept( ipv4Outcome.notOk( _qr.msg(), _qr.cause() ) );
+            ipv4Handler.accept( ipv4Outcome.ok( extractIPv4Addresses( _qr.info().response().answers )) );
+        }
     }
 
 

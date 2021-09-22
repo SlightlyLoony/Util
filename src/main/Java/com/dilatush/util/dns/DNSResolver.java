@@ -1,12 +1,10 @@
 package com.dilatush.util.dns;
 
-// TODO: resolver follow CNAME chains when building answers from cache or iterative query
 // TODO: Handle responses with no answers (see RFC 2308)
 // TODO: Get rid of protected everywhere
 // TODO: Move DNS Resolver into its own project
 // TODO: Comments and Javadocs...
-// TODO: CNAME chasing in cache resolution
-// TODO: CNAME chasing in recursive resolution (for incomplete answers)
+
 
 import com.dilatush.util.Checks;
 import com.dilatush.util.ExecutorService;
@@ -109,20 +107,20 @@ public class DNSResolver {
     // recursive query...
     // only one question per query!
     // https://stackoverflow.com/questions/4082081/requesting-a-and-aaaa-records-in-single-dns-query/4083071#4083071
-    public void query( final DNSQuestion _question, final Consumer<Outcome<QueryResult>> _handler, final DNSTransport _initialTransport,
+    public Outcome<?> query( final DNSQuestion _question, final Consumer<Outcome<QueryResult>> _handler, final DNSTransport _initialTransport,
                        final DNSServerSelection _serverSelection ) {
 
         Checks.required( _question, _handler, _initialTransport, _serverSelection );
 
         if( resolveFromCache( _question, _handler ) )
-            return;
+            return outcome.ok();
 
         List<AgentParams> agents = getAgents( _serverSelection );
 
         DNSQuery query = new DNSRecursiveQuery( this, cache, nio, executor, activeQueries, _question, getNextID(), agents, _handler );
 
         // TODO: call handler on failure...
-        query.initiate( _initialTransport );
+        return query.initiate( _initialTransport );
     }
 
 

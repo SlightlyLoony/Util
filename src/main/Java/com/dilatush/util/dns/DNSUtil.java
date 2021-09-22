@@ -5,8 +5,11 @@ import com.dilatush.util.dns.message.DNSDomainName;
 import com.dilatush.util.dns.message.DNSQuestion;
 import com.dilatush.util.dns.message.DNSRRClass;
 import com.dilatush.util.dns.message.DNSRRType;
+import com.dilatush.util.dns.rr.A;
 import com.dilatush.util.dns.rr.DNSResourceRecord;
 
+import java.net.Inet4Address;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -17,6 +20,19 @@ import java.util.List;
 public class DNSUtil {
 
     private static final Outcome.Forge<DNSQuestion> outcomeQuestion = new Outcome.Forge<>();
+
+
+    /**
+     * Returns a list of all the IPv4 addresses found in any A records contained in the given list of DNS resource records.
+     *
+     * @param _rrs the list of DNS resource records to search.
+     * @return a list of IPv4 addresses found in any A records contained in the given list of DNS resource records.
+     */
+    public static List<Inet4Address> extractIPv4Addresses( final List<DNSResourceRecord> _rrs ) {
+        List<Inet4Address> result = new ArrayList<>();
+        _rrs.stream().filter( (rr) -> rr instanceof A ).forEach( (rr) -> result.add( ((A)rr).address ) );
+        return result;
+    }
 
 
     public static Outcome<DNSQuestion> getQuestion( final String _domainName, final DNSRRType _type, final DNSRRClass _class ) {

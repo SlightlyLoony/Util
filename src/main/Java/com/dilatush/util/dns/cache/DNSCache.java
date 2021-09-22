@@ -119,6 +119,10 @@ public class DNSCache {
         if( maxCacheSize < 1 )
             return;
 
+        // if the TTL on the given record is zero, we're not going to cache it...
+        if( _rr.ttl == 0 )
+            return;
+
         // we aren't going to add unimplemented resource records...
         if( _rr instanceof UNIMPLEMENTED )
             return;
