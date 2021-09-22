@@ -1,11 +1,12 @@
 package com.dilatush.util.dns;
 
-// TODO: iterative must resolve CNAMEs, like recursive servers do
 // TODO: resolver follow CNAME chains when building answers from cache or iterative query
 // TODO: Handle responses with no answers (see RFC 2308)
 // TODO: Get rid of protected everywhere
 // TODO: Move DNS Resolver into its own project
 // TODO: Comments and Javadocs...
+// TODO: CNAME chasing in cache resolution
+// TODO: CNAME chasing in recursive resolution (for incomplete answers)
 
 import com.dilatush.util.Checks;
 import com.dilatush.util.ExecutorService;

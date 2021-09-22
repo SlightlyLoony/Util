@@ -163,47 +163,7 @@ public class DNSIterativeQuery extends DNSQuery {
 
         // if we have some answers, then let's see if we're done, or if we're resolving a CNAME chain...
         if( !responseMessage.answers.isEmpty() ) {
-
-            LOGGER.finest( "Got some answers: " + responseMessage.answers.size() );
-
-            // There are several possible scenarios here, which must be checked in the order given:
-            // 1. There are one or more answers, and they're all the desired type (or the desired type is ANY).  In this case, we accumulate all the answers and we're done.
-            // 2. There are two or more answers, consisting of one or more CNAME records followed by one or more answers of the desired type.  In this case, we accumulate
-            //    all the answers, and we're done.
-            // 3. There are one or more answers, all of which are CNAME records.  In this case, the last CNAME is a referral, we accumulate all the answers, check for a CNAME
-            //    loop (which is an error, and then fire off a sub-query to resolve the referral.  The results of the sub-query are evaluated exactly as the results of the
-            //    first query.
-            // 4. There are one or more answers which are neither CNAME records nor the desired type.  This is an error.
-
-            // If the desired type is ANY, then this response is our answer.
-            if( question.qtype == DNSRRType.ANY ) {
-                handler.accept( queryOutcome.ok( new QueryResult( queryMessage, responseMessage, queryLog )) );
-                activeQueries.remove( (short) id );
-                return;
-            }
-
-            // do a little analysis, so we can figure out what to do...
-            final int[] cnameCount   = {0};
-            final int[] desiredCount = {0};
-            final int[] wrongCount   = {0};
-            final boolean[] bogus = {false};
-            responseMessage.answers.forEach( (rr) -> {
-                if( rr instanceof CNAME ) {
-                    cnameCount[ 0 ]++;
-                    if( desiredCount[0] > 0 ) {
-                        bogus[0] = true;
-                    }
-                }
-                else if( rr.type == question.qtype ) {
-                    desiredCount[0]++;
-                }
-                else {
-                    wrongCount[0]++;
-                    bogus[0] = true;
-                }
-            } );
-
-
+            handleAnswers();
             return;
         }
 
@@ -298,6 +258,191 @@ public class DNSIterativeQuery extends DNSQuery {
     }
 
 
+    private record AnswersAnalysis( int cnameCount, int desiredCount, int wrongCount, boolean bogus ){};
+
+    private AnswersAnalysis analyzeAnswers() {
+
+        final int[] cnameCount   = {0};
+        final int[] desiredCount = {0};
+        final int[] wrongCount   = {0};
+        final boolean[] bogus = {false};
+        answers.forEach( (rr) -> {
+            if( rr instanceof CNAME ) {
+                cnameCount[ 0 ]++;
+                if( desiredCount[0] > 0 ) {
+                    bogus[0] = true;
+                }
+            }
+            else if( rr.type == question.qtype ) {
+                desiredCount[0]++;
+            }
+            else {
+                wrongCount[0]++;
+                bogus[0] = true;
+            }
+        } );
+
+        return new AnswersAnalysis( cnameCount[0], desiredCount[0], wrongCount[0], bogus[0] );
+    }
+
+
+    private void doneWithAnswers() {
+        queryLog.log( "Got viable answers" );
+        responseMessage = queryMessage.getSyntheticResponse( answers );
+        handler.accept( queryOutcome.ok( new QueryResult( queryMessage, responseMessage, queryLog )) );
+        activeQueries.remove( (short) id );
+    }
+
+
+    private void doneWithProblem( final String _msg ) {
+        queryLog.log( "Problem with answers: " + _msg );
+        handler.accept( queryOutcome.notOk( _msg, null, new QueryResult( queryMessage, null, queryLog ) ) );
+        activeQueries.remove( (short) id );
+    }
+
+
+    /**
+     * Inspects the records in the accumulated answers to make certain that if there are CNAME records, they are correctly chained.  Returns {@code true} if they are;
+     * otherwise sends a not ok outcome and returns {@code false}.
+     *
+     * @return {@code true} if the answers are correctly chained.
+     */
+    private boolean isProperChaining() {
+
+        String expectedDomain = question.qname.text;
+
+        for( DNSResourceRecord rr : answers ) {
+
+            if( !expectedDomain.equals( rr.name.text ) ) {
+                doneWithProblem( "Invalid CNAME chain" );
+                return false;
+            }
+
+            if( rr instanceof CNAME )
+                expectedDomain = ((CNAME) rr).cname.text;
+            else
+                break;
+        }
+        return true;
+    }
+
+
+    /**
+     * Returns {@code true} if the accumulated answers do not contain a CNAME loop, otherwise sends a not ok outcome and returns {@code false}.
+     *
+     * @return {@code true} if the accumulated answers do not contain a CNAME loop.
+     */
+    private boolean isLoopless() {
+
+        Set<String> cnameDomains = new HashSet<>();
+        for( DNSResourceRecord rr : answers ) {
+            if( rr instanceof CNAME) {
+                String dn = rr.name.text;
+                if( cnameDomains.contains( dn ) ) {
+                    doneWithProblem( "CNAME loop, starting with: " + dn );
+                    return false;
+                }
+                cnameDomains.add( dn );
+            }
+        }
+        return true;
+    }
+
+
+    private void handleAnswers() {
+
+        LOGGER.finest( "Got some answers: " + responseMessage.answers.size() );
+
+        // first we accumulate the answers from the message we just received with any that we've received from previous queries or sub-queries...
+        answers.addAll( responseMessage.answers );
+
+        // There are several possible scenarios here, which must be checked in the order given:
+        // 1. There are one or more answers, and the desired type is ANY or CNAME, or they're all the desired type. In this case, we accumulate all the answers, and we're done.
+        // 2. There are two or more answers, consisting of one or more CNAME records followed by one or more answers of the desired type.  In this case, we check for proper
+        //    CNAME chaining, accumulate all the answers, and we're done.
+        // 3. There are one or more answers, all of which are CNAME records.  In this case, the last CNAME is a referral, we accumulate all the answers, check for a CNAME
+        //    loop (which is an error, and then fire off a sub-query to resolve the referral.  The results of the sub-query are evaluated exactly as the results of the
+        //    first query.
+        // 4. There are one or more answers which are neither CNAME records nor the desired type.  This is an error.
+
+        // now we do a little analysis on our accumulated answers, so we can figure out what to do next...
+        AnswersAnalysis aa = analyzeAnswers();
+
+        // If the desired type is ANY or CNAME, or all the records are the type we want, then we're done...
+        if( (question.qtype == DNSRRType.ANY) || (question.qtype == DNSRRType.CNAME) || (aa.desiredCount == answers.size())) {
+            doneWithAnswers();
+            return;
+        }
+
+        // if we've got one or more CNAME records followed by one or more records of our desired type, then we check for proper CNAME chaining, and we're done...
+        if( (aa.cnameCount > 0) && (aa.desiredCount > 0) && !aa.bogus ) {
+
+            // make sure our CNAME records chain properly in the order we have them, to the first record of the desired type...
+            if( !isProperChaining() )
+                return;
+
+            // otherwise, send our excellent answers back...
+            doneWithAnswers();
+            return;
+        }
+
+        // if have one or more CNAME records and nothing else, check for a CNAME loop, then fire a sub-query to the last (unresolved) domain...
+        if( aa.cnameCount == answers.size() ) {
+
+            // if we have a CNAME loop, that's a fatal error...
+            if( !isLoopless() )
+                return;
+
+            // send off a sub-query to get the next element of the CNAME chain, or our actual answer...
+            DNSDomainName nextDomain = ((CNAME)answers.get( answers.size() - 1 )).cname;
+            DNSRRType nextType = question.qtype;
+
+            LOGGER.finest( "Firing " + nextDomain.text + " " + nextType + " record sub-query " + subQueries.get() + " from query " + id );
+            DNSQuestion aQuestion = new DNSQuestion( nextDomain, nextType );
+            DNSIterativeQuery iterativeQuery = new DNSIterativeQuery( resolver, cache, nio, executor, activeQueries, aQuestion, resolver.getNextID(),
+                    this::handleChainSubQuery );
+            iterativeQuery.initiate( UDP );
+            return;
+        }
+
+        // if we have one or more records that are neither CNAME nor our desired record type, we have an error...
+        if( aa.wrongCount > 0 ) {
+            doneWithProblem( "Unexpected record types in answers" );
+            return;
+        }
+
+        // if we get here, we have a condition that we didn't cover in the logic above - big problem...
+        doneWithProblem( "Unexpected condition in answers" );
+    }
+
+
+    private void handleChainSubQuery( final Outcome<QueryResult> _outcome ) {
+
+        LOGGER.log( FINER, "Entered handleChainSubQuery, " + (_outcome.ok() ? "ok" : "not ok") );
+        String logMsg = "Handling outcome of chain sub-query " + _outcome.info().query().toString()
+                + ((_outcome.info().response() != null) ? "\nResponse: " + _outcome.info().response() : "");
+        LOGGER.log( FINEST, logMsg );
+
+        // if the outcome was not ok, then we have a failed query...
+        if( _outcome.notOk() ) {
+            queryLog.log( "Bad outcome on chain sub-query: " + _outcome.msg() );
+            handler.accept( queryOutcome.notOk( _outcome.msg(), null, new QueryResult( queryMessage, null, queryLog ) ) );
+            activeQueries.remove( (short) id );
+            queryLog.log( "Chain sub-query" );
+            queryLog.addSubQueryLog( _outcome.info().log() );
+            return;
+        }
+
+        // whatever happened, log the sub-query...
+        queryLog.log( "Chain sub-query" );
+        queryLog.addSubQueryLog( _outcome.info().log() );
+
+        // process the answers; we could be done, or we could need another query...
+        responseMessage = _outcome.info().response();
+        handleAnswers();
+    }
+
+
     private void startNextQuery() {
 
         // if we have no IPs to query, we've got a problem...
@@ -331,12 +476,12 @@ public class DNSIterativeQuery extends DNSQuery {
 
 
     /**
-     * Handle the outcome of a sub-query.  Note that if the executor is configured with multiple threads, then it's possible for multiple threads to execute this method
-     * concurrently; hence the synchronization.
+     * Handle the outcome of a sub-query for name server resolution.  Note that if the executor is configured with multiple threads, then it's possible for multiple threads to
+     * execute this method concurrently; hence the synchronization.
      *
      * @param _outcome The {@link Outcome Outcome&lt;QueryResult&gt;} of the sub-query.
      */
-    private void handleNSResolutionSubQuery( Outcome<QueryResult> _outcome ) {
+    private void handleNSResolutionSubQuery( final Outcome<QueryResult> _outcome ) {
 
         LOGGER.log( FINER, "Entered handleSubQuery, " + (_outcome.ok() ? "ok" : "not ok") );
         String logMsg = "Query " + _outcome.info().query().toString()
@@ -351,7 +496,7 @@ public class DNSIterativeQuery extends DNSQuery {
                 addIPs( nextIPs, response.answers );
 
             // whatever happened, log the sub-query...
-            queryLog.log( "Sub-query" );
+            queryLog.log( "Name server resolution sub-query" );
             queryLog.addSubQueryLog( _outcome.info().log() );
         }
 
