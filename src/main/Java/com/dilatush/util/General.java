@@ -11,6 +11,17 @@ public class General {
 
 
     /**
+     * Initializes the Java logging system with the properties contained in the file at the given path.  This method must be called before any use of the Java logging system.
+     *
+     * @param _path The path to the logging properties file.
+     */
+    public static void initLogging( final String _path ) {
+        Checks.notEmpty( _path );
+        System.getProperties().setProperty( "java.util.logging.config.file", _path );
+    }
+
+
+    /**
      * Return a {@link Logger} instance whose name is the canonical name of the caller's class.  If the caller's class cannot be determined, a default logger is returned.
      *
      * @return a new logger.
