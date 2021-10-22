@@ -171,7 +171,7 @@ public class IPv6Address extends IPAddress {
 
     public static void main( final String[] _args ) {
 
-        String test = "gssdfdlkd";
+        String test = "gss::dfd::lkd";
 
         String[] parts = test.split( "::", -1 );
 
