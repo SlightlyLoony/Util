@@ -1,12 +1,11 @@
 package com.dilatush.util.ip;
 
+import com.dilatush.util.Checks;
 import com.dilatush.util.Outcome;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Arrays;
-
-import static com.dilatush.util.General.breakpoint;
 
 public class IPv6Address extends IPAddress {
 
@@ -18,6 +17,12 @@ public class IPv6Address extends IPAddress {
     private final byte[] address;  // the sixteen bytes of IPv6 address, MSB first...
 
 
+    /**
+     * Creates a new instance of this class with the given address, which must be 128 bits (16 bytes) long.  Note that this constructor is private, and that the argument is not
+     * validated.
+     *
+     * @param _address The 128 bit (16 byte) address.
+     */
     private IPv6Address( final byte[] _address ) {
         address = _address;
     }
@@ -139,22 +144,38 @@ public class IPv6Address extends IPAddress {
     }
 
 
+    /**
+     * Returns the 128 bit (16 byte) address in this instance.  Note that a copy of the internal array is returned, so it may safely be modified.
+     *
+     * @return The 128 bit (16 byte) address in this instance.
+     */
     @Override
     public byte[] getAddress() {
-        return address;
+        return Arrays.copyOf( address, address.length );
     }
 
 
-    static public Outcome<IPv6Address> fromBytes( final byte[] _bytes ) {
+    /**
+     * Attempts to create a new instance of {@link IPv6Address} from the given 128 bit (16 byte) address.  If the number of bytes provided is not 16, returns not ok with an
+     * explanatory message.  Otherwise, returns ok with the new {@link IPv6Address} instance.
+     *
+     * @param _bytes The 128 bits (16 bytes) of address.
+     * @return The {@link Outcome Outcome&lt;IPv6Address&gt;} result.
+     */
+    public static Outcome<IPv6Address> fromBytes( final byte[] _bytes ) {
 
-        if( _bytes == null )
-            return outcomeIP.notOk( "No bytes argument supplied" );
-        else if( _bytes.length != 16 )
+        Checks.required( (Object) _bytes );
+
+        if( _bytes.length != 16 )
             return outcomeIP.notOk( "Should be 16 bytes for IPv6 address, was " + _bytes.length );
         return outcomeIP.ok( new IPv6Address( _bytes ) );
     }
 
 
+    /**
+     * Returns a new instance of {@link InetAddress}
+     * @return
+     */
     @Override
     public InetAddress toInetAddress() {
 
@@ -169,12 +190,17 @@ public class IPv6Address extends IPAddress {
     }
 
 
-    public static void main( final String[] _args ) {
+    @Override
+    public boolean equals( final Object _o ) {
+        if( this == _o ) return true;
+        if( _o == null || getClass() != _o.getClass() ) return false;
+        IPv6Address that = (IPv6Address) _o;
+        return Arrays.equals( address, that.address );
+    }
 
-        String test = "gss::dfd::lkd";
 
-        String[] parts = test.split( "::", -1 );
-
-        breakpoint();
+    @Override
+    public int hashCode() {
+        return Arrays.hashCode( address );
     }
 }

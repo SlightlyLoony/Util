@@ -4,6 +4,7 @@ import com.dilatush.util.Outcome;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.Arrays;
 
 public class IPv4Address extends IPAddress {
 
@@ -71,5 +72,20 @@ public class IPv4Address extends IPAddress {
         catch( UnknownHostException _e ) {
             throw new IllegalStateException( "IPv4 address that is not 4 bytes long" );
         }
+    }
+
+
+    @Override
+    public boolean equals( final Object _o ) {
+        if( this == _o ) return true;
+        if( _o == null || getClass() != _o.getClass() ) return false;
+        IPv4Address that = (IPv4Address) _o;
+        return Arrays.equals( address, that.address );
+    }
+
+
+    @Override
+    public int hashCode() {
+        return Arrays.hashCode( address );
     }
 }
