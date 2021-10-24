@@ -6,31 +6,266 @@ import com.dilatush.util.Outcome;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static com.dilatush.util.Strings.isEmpty;
 
+
+/**
+ * The abstract base class for concrete classes representing IP addresses.
+ *
+ * @author Tom Dilatush  tom@dilatush.com
+ */
 @SuppressWarnings( "unused" )
-abstract public class IPAddress {
+abstract public class IPAddress implements Comparable<IPAddress> {
 
     private final static Outcome.Forge<IPAddress> outcomeIP    = new Outcome.Forge<>();
     private final static Outcome.Forge<Byte>      outcomeByte  = new Outcome.Forge<>();
     private final static Outcome.Forge<byte[]>    outcomeBytes = new Outcome.Forge<>();
 
+    // recognizes the general form of a dotted-decimal IPv4 address (like "10.0.3.222"), but does NOT validate the value of each quad...
     private final static Pattern IPv4PATTERN = Pattern.compile(
                     "^(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})$" );
+
+    // recognizes the general form of an IPv6 address, possibly including an embedded IPv4 address; group 1 is the hexadecimal group portion
+    // of the IPv6 address (which may be the entire address), and groups 2..5 (if non-null) are the dotted-decimal quads...
     private final static Pattern IPv6SEP_PATTERN = Pattern.compile(
                     "^((?:(?:[0-9a-fA-F]{1,4}:){0,7}[0-9a-fA-F]{1,4})?(?:::(?:(?:[0-9a-fA-F]{1,4}:){0,7}[0-9a-fA-F]{1,4})?)?)" +
                     ":?(?:(?<=:)(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3}))?$" );
+
+    // recognizes the 0..8 colon-separated hexadecimal groups in an IPv6 address, but NOT the double-colon indicator of a run of zeroes...
     private final static Pattern IPv6HEX_PATTERN = Pattern.compile(
                     "^([0-9a-fA-F]{1,4})?(?::([0-9a-fA-F]{1,4}))?(?::([0-9a-fA-F]{1,4}))?(?::([0-9a-fA-F]{1,4}))?" +
                     "(?::([0-9a-fA-F]{1,4}))?(?::([0-9a-fA-F]{1,4}))?(?::([0-9a-fA-F]{1,4}))?(?::([0-9a-fA-F]{1,4}))?$" );
 
-    public abstract byte[] getAddress();
 
+    // the bytes of this address, stored as positive values (for ease of comparison) in a read-only list so that other classes in the same package cannot modify it...
+    protected final List<Integer> address;
+
+
+    /**
+     * Create a new instance of this class with an address comprised of the given bytes.  Note that this constructor is protected, and should be called only from a subclass.  The
+     * only validation performed is a check for the presence of the argument.
+     *
+     * @param _address The bytes that comprise the address.
+     */
+    protected IPAddress( final byte[] _address ) {
+
+        // noinspection all
+        Checks.required( (Object) _address );
+
+        // create and fill a temporary list with the positive integer values of the given bytes...
+        List<Integer> addr = new ArrayList<>( _address.length );
+        for( byte b : _address ) {
+            addr.add( b & 0xff );
+        }
+
+        // prevent other classes in the package (or subclasses) from meddling with the address value...
+        address = Collections.unmodifiableList( addr );
+    }
+
+
+    /**
+     * Return the bytes of the IP address, in a byte array.  The bytes are in network order, that is, the byte at index 0 is the most significant byte and is the first byte when
+     * serialized for transmission over the network.  The MSB of the first byte is the first bit when serialized for transmission over the network.
+     *
+     * @return the {@code byte[]} containing the address' bytes.
+     */
+    public byte[] getAddress() {
+
+        // a place to store the bytes...
+        byte[] result = new byte[address.size()];
+
+        // fill in the bytes from our address list of integers...
+        for( int i = 0; i < result.length; i++ ) {
+            result[i] = address.get( i ).byteValue();
+        }
+
+        // and we're done...
+        return result;
+    }
+
+
+    /**
+     * Returns {@code true} if this address is a private address that is not routable over the public Internet.
+     *
+     * @return {@code true} if this address is a private address that is not routable over the public Internet.
+     */
+    public abstract boolean isPrivate();
+
+
+    /**
+     * Returns {@code true} if this address is normally routable over the public Internet.  Addresses that are not private, not link local, not loopback, not for documentation,
+     * not broadcast, and are not reserved for any other reason are considered public.  Note that some addresses not considered public by these criteria are actually routable
+     * over the public Internet under certain circumstances.  The intent of this method is to return true for addresses that always publicly routable.
+     *
+     * @return {@code true} if this address is normally routable over the public Internet.
+     */
+    public boolean isPublic() {
+        return !( isPrivate() || isBroadcast() || isLinkLocal() || isLoopback() || isDocumentation() || isReserved() );
+    }
+
+
+    /**
+     * Returns {@code true} if this address is a unicast address.  All addresses that are not explicitly multicast are unicast.
+     *
+     * @return {@code true} if this address is a unicast address.
+     */
+    public boolean isUnicast() {
+        return !isMulticast();
+    }
+
+
+    /**
+     * Return {@code true} if this address is a multicast address.  Packets with a multicast address as the destination address may be received by multiple hosts.
+     *
+     * @return {@code true} if this address is a multicast address.
+     */
+    public abstract boolean isMulticast();
+
+
+    /**
+     * Return {@code true} if this address is a loopback address.
+     *
+     * @return {@code true} if this address is a loopback address.
+     */
+    public abstract boolean isLoopback();
+
+
+    /**
+     * Return {@code true} if this address is a link-local address.
+     *
+     * @return {@code true} if this address is a link-local address.
+     */
+    public abstract boolean isLinkLocal();
+
+
+    /**
+     * Return {@code true} if this address has been reserved for documentation.
+     *
+     * @return {@code true} if this address has been reserved for documentation.
+     */
+    public abstract boolean isDocumentation();
+
+
+    /**
+     * Return {@code true} if this address is a broadcast address.
+     *
+     * @return {@code true} if this address is a broadcast address.
+     */
+    public abstract boolean isBroadcast();
+
+
+    /**
+     * Returns {@code true} if this address is reserved for some purpose not otherwise detected.
+     *
+     * @return {@code true} if this address is reserved for some purpose not otherwise detected.
+     */
+    public abstract boolean isReserved();
+
+
+    /**
+     * Return a new instance of {@link InetAddress} that contains the IP address in this instance, and no host name.
+     *
+     * @return A new instance of {@link InetAddress} that contains the IP address in this instance, and no host name.
+     */
     public abstract InetAddress toInetAddress();
 
+
+    /**
+     * Returns the number of bits in this address.
+     *
+     * @return The number of bits in this address.
+     */
+    public int size() {
+        return address.size() << 3;
+    }
+
+
+    /**
+     * Compares this {@link IPAddress} with the given {@link IPAddress} for order.  Returns a
+     * negative integer, zero, or a positive integer as this address is less
+     * than, equal to, or greater than the given address.  If the two addresses being compared
+     * have a different number of bytes (i.e., IPv4 vs. IPv6), the one with fewer bytes is
+     * considered to be smaller.
+     *
+     * @param _other the address to be compared with this one.
+     * @return a negative integer, zero, or a positive integer as this address
+     * is less than, equal to, or greater than the given address.
+     */
+    @Override
+    public int compareTo( final IPAddress _other ) {
+
+        Checks.required( _other );
+
+        // if we are comparing two different address types, the one with fewer bytes is smaller than the other...
+        if( address.size() != _other.address.size() )
+            return (address.size() < _other.address.size()) ? -1 : 1;
+
+        // they're the same size, so we do a byte-by-byte compare, as positive integers...
+        for( int i = 0; i < address.size(); i++ ) {
+
+            // if the bytes at this index are equal, we just try the next one...
+            if( a( i ) == _other.a( i ) )
+                continue;
+
+            // they're not the same, so we have a result...
+            return (a( i ) < _other.a( i )) ? -1 : 1;
+        }
+
+        // if we get here, then all the bytes were equal -- and so are the two addresses...
+        return 0;
+    }
+
+
+    /**
+     * Returns {@code true} if this instance is equal to the given instance.
+     *
+     * @param _o The object to check for equality.
+     * @return {@code true} if this instance is equal to the given instance.
+     */
+    @Override
+    public boolean equals( final Object _o ) {
+
+        if( this == _o ) return true;
+        if( !(_o instanceof IPAddress ipAddress) ) return false;
+        return address.equals( ipAddress.address );
+    }
+
+
+    /**
+     * Returns a hash code for this instance.
+     *
+     * @return A hash code for this instance.
+     */
+    @Override
+    public int hashCode() {
+        return Objects.hash( address );
+    }
+
+
+    /**
+     * Convenience method that returns the positive value of the byte at the given index within the address bytes.
+     *
+     * @param _index The index of the byte to retrieve.
+     * @return The positive value of the byte at the given index within the address bytes.
+     */
+    protected int a( final int _index ) {
+        return address.get( _index );
+    }
+
+
+    /**
+     * Returns a new {@link IPAddress} instance (either an {@link IPv4Address} or an {@link IPv6Address}) that contains the IP address in the given {@link InetAddress} instance.
+     *
+     * @param _address The {@link InetAddress} instance to extract an IP address from.
+     * @return A new instance of {@link IPAddress} containing the IP address in the given {@link InetAddress} instance.
+     */
     public static IPAddress fromInetAddress( final InetAddress _address ) {
 
         Checks.required( _address );

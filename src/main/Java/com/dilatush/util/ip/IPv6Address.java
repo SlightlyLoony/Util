@@ -3,18 +3,32 @@ package com.dilatush.util.ip;
 import com.dilatush.util.Checks;
 import com.dilatush.util.Outcome;
 
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Arrays;
 
-public class IPv6Address extends IPAddress {
+/**
+ * Instances of this class represent IP version 6 addresses.  Instances of this class are immutable and threadsafe.
+ *
+ * @author Tom Dilatush  tom@dilatush.com
+ */
+@SuppressWarnings( "unused" )
+final public class IPv6Address extends IPAddress {
+
+    /** The wildcard IPv6 address "0:0:0:0:0:0:0:0" (or "::"). */
+    public static final IPv6Address WILDCARD    = new IPv6Address( new byte[] {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0} );
+
+    /** The unspecified IPv6 address "0:0:0:0:0:0:0:0" (or "::"). */
+    public static final IPv6Address UNSPECIFIED = WILDCARD;
+
+    /** The loopback IPv6 address "::1". */
+    public static final IPv6Address LOOPBACK    = new IPv6Address( new byte[] {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1} );
 
     private static final Outcome.Forge<IPv6Address> outcomeIP = new Outcome.Forge<>();
 
     private static final byte[] IPv4_COMPATIBLE_IPv6_PREFIX = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,           0,           0 };
     private static final byte[] IPv4_MAPPED_IPv6_PREFIX     = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (byte) 0xff, (byte) 0xff };
-
-    private final byte[] address;  // the sixteen bytes of IPv6 address, MSB first...
 
 
     /**
@@ -24,8 +38,101 @@ public class IPv6Address extends IPAddress {
      * @param _address The 128 bit (16 byte) address.
      */
     private IPv6Address( final byte[] _address ) {
-        address = _address;
+        super( _address );
     }
+
+
+    /**
+     * Returns {@code true} if this address is a private address that is not routable over the public Internet.
+     *
+     * @return {@code true} if this address is a private address that is not routable over the public Internet.
+     */
+    @Override
+    public boolean isPrivate() {
+        return PRIVATE.contains( this );
+    }
+    private static final IPNetwork PRIVATE = new IPNetwork( IPv6Address.fromString( "fc00::" ).info(), 7 );
+
+
+    /**
+     * Return {@code true} if this address is a multicast address.  Packets with a multicast address as the destination address may be received by multiple hosts.
+     *
+     * @return {@code true} if this address is a multicast address.
+     */
+    @Override
+    public boolean isMulticast() {
+        return MULTICAST.contains( this );
+    }
+    private static final IPNetwork MULTICAST = new IPNetwork( IPv6Address.fromString( "ff00::" ).info(), 8 );
+
+
+    /**
+     * Return {@code true} if this address is a loopback address.
+     *
+     * @return {@code true} if this address is a loopback address.
+     */
+    @Override
+    public boolean isLoopback() {
+        return equals( LOOPBACK );
+    }
+
+
+    /**
+     * Return {@code true} if this address is a link-local address.
+     *
+     * @return {@code true} if this address is a link-local address.
+     */
+    @Override
+    public boolean isLinkLocal() {
+
+        return LINK_LOCAL.contains( this );
+    }
+    private static final IPNetwork LINK_LOCAL = new IPNetwork( IPv6Address.fromString( "fe80::" ).info(), 10 );
+
+
+    /**
+     * Return {@code true} if this address has been reserved for documentation.
+     *
+     * @return {@code true} if this address has been reserved for documentation.
+     */
+    @Override
+    public boolean isDocumentation() {
+        return DOCUMENTATION.contains( this );
+    }
+    private static final IPNetwork DOCUMENTATION = new IPNetwork( IPv6Address.fromString( "2001:db8::" ).info(), 32 );
+
+
+    /**
+     * Return {@code true} if this address is a broadcast address.
+     *
+     * @return {@code true} if this address is a broadcast address.
+     */
+    @Override
+    public boolean isBroadcast() {
+        return false;
+    }
+
+
+    /**
+     * Returns {@code true} if this address is reserved for some purpose not otherwise detected.
+     *
+     * @return {@code true} if this address is reserved for some purpose not otherwise detected.
+     */
+    @Override
+    public boolean isReserved() {
+
+        return     IPv4_MAPPED.contains( this )
+                || IPv4_IPv6.contains( this )
+                || DISCARD_ONLY.contains( this )
+                || BENCHMARKING.contains( this )
+                || RESERVED1.contains( this );
+    }
+    private static final IPNetwork IPv4_MAPPED  = new IPNetwork( IPv6Address.fromString( "::ffff:0:0"  ).info(), 96 );
+    private static final IPNetwork IPv4_IPv6    = new IPNetwork( IPv6Address.fromString( "64:ff9b:1::" ).info(), 48 );
+    private static final IPNetwork DISCARD_ONLY = new IPNetwork( IPv6Address.fromString( "::ffff:0:0"  ).info(), 96 );
+    private static final IPNetwork BENCHMARKING = new IPNetwork( IPv6Address.fromString( "2001:2::"    ).info(), 48 );
+    private static final IPNetwork RESERVED1    = new IPNetwork( IPv6Address.fromString( "2001::"      ).info(), 23 );
+
 
 
     /**
@@ -36,9 +143,7 @@ public class IPv6Address extends IPAddress {
     public String toString() {
 
         // do we have an IPv4 address embedded in the 32 LSBs?
-        boolean embeddedIPv4 =
-                Arrays.equals( address, 0, IPv4_COMPATIBLE_IPv6_PREFIX.length, IPv4_COMPATIBLE_IPv6_PREFIX, 0, IPv4_COMPATIBLE_IPv6_PREFIX.length ) ||
-                Arrays.equals( address, 0, IPv4_MAPPED_IPv6_PREFIX.length,     IPv4_MAPPED_IPv6_PREFIX,     0, IPv4_MAPPED_IPv6_PREFIX.length );
+        boolean embeddedIPv4 = IPv4_MAPPED.contains( this ) || IPv4_IPv6.contains( this );
 
         // find the longest run of zero bytes that will be encoded as hexadecimal 16 bit groups...
         int zeroes = 0;          // the number of zero bytes in the current run of zero bytes...
@@ -48,7 +153,7 @@ public class IPv6Address extends IPAddress {
         for( int i = 0; i < (embeddedIPv4 ? 12 : 16); i++ ) {
 
             // if this byte is a zero...
-            if( address[i] == 0 ) {
+            if( a(i) == 0 ) {
 
                 // if we're already in a run of zeroes...
                 if( runStart >= 0 ) {
@@ -120,7 +225,7 @@ public class IPv6Address extends IPAddress {
                     sb.append( ':' );
 
                 // emit our 16 bit hex group...
-                String hex = Integer.toHexString( ((address[i] & 0xff) << 8) | (address[i+1] & 0xff) );
+                String hex = Integer.toHexString( (a(i) << 8) | a(i+1) );
                 sb.append( hex );
             }
         }
@@ -135,7 +240,7 @@ public class IPv6Address extends IPAddress {
                 sb.append( (i > 12) ? '.' : ':' );
 
                 // emit the decimal byte...
-                sb.append( 0xff & address[i] );
+                sb.append( a(i) );
             }
         }
 
@@ -145,62 +250,41 @@ public class IPv6Address extends IPAddress {
 
 
     /**
-     * Returns the 128 bit (16 byte) address in this instance.  Note that a copy of the internal array is returned, so it may safely be modified.
+     * Attempts to create a new instance of {@link IPv6Address} from the given array of bytes, which must have a length of 16.  If successful, an ok with the new instance is
+     * returned.  Otherwise, a not ok with an explanatory message is returned.
      *
-     * @return The 128 bit (16 byte) address in this instance.
-     */
-    @Override
-    public byte[] getAddress() {
-        return Arrays.copyOf( address, address.length );
-    }
-
-
-    /**
-     * Attempts to create a new instance of {@link IPv6Address} from the given 128 bit (16 byte) address.  If the number of bytes provided is not 16, returns not ok with an
-     * explanatory message.  Otherwise, returns ok with the new {@link IPv6Address} instance.
-     *
-     * @param _bytes The 128 bits (16 bytes) of address.
-     * @return The {@link Outcome Outcome&lt;IPv6Address&gt;} result.
+     * @param _bytes The sixteen bytes of address to create a new {@link IPv6Address} instance with.
+     * @return An {@link Outcome Outcome&lt;IPv6Address&gt;} instance with the result.
      */
     public static Outcome<IPv6Address> fromBytes( final byte[] _bytes ) {
 
+        // noinspection all
         Checks.required( (Object) _bytes );
 
         if( _bytes.length != 16 )
             return outcomeIP.notOk( "Should be 16 bytes for IPv6 address, was " + _bytes.length );
-        return outcomeIP.ok( new IPv6Address( _bytes ) );
+        return outcomeIP.ok( new IPv6Address( Arrays.copyOf( _bytes, _bytes.length ) ) );
     }
 
 
     /**
-     * Returns a new instance of {@link InetAddress}
-     * @return
+     * Return a new instance of {@link Inet6Address} that contains the IP address in this instance, and no host name.
+     *
+     * @return A new instance of {@link Inet6Address} that contains the IP address in this instance, and no host name.
      */
     @Override
     public InetAddress toInetAddress() {
 
         try {
-            return InetAddress.getByAddress( address );
+            InetAddress ia = InetAddress.getByAddress( getAddress() );
+            if( !(ia instanceof Inet6Address) )
+                throw new IllegalStateException( "Converting IP6Address to Inet6Address resulted in " + ia.getClass().getSimpleName() );
+            return ia;
         }
 
         // it should be impossible to get here, as the address is guaranteed to be a valid 16 bytes long...
         catch( UnknownHostException _e ) {
             throw new IllegalStateException( "IPv6 address that is not 16 bytes long" );
         }
-    }
-
-
-    @Override
-    public boolean equals( final Object _o ) {
-        if( this == _o ) return true;
-        if( _o == null || getClass() != _o.getClass() ) return false;
-        IPv6Address that = (IPv6Address) _o;
-        return Arrays.equals( address, that.address );
-    }
-
-
-    @Override
-    public int hashCode() {
-        return Arrays.hashCode( address );
     }
 }

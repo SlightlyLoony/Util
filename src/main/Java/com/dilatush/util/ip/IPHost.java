@@ -3,14 +3,21 @@ package com.dilatush.util.ip;
 import com.dilatush.util.Checks;
 import com.dilatush.util.Outcome;
 
+import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import static com.dilatush.util.General.getLogger;
 
 /**
  * Instances of this class represent a host name as a standard DNS formatted string, and zero or more IP addresses for that host.  Instances of this class are immutable and
@@ -26,6 +33,8 @@ public class IPHost {
 
     /** Zero or more IP addresses (either IPv4 or IPv6) for this host. */
     public final List<IPAddress> ipAddresses;
+
+    private final Logger LOGGER = getLogger();
 
     private static final Outcome.Forge<IPHost> outcomeIPHost = new Outcome.Forge<>();
 
@@ -62,8 +71,81 @@ public class IPHost {
     }
 
 
+    /**
+     * Returns a new instance of {@link InetAddress} from the hostname and IP addresses in this instance.  If this instance has no IP addresses, then the IPv4 wildcard address
+     * (0.0.0.0) is used; otherwise the first address (which could be either IPv4 or IPv6) is used.
+     *
+     * @return A new instance of {@link InetAddress} from the hostname and IP addresses in this instance.
+     */
     public InetAddress getInetAddress() {
-        return InetAddress.
+
+        try {
+            return (ipAddresses.size() > 0)
+                    ? InetAddress.getByAddress( hostname, ipAddresses.get( 0 ).getAddress() )
+                    : InetAddress.getByAddress( hostname, IPv4Address.WILDCARD.getAddress() );
+        }
+
+        // this should actually be impossible...
+        catch( UnknownHostException _e ) {
+            LOGGER.log( Level.SEVERE, "Failed to get InetAddress", _e );
+            throw new IllegalStateException( "Failed to get InetAddress" );
+        }
+    }
+
+
+    /**
+     * Returns a new instance of {@link Inet4Address} from the hostname and IP addresses in this instance.  If this instance has no IPv4 addresses, then the IPv4 wildcard address
+     * (0.0.0.0) is used; otherwise the first IPv4 address is used.
+     *
+     * @return A new instance of {@link Inet4Address} from the hostname and IP addresses in this instance.
+     */
+    public Inet4Address getInet4Address() {
+
+        try {
+            List<IPv4Address> ips = getIPv4Addresses();
+            return (ips.size() > 0)
+                    ? (Inet4Address) InetAddress.getByAddress( hostname, ipAddresses.get( 0 ).getAddress() )
+                    : (Inet4Address) InetAddress.getByAddress( hostname, IPv4Address.WILDCARD.getAddress() );
+        }
+
+        // this should actually be impossible...
+        catch( UnknownHostException _e ) {
+            LOGGER.log( Level.SEVERE, "Failed to get Inet4Address", _e );
+            throw new IllegalStateException( "Failed to get Inet4Address" );
+        }
+    }
+
+
+    /**
+     * Returns a new instance of {@link Inet6Address} from the hostname and IP addresses in this instance.  If this instance has no IPv4 addresses, then the IPv4 wildcard address
+     * (0.0.0.0) is used; otherwise the first IPv4 address is used.
+     *
+     * @return A new instance of {@link Inet6Address} from the hostname and IP addresses in this instance.
+     */
+    public Inet6Address getInet6Address() {
+
+        try {
+            List<IPv6Address> ips = getIPv6Addresses();
+            return (ips.size() > 0)
+                    ? (Inet6Address) InetAddress.getByAddress( hostname, ipAddresses.get( 0 ).getAddress() )
+                    : (Inet6Address) InetAddress.getByAddress( hostname, IPv4Address.WILDCARD.getAddress() );
+        }
+
+        // this should actually be impossible...
+        catch( UnknownHostException _e ) {
+            LOGGER.log( Level.SEVERE, "Failed to get Inet4Address", _e );
+            throw new IllegalStateException( "Failed to get Inet4Address" );
+        }
+    }
+
+
+    /**
+     * Returns a list (possibly empty) of all the IP addresses (IPv4 or IPv6) in this instance.
+     *
+     * @return A list (possibly empty) of all the IP addresses (IPv4 or IPv6) in this instance.
+     */
+    public List<IPAddress> getIPAddresses() {
+        return ipAddresses;
     }
 
 
@@ -151,6 +233,12 @@ public class IPHost {
     }
 
 
+    /**
+     * Returns {@code true} if the given object is equal to this instance.
+     *
+     * @param _o The object to test for equality.
+     * @return {@code true} if the given object is equal to this instance.
+     */
     @Override
     public boolean equals( final Object _o ) {
         if( this == _o ) return true;
@@ -160,6 +248,11 @@ public class IPHost {
     }
 
 
+    /**
+     * Returns a 32-bit hash code for this instance.
+     *
+     * @return A 32-bit hash code for this instance.
+     */
     @Override
     public int hashCode() {
         return Objects.hash( hostname, ipAddresses );
