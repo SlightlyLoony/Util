@@ -170,30 +170,12 @@ public class GeneratorController {
     private void generatorListener( final Generator.Event _event ) {
 
         switch( _event ) {
-
-            case ON:
-                fsm.onEvent( Event.ON );
-                break;
-
-            case UP:
-                fsm.onEvent( Event.UP );
-                break;
-
-            case OFF:
-                fsm.onEvent( Event.OFF );
-                break;
-
-            case AUTO:
-                fsm.onEvent( Event.AUTO );
-                break;
-
-            case DOWN:
-                fsm.onEvent( Event.DOWN );
-                break;
-
-            case FIXED:
-                fsm.onEvent( Event.FIX );
-                break;
+            case ON    -> fsm.onEvent( Event.ON   );
+            case UP    -> fsm.onEvent( Event.UP   );
+            case OFF   -> fsm.onEvent( Event.OFF  );
+            case AUTO  -> fsm.onEvent( Event.AUTO );
+            case DOWN  -> fsm.onEvent( Event.DOWN );
+            case FIXED -> fsm.onEvent( Event.FIX  );
         }
     }
 

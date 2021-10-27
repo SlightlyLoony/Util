@@ -34,7 +34,7 @@ public class FSMEvents<S extends Enum<S>,E extends Enum<E>> {
      * a list of all the events).
      *
      * @param _fsm The FSM associated with this instance.
-     * @param _eventScheduler The event scheduler for this instance (may be {@code null} if scheduled events are not configured).
+     * @param _eventScheduler The event scheduler for this instance (can be {@code null} if scheduled events are not configured).
      * @param _event A sample event.
      */
     public FSMEvents( final FSM<S,E> _fsm, final ScheduledExecutor _eventScheduler, final E _event ) {
@@ -133,12 +133,21 @@ public class FSMEvents<S extends Enum<S>,E extends Enum<E>> {
     }
 
 
+    public void shutdown() {
+
+        // if we have an event scheduler, shut it down...
+        if( eventScheduler != null ) {
+            eventScheduler.shutdown();
+        }
+    }
+
+
     /**
-     * Returns a list containing all of the FSM event values.
+     * Returns a list containing all the FSM event values.
      *
      * @param _event An example FSM event.  The concrete example is necessary so that this method can use the {@code _event.getClass()} method,
      *               which is not available from just the type name.
-     * @return a list containing all of the FSM event values
+     * @return a list containing all the FSM event values
      */
     @SuppressWarnings( "unchecked" )
     private List<E> getEventValues( final E _event ) {

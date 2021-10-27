@@ -22,7 +22,7 @@ import com.dilatush.util.fsm.FSM;
 
 
     /**
-     * Cancel this event, if it was scheduled by one of {@link FSM}'s {@code scheduleEvent()} methods.  Otherwise this method does nothing.
+     * Cancel this event, if it was scheduled by one of {@link FSM}'s {@code scheduleEvent()} methods.  Otherwise, this method does nothing.
      */
     public void cancel() {
     }

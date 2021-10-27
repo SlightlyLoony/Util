@@ -47,45 +47,35 @@ public class GeneratorSim implements Generator {
 
             char c = line.toUpperCase().charAt( 0 );
             switch( c ) {
-
-                case 'Q':
+                case 'Q' -> {
                     done = true;
                     outGen( "Quit" );
-                    break;
-
-                case 'N':
+                }
+                case 'N' -> {
                     outGen( "On" );
                     listener.accept( Event.ON );
-                    break;
-
-                case 'F':
+                }
+                case 'F' -> {
                     outGen( "Off" );
                     listener.accept( Event.OFF );
-                    break;
-
-                case 'A':
+                }
+                case 'A' -> {
                     outGen( "Auto" );
                     listener.accept( Event.AUTO );
-                    break;
-
-                case 'D':
+                }
+                case 'D' -> {
                     outGen( "Grid Down" );
                     listener.accept( Event.DOWN );
-                    break;
-
-                case 'U':
+                }
+                case 'U' -> {
                     outGen( "Grid Up" );
                     listener.accept( Event.UP );
-                    break;
-
-                case 'X':
+                }
+                case 'X' -> {
                     outGen( "Fixed" );
                     listener.accept( Event.FIXED );
-                    break;
-
-                default:
-                    help();
-                    break;
+                }
+                default -> help();
             }
         }
     }

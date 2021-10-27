@@ -282,13 +282,24 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
             transitions.put( index, new FSMTransitionSpec<>( def.action, def.toState ) );
         }
 
-        // see what states we have no transitions from...
+        // see what non-terminal states we have no transitions from...
         Set<S> fromStates = new HashSet<>( stateEnums );
         for( FSMTransitionID<S,E> def : transitions.keySet() ) {
             fromStates.remove( def.fromState );
         }
         for( S state : fromStates ) {
-            errorMessages.add( "   No transition from state: " + state.toString() );
+            if( !terminals.contains( state ) )
+                errorMessages.add( "   No transition from non-terminal state: " + state.toString() );
+        }
+
+        // see what terminal states we do have transitions from...
+        fromStates = new HashSet<>();
+        for( FSMTransitionID<S,E> def : transitions.keySet() ) {
+            fromStates.add( def.fromState );
+        }
+        for( S state : fromStates ) {
+            if( terminals.contains( state ) )
+                errorMessages.add( "   Transition from terminal state: " + state.toString() );
         }
 
         // see what states we have no transitions to...

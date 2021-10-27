@@ -195,10 +195,10 @@ public class EngineController {
 
 
     /**
-     * This example of an FSM event transform transforms a raw event containing the engine RPM into one of three discrete FSM events, or returns
+     * This example of an FSM "event transform" transforms a raw event containing the engine RPM into one of three discrete FSM events, or returns
      * a {@code null} when the RPMs are in a range that can't trigger any transitions.
      *
-     * @param _event The FSM event being transformed, in this case always an RPM event (with RPMs as the data).
+     * @param _event The FSM event being transformed, in this case, always an RPM event (with RPMs as the data).
      * @param _fsm The FSM associated with this transformation.
      * @return the transformed event, or {@code null} if none
      */

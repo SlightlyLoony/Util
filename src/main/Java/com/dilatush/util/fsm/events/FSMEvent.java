@@ -37,7 +37,7 @@ public abstract class FSMEvent<E extends Enum<E>> {
 
 
     /**
-     * Cancel this event, if it was scheduled by one of {@link FSM}'s {@code scheduleEvent()} methods.  Otherwise this method does nothing.
+     * Cancel this event, if it was scheduled by one of {@link FSM}'s {@code scheduleEvent()} methods.  Otherwise, this method does nothing.
      */
     public abstract void cancel();
 

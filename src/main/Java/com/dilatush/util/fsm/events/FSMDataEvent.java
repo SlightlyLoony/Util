@@ -30,7 +30,7 @@ import com.dilatush.util.fsm.FSM;
 
 
     /**
-     * Cancel this event, if it was scheduled by one of {@link FSM}'s {@code scheduleEvent()} methods.  Otherwise this method does nothing.
+     * Cancel this event, if it was scheduled by one of {@link FSM}'s {@code scheduleEvent()} methods.  Otherwise, this method does nothing.
      */
     @Override
     public void cancel() {
@@ -59,13 +59,13 @@ import com.dilatush.util.fsm.FSM;
 
     /**
      * Return a string representing this instance.  If the event has no data object, then this method returns the result of the {@code toString()}
-     * method on the type {@code Enum}.  Otherwise this method returns the the result of the {@code toString()} method on the type {@code Enum},
+     * method on the type {@code Enum}.  Otherwise, this method returns the result of the {@code toString()} method on the type {@code Enum},
      * followed by a space, and finally the result of the {@code toString()} method on the data object.
      *
      * @return a string representing this instance
      */
     @Override
     public String toString() {
-        return (data == null) ? event.toString() : event.toString() + " " + data.toString();
+        return (data == null) ? event.toString() : event.toString() + " " + data;
     }
 }

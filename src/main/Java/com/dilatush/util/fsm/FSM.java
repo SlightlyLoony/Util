@@ -221,6 +221,10 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      */
     private void onEventImpl( final FSMEvent<E> _event ) {
 
+        // if we're in a terminal state, we ignore all events...
+        if( states.get( state.ordinal() ).terminal )
+            return;
+
         // if we have an event listener, call it...
         if( eventListener != null )
             eventListener.accept( _event );
@@ -311,6 +315,19 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
             // if we have a listener, inform them...
             if( stateChangeListener != null )
                 stateChangeListener.accept( state );
+
+            // if we just entered a terminal state, shut down the FSM...
+            if( states.get( state.ordinal() ).terminal ) {
+
+                // if we have a dispatch thread, kill it, and clear the events buffer...
+                if( eventDispatcher != null ) {
+                    eventDispatcher.interrupt();  // kill the thread...
+                    eventsBuffer.clear();         // clear the events buffer...
+                }
+
+                // if we have an event scheduler, kill it...
+                events.shutdown();
+            }
         }
     }
 
@@ -734,12 +751,13 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
 
         try {
             // the compiler is confused by the branch in the constructor that sets these up...
-            assert eventsBuffer != null;
+            assert eventsBuffer    != null;
             assert eventDispatcher != null;
 
+            // we loop here until interrupted, grabbing events and handling them...
             while( !eventDispatcher.isInterrupted() ) {
-                FSMEvent<E> event = eventsBuffer.takeFirst();
-                onEventImpl( event );
+                FSMEvent<E> event = eventsBuffer.takeFirst();  // wait until an event shows up, then grab it...
+                onEventImpl( event );                          // handle the event we just grabbed...
             }
         }
         catch( InterruptedException _e ) {

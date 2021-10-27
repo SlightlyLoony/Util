@@ -97,7 +97,7 @@ public final class FSMTransition<S extends Enum<S>,E extends Enum<E>> {
      * and event scheduling is <i>not</i> enabled in the FSM, an {@link UnsupportedOperationException} will be thrown.
      *
      * @param _event The enum for the FSM event to occur when the timeout expires.
-     * @param _eventData The optional (may be {@code null}) data associated with the FSM event.
+     * @param _eventData The optional (can be {@code null}) data associated with the FSM event.
      * @param _delay The delay (as a {@link Duration} instance) for the timeout.
      */
     @SuppressWarnings( "unused" )
