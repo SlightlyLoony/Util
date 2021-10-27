@@ -13,6 +13,7 @@ import static com.dilatush.util.General.isNull;
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
+@SuppressWarnings( "unused" )
 public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
 
     private static final int DEFAULT_MAX_BUFFERED_EVENTS = 100;
@@ -31,6 +32,7 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
     /*package-private*/ final List<S>                                                               stateEnums;
     /*package-private*/ final Map<S,FSMStateAction<S,E>>                                            onEntryActions;
     /*package-private*/ final Map<S,FSMStateAction<S,E>>                                            onExitActions;
+    /*package-private*/ final Set<S>                                                                terminals;
     /*package-private*/ final Map<E,FSMEventAction<S,E>>                                            eventActions;
     /*package-private*/ ScheduledExecutor scheduler;
 
@@ -59,6 +61,7 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
         transforms     = new HashMap<>();
         onEntryActions = new HashMap<>();
         onExitActions  = new HashMap<>();
+        terminals      = new HashSet<>();
         eventActions   = new HashMap<>();
         errorMessages  = new ArrayList<>();
         defs           = new ArrayList<>();
@@ -77,7 +80,7 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
     /**
      * Add a new FSM state transition definition to this FSM specification.  Each transition defines one allowed transition between two FSM states
      * (the "from state" and the "to state") when a particular FSM event occurs, along with the optional FSM action that will be executed on that
-     * transition.  Together with the enumerated FSM states and FSM events, the FSM state transitions define all of the possible states of the FSM
+     * transition.  Together with the enumerated FSM states and FSM events, the FSM state transitions define all the possible states of the FSM
      * and all the possible ways to transition from one state to another.
      *
      * @param _fromState The FSM state being transitioned from.
@@ -218,6 +221,16 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
 
 
     /**
+     * Sets the given FSM state as a terminal state.
+     *
+     * @param _state The FSM state to set as a terminal state.
+     */
+    public void setStateTerminal( final S _state ) {
+        terminals.add( _state );
+    }
+
+
+    /**
      * Set the optional event action for the given FSM event to the given {@link FSMEventAction} implementation.  An event action is run when a
      * matching event is handled.
      *
@@ -263,7 +276,7 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
             FSMTransitionID<S,E> index = new FSMTransitionID<>( def.fromState, def.onEvent );
             Object checker = transitions.get( index );
             if( checker != null ) {
-                errorMessages.add( "   Duplicate transition ID: " + index.toString() );
+                errorMessages.add( "   Duplicate transition ID: " + index );
                 continue;
             }
             transitions.put( index, new FSMTransitionSpec<>( def.action, def.toState ) );
@@ -304,11 +317,11 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
 
 
     /**
-     * Returns a list containing all of the FSM state values.
+     * Returns a list containing all the FSM state values.
      *
      * @param _state An example FSM state.  The concrete example is necessary so that this method can use the {@code _state.getClass()} method,
      *               which is not available from just the type name.
-     * @return a list containing all of the FSM state values
+     * @return a list containing all the FSM state values
      */
     @SuppressWarnings( "unchecked" )
     private List<S> getStateValues( final S _state ) {
@@ -317,11 +330,11 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
 
 
     /**
-     * Returns a list containing all of the FSM event values.
+     * Returns a list containing all the FSM event values.
      *
      * @param _event An example FSM event.  The concrete example is necessary so that this method can use the {@code _event.getClass()} method,
      *               which is not available from just the type name.
-     * @return a list containing all of the FSM event values
+     * @return a list containing all the FSM event values
      */
     @SuppressWarnings( "unchecked" )
     private List<E> getEventValues( final E _event ) {
@@ -381,6 +394,7 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
 
         /*package-private*/ S                   state;
         /*package-private*/ Object              context;
+        /*package-private*/ boolean             terminal;
 
 
         /**

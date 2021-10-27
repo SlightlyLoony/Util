@@ -7,10 +7,7 @@ import com.dilatush.util.fsm.events.FSMEvents;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
@@ -23,6 +20,7 @@ import static com.dilatush.util.Strings.isEmpty;
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
+@SuppressWarnings( "unused" )
 public class FSM<S extends Enum<S>,E extends Enum<E>> {
 
     final static private Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
@@ -66,7 +64,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
     // true if event scheduling services are enabled...
     private final boolean                                                       eventScheduling;
 
-    // true if event buffering is is enabled...
+    // true if event buffering is enabled...
     private final boolean                                                       bufferedEvents;
 
     // the thread for the event dispatcher, IF event buffering is enabled...
@@ -105,7 +103,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
         // make our list of states...
         states = new ArrayList<>();
         for( FSMSpec.FSMStateSpec<S> stateSpec : _spec.stateSpecs ) {
-            states.add( new FSMState<>( stateSpec.state, this, fsmContext, stateSpec.context ) );
+            states.add( new FSMState<>( stateSpec.state, this, fsmContext, stateSpec.context, _spec.terminals.contains( stateSpec.state ) ) );
         }
 
         // make our event transform lookup table...
@@ -123,8 +121,8 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
 
         // add the transitions to our lookup table...
         _spec.transitions.forEach( (id, spec) -> {
-            FSMState<S,E> fromState = states.get( id.fromState.ordinal() );  // get the from state FSMState object...
-            FSMState<S,E> toState   = states.get( spec.toState.ordinal() );  // get the to state FSMState object...
+            FSMState<S,E> fromState = states.get( id.fromState.ordinal() );  // get the "from state" FSMState object...
+            FSMState<S,E> toState   = states.get( spec.toState.ordinal() );  // get the "to state" FSMState object...
             transitions.get( id.fromState.ordinal() )
                     .set(
                             id.event.ordinal(),
@@ -140,7 +138,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
         // build our on-exit action lookup table...
         onExitActions = new ArrayList<>( _spec.stateEnums.size() );
         for( int i = 0; i < _spec.stateEnums.size(); i++ ) onExitActions.add( null );                    // fill the list with nulls for each state...
-        _spec.onExitActions.forEach( (state, action) -> onExitActions.set( state.ordinal(), action) );  // set any defined on-exit actions...
+        _spec.onExitActions.forEach( (state, action) -> onExitActions.set( state.ordinal(), action) );   // set any defined on-exit actions...
 
         // build our event action lookup table...
         eventActions = new ArrayList<>( _spec.eventEnums.size() );
@@ -166,13 +164,8 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
         ScheduledExecutor eventScheduler = null;
         if( eventScheduling ) {
 
-            // if the spec supplied a scheduler, use it...
-            if( _spec.scheduler != null )
-                eventScheduler = _spec.scheduler;
-
-            // otherwise, start up our own scheduler...
-            else
-                eventScheduler = new ScheduledExecutor();
+            // if the spec supplied a scheduler, use it; otherwise, start up our own scheduler...
+            eventScheduler = Objects.requireNonNullElseGet( _spec.scheduler, ScheduledExecutor::new );
         }
 
         // set up our events source...
@@ -265,7 +258,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
             return;
         }
 
-        // get the the states we're leaving and going to...
+        // get the states we're leaving and going to...
         FSMState<S,E> fromState = states.get( transition.fromState.state.ordinal() );
         FSMState<S,E> toState   = states.get( transition.toState.state.ordinal()   );
 
@@ -343,7 +336,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
 
             // let's be sure we don't get nasty infinite recursion going here...
             if( result.event == _event.event )
-                throw new IllegalStateException( "Event transform returned the same event type: " + result.event.toString() );
+                throw new IllegalStateException( "Event transform returned the same event type: " + result.event );
 
             // otherwise, we handle it right now, recursively...
             onEventImpl( result );
@@ -723,7 +716,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
 
 
     /**
-     * Returns an {@link FSMEvent} instance created from the given event enum and event data (an arbitrary {@link Object} instance.
+     * Returns an {@link FSMEvent} instance created from the given event enum and event data (an arbitrary {@link Object} instance).
      *
      * @param _event The event enum to create an {@link FSMEvent} instance from.
      * @param _data The data for the event.

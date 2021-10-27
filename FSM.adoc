@@ -454,6 +454,9 @@ You've already seen that there are four kinds of actions you can specify to the 
 
 Your actions (and event transforms) should be careful to avoid any blocking (such as network I/O) or any computation that uses significant CPU time.  The issue is that all other event handling will be held up until your actions (and transforms) finish, and this can lead to FSM behavior that's not what you want.  In any situation where your code _must_ do something that blocks or is CPU-intensive, you should run that activity in another thread and initiate that thread from your action (or transform).
 
+== Lifetime of the FSM ==
+Some FSMs (like the examples above) need to live basically forever, as their job is never actually finished.  Other FSMs have a more limited lifetime: they do a job, finish it, and then their life is over.  This FSM implementation handles this notion with "terminal states".  When entered, a terminal state will perform any specified event actions on the triggering event, and any on-entry actions specified in the terminal state -- and then the FSM is shut down.  That means that any threads started by the FSM are terminated, and any events are ignored.
+
 == On keeping state...
 Most real-world implementations of an FSM require some state _other_ than the FSM's state; in our example program, `EngineController` is an example of such an FSM.  In many real-world examples of FSMs, there will be dozens or even hundreds of pieces of state that need to be squirreled away somewhere until they're needed.  The FSM package gives you multiple places to do that.  Each of these places has its pros and cons, some of which may simply be matters of the programmer's taste or conventions.  None of them are required, all of them are freely available for you to use, and most of the time it makes zero difference to the functioning of the FSM which one you choose.  Here are the mechanisms available to you:
 
@@ -477,7 +480,7 @@ Each FSM state context can also contain a set of properties.  These properties a
 This package _validates_ the FSM's specification (`FSMSpec`) before it will start up.  If the validation fails, the FSM will not be created.  The validation process checks for the following:
 
 * *Duplicates*: No two transaction definitions may have the same "from" state and triggering event.
-* *Stuck states*: States that cannot be left, because no transaction definitions includes them as the "from" state.
+* *Stuck states*: States that cannot be left, because no transaction definitions includes them as the "from" state.  Terminal states (states that shut down the FSM) are an exception to this.
 * *Isolated states*: States that cannot be entered, because no transaction definition includes them as the "to" state.
 * *Unused events*: Events that don't appear as the event in a transition definition, and also don't have an event transform specified.
 
