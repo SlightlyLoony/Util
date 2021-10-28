@@ -234,7 +234,7 @@ public class EngineController {
 
 
     // on STOPPED, START -> STARTING...
-    private void actionStart( final FSMTransition<State,Event> _transition ) {
+    private void actionStart( final FSMTransition<State,Event> _transition, FSMEvent<Event> _event ) {
         out( "engine starting" );
         GlobalContext context = (GlobalContext) _transition.fsmContext;
         engineStartAttempts = 0;
@@ -246,7 +246,7 @@ public class EngineController {
 
 
     // on COOLING, COOLED -> STARTING...
-    private void actionCooled( final FSMTransition<State,Event> _transition ) {
+    private void actionCooled( final FSMTransition<State,Event> _transition, FSMEvent<Event> _event ) {
         out( "starter cooled" );
         GlobalContext context = (GlobalContext) _transition.fsmContext;
         context.timeout = fsm.scheduleEvent( Event.MAX_STARTER_TIME, Duration.ofMillis( MAX_STARTER_TIME_MS ) );
@@ -255,7 +255,7 @@ public class EngineController {
 
 
     // on STOPPING, RPM_0 -> STOPPED...
-    private void actionStopped( final FSMTransition<State,Event> _transition ) {
+    private void actionStopped( final FSMTransition<State,Event> _transition, FSMEvent<Event> _event ) {
         out( "engine stopped" );
         StoppingContext context = (StoppingContext) _transition.fromState.context;
         context.timeout.cancel();
@@ -264,14 +264,14 @@ public class EngineController {
 
 
     // on STOPPING, STOPPING_TIMEOUT -> FAILED...
-    private void actionFailed( final FSMTransition<State,Event> _transition ) {
+    private void actionFailed( final FSMTransition<State,Event> _transition, FSMEvent<Event> _event ) {
         out( "engine failed" );
         eventListener.accept( Report.FAILED );
     }
 
 
     // on RUNNING, RPM_OUT_OF_RANGE -> STOPPING...
-    private void actionOverload( final FSMTransition<State,Event> _transition ) {
+    private void actionOverload( final FSMTransition<State,Event> _transition, FSMEvent<Event> _event ) {
         out( "engine overloaded" );
         engineOff();
         eventListener.accept( Report.OVERLOADED );
@@ -279,30 +279,30 @@ public class EngineController {
 
 
     // on STABILIZING, STABLE -> RUNNING...
-    private void actionRunning( final FSMTransition<State,Event> _transition ) {
+    private void actionRunning( final FSMTransition<State,Event> _transition, FSMEvent<Event> _event ) {
         out( "engine running" );
         eventListener.accept( Report.RUNNING);
     }
 
 
     // on COOLING, CANNOT_START -> FAILED...
-    private void actionNoStart( final FSMTransition<State,Event> _transition ) {
+    private void actionNoStart( final FSMTransition<State,Event> _transition, FSMEvent<Event> _event ) {
         out( "couldn't start engine" );
         engineOff();
-        actionFailed( _transition );
+        actionFailed( _transition, _event );
     }
 
 
     // on STABILIZING, STABILIZING_TIMEOUT -> FAILED...
-    private void actionUnstable( final FSMTransition<State,Event> _transition ) {
+    private void actionUnstable( final FSMTransition<State,Event> _transition, FSMEvent<Event> _event ) {
         out( "couldn't stabilize engine RPM" );
         engineOff();
-        actionFailed( _transition );
+        actionFailed( _transition, _event );
     }
 
 
     // one STARTING, RPM_OUT_OF_RANGE -> STABILIZING...
-    private void actionStabilize( final FSMTransition<State,Event> _transition ) {
+    private void actionStabilize( final FSMTransition<State,Event> _transition, FSMEvent<Event> _event ) {
         out( "stabilizing engine RPM" );
         engine.starter( OFF );
         GlobalContext fmContext = (GlobalContext) _transition.fsmContext;
@@ -312,13 +312,13 @@ public class EngineController {
 
 
     // on STABILIZING, RPM_IN_RANGE -> STABILIZING...
-    private void actionInRange( final FSMTransition<State,Event> _transition ) {
+    private void actionInRange( final FSMTransition<State,Event> _transition, FSMEvent<Event> _event ) {
         _transition.toState.setProperty( "StableTime", fsm.scheduleEvent( Event.STABLE, Duration.ofMillis( MIN_STABLE_TIME_MS ) ) );
     }
 
 
     // on STABILIZING, RPM_OUT_OF_RANGE -> STABILIZING
-    private void actionOutOfRange( final FSMTransition<State,Event> _transition ) {
+    private void actionOutOfRange( final FSMTransition<State,Event> _transition, FSMEvent<Event> _event ) {
         FSMEvent<?> stableTime = (FSMEvent<?>) _transition.toState.getProperty( "StableTime" );
         if( stableTime != null)
             stableTime.cancel();
@@ -326,7 +326,7 @@ public class EngineController {
 
 
     // on STARTING, MAX_STARTER_TIME -> COOLING
-    private void actionCool( final FSMTransition<State,Event> _transition ) {
+    private void actionCool( final FSMTransition<State,Event> _transition, FSMEvent<Event> _event ) {
         out( "cooling engine starter" );
         engine.starter( OFF );
         engineStartAttempts++;

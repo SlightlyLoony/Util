@@ -3,6 +3,7 @@ package com.dilatush.util.fsm.example;
 import com.dilatush.util.fsm.FSM;
 import com.dilatush.util.fsm.FSMSpec;
 import com.dilatush.util.fsm.FSMTransition;
+import com.dilatush.util.fsm.events.FSMEvent;
 
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -93,7 +94,7 @@ public class GeneratorController {
 
 
     // on FAIL, FIX -> OFF...
-    private void fixAction( final FSMTransition<State, Event> _transition ) {
+    private void fixAction( final FSMTransition<State, Event> _transition, FSMEvent<Event> _event ) {
         out( "fixed" );
         engineController.fixed();
         generator.failureIndicator( Generator.Mode.OFF );
@@ -101,7 +102,7 @@ public class GeneratorController {
 
 
     // on GEN, OVER -> OVER...
-    private void overAction( final FSMTransition<State, Event> _transition ) {
+    private void overAction( final FSMTransition<State, Event> _transition, FSMEvent<Event> _event ) {
         out( "overload" );
         engineController.stop();
         generator.ats( Generator.Mode.OFF );
@@ -112,7 +113,7 @@ public class GeneratorController {
 
     // on GEN, UP  -> WAIT...
     // on GEN, OFF -> OFF...
-    private void atsOffAction( final FSMTransition<State, Event> _transition ) {
+    private void atsOffAction( final FSMTransition<State, Event> _transition, FSMEvent<Event> _event ) {
         out( "ATS off, engine stop" );
         generator.ats( Generator.Mode.OFF );
         generator.generatingIndicator( Generator.Mode.OFF );
@@ -122,7 +123,7 @@ public class GeneratorController {
 
 
     // on GEN, RUN -> GEN...
-    private void atsOnAction( final FSMTransition<State, Event> _transition ) {
+    private void atsOnAction( final FSMTransition<State, Event> _transition, FSMEvent<Event> _event ) {
         out( "ATS on" );
         generator.ats( Generator.Mode.ON );
         generator.generatingIndicator( Generator.Mode.ON );
@@ -130,7 +131,7 @@ public class GeneratorController {
 
 
     // on WAIT, DOWN -> GEN...
-    private void genAction( final FSMTransition<State, Event> _transition ) {
+    private void genAction( final FSMTransition<State, Event> _transition, FSMEvent<Event> _event ) {
         out( "grid down" );
         generator.runningIndicator( Generator.Mode.ON );
         engineController.start();
@@ -139,7 +140,7 @@ public class GeneratorController {
 
     // on GEN, FAIL -> FAIL...
     // on RUN, FAIL -> FAIL...
-    private void failAction( final FSMTransition<State, Event> _transition ) {
+    private void failAction( final FSMTransition<State, Event> _transition, FSMEvent<Event> _event ) {
         out( "engine fail" );
         engineController.stop();
         generator.runningIndicator( Generator.Mode.OFF );
@@ -150,7 +151,7 @@ public class GeneratorController {
 
 
     // on RUN, OFF -> OFF...
-    private void offAction( final FSMTransition<State, Event> _transition ) {
+    private void offAction( final FSMTransition<State, Event> _transition, FSMEvent<Event> _event ) {
         out( "off" );
         generator.runningIndicator( Generator.Mode.OFF );
         engineController.stop();
@@ -159,7 +160,7 @@ public class GeneratorController {
 
     // on OFF,  ON -> RUN...
     // on WAIT, ON -> RUN...
-    private void onAction( final FSMTransition<State, Event> _transition ) {
+    private void onAction( final FSMTransition<State, Event> _transition, FSMEvent<Event> _event ) {
         out( "on" );
         generator.runningIndicator( Generator.Mode.ON );
         engineController.start();

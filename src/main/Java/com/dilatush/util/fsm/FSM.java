@@ -1,5 +1,6 @@
 package com.dilatush.util.fsm;
 
+import com.dilatush.util.Checks;
 import com.dilatush.util.ScheduledExecutor;
 import com.dilatush.util.Threads;
 import com.dilatush.util.fsm.events.FSMEvent;
@@ -84,6 +85,8 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      * @param _spec The {@link FSMSpec} specification for this finite state machine.
      */
     public FSM( final FSMSpec<S,E> _spec ) {
+
+        Checks.required( _spec );
 
         // if the specification is not valid, bail out with a detailed error message...
         if( !_spec.isValid() )
@@ -294,7 +297,7 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
             LOGGER.finest( () -> "Running transition action" );
 
             // run the action...
-            transition.action.run( transition );
+            transition.action.run( transition, _event );
         }
 
         // if we're actually changing the state...

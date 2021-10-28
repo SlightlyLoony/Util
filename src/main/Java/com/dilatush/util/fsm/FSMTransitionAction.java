@@ -1,5 +1,7 @@
 package com.dilatush.util.fsm;
 
+import com.dilatush.util.fsm.events.FSMEvent;
+
 /**
  * Implemented to provide an action that's associated with an FSM state transition.
  *
@@ -14,6 +16,7 @@ public interface FSMTransitionAction<S extends Enum<S>, E extends Enum<E>> {
      * application dependent.</p>
      *
      * @param _transition the transition this action is occurring in
+     * @param _event the event the triggered this action
      */
-    void run( FSMTransition<S,E> _transition );
+    void run( FSMTransition<S,E> _transition, FSMEvent<E> _event );
 }
