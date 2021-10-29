@@ -224,8 +224,8 @@ public class FSM<S extends Enum<S>,E extends Enum<E>> {
      */
     private void onEventImpl( final FSMEvent<E> _event ) {
 
-        // if we're in a terminal state, we ignore all events...
-        if( states.get( state.ordinal() ).terminal )
+        // if we're not just starting up, and we're in a terminal state, we ignore all events...
+        if( (state != null) && states.get( state.ordinal() ).terminal )
             return;
 
         // if we have an event listener, call it...
