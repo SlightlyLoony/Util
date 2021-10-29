@@ -308,7 +308,8 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
             toStates.remove( transition.toState );
         }
         for( S state : toStates ) {
-            errorMessages.add( "   No transition to state: " + state.toString() );
+            if( state != initialState )
+                errorMessages.add( "   No transition to state: " + state.toString() );
         }
 
         // see what events we don't use...
