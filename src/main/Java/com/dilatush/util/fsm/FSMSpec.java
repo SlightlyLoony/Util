@@ -195,8 +195,9 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
 
     /**
      * Set the optional state on-entry action for the given FSM state to the given {@link FSMStateAction} implementation.  A state on-entry action is
-     * run while an FSM event that causes a transition from one FSM state to another is being handled.  The on-entry action for the state being
-     * entered is run after the on-exit action (if there is one) for the state being left, and after the transition action (if there is one).
+     * run on an FSM event that causes a transition from one FSM state to another is being handled - transitions that don't involve a state change will <i>not</i> cause the
+     * on-entry action to be run.  The on-entry action for the state being entered is run after the on-exit action (if there is one) for the state being left, and after the
+     * transition action (if there is one).
      *
      * @param _state The FSM state to set a state on-entry action for.
      * @param _action The FSM state action to set.
@@ -208,8 +209,9 @@ public class FSMSpec<S extends Enum<S>,E extends Enum<E>> {
 
     /**
      * Set the optional state on-exit action for the given FSM state to the given {@link FSMStateAction} implementation.  A state on-exit action is
-     * run while an FSM event that causes a transition from one FSM state to another is being handled.  The on-exit action for the state being
-     * left is run before the on-entry action (if there is one) for the state being entered, and before the transition action (if there is one).
+     * run while an FSM event that causes a transition from one FSM state to another is being handled - transitions that don't involve a state change will <i>not</i> cause the
+     * on-exit action to be run.  The on-exit action for the state being left is run before the on-entry action (if there is one) for the state being entered, and before the
+     * transition action (if there is one).
      *
      * @param _state The FSM state to set a state on-entry action for.
      * @param _action The FSM state action to set.
