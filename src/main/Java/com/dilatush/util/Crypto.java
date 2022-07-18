@@ -4,10 +4,12 @@ import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
 import javax.crypto.CipherOutputStream;
 import javax.crypto.NoSuchPaddingException;
+import javax.crypto.spec.DHParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.math.BigInteger;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.security.*;
@@ -244,5 +246,128 @@ public class Crypto {
             throw new IllegalArgumentException( "Invalid AES key base64 string: " + _base64KeyBytes );
 
         return getKey_AES_128( Base64Fast.decodeBytes( _base64KeyBytes ) );
+    }
+
+
+    /**
+     * Creates a "safe" set of Diffie-Hellman parameters of the given bit length, using the procedure given in "Cryptography Engineering", in the section on safe
+     * primes for Diffie-Hellman parameters starting on page 186.
+     *
+     * @param _bitLength The number of bits desired in the p parameter.
+     * @param _secureRandom The source of random numbers to use in this function.
+     * @return The Diffie-Hellman parameters p, g, and p's bit length.
+     */
+    public static DHParameterSpec getDHParameters( final int _bitLength, final SecureRandom _secureRandom ) {
+
+        // we're going to loop until we found our parameters...
+        while( true ) {
+
+            // find a prime q such that 2q+1 is a candidate p...
+            int qBitLen = _bitLength - 1;
+            BigInteger q = BigInteger.probablePrime( qBitLen, _secureRandom );
+
+            // calculate the candidate p...
+            BigInteger p = q.multiply( BigInteger.TWO ).add( BigInteger.ONE );
+
+            // if our candidate p is not prime (to a certainty of 1-2^-100, matching BigInteger.probablePrime), then start over...
+            if( !p.isProbablePrime( 100 ) )
+                continue;
+
+            // iterate until we have a suitable value for g...
+            BigInteger g = null;
+            while( g == null ) {
+
+                // get a candidate alpha...
+                BigInteger alpha;
+                do {
+                    alpha = new BigInteger( p.bitLength(), _secureRandom ).add( BigInteger.TWO );  // lower bound is 2...
+                } while (alpha.compareTo( p.subtract( BigInteger.TWO ) ) > 0);
+
+                // turn it into a value for g...
+                BigInteger gc = alpha.modPow( BigInteger.TWO, p );
+
+                // check it for the two forbidden values and try again if we got one...
+                if( (gc.compareTo( BigInteger.ONE ) == 0) || (gc.compareTo( p.subtract( BigInteger.ONE ) ) == 0) )
+                    continue;
+
+                // our candidate is good, so use it...
+                g = gc;
+            }
+
+            // we've got all our parameters now, so get our result value and skedaddle...
+            return new DHParameterSpec( p, g, _bitLength );
+        }
+    }
+
+
+    /**
+     *  In number theory, the Legendre symbol is a multiplicative function with values 1, -1, 0 that is a quadratic character modulo a prime number p:
+     *  its value on a (nonzero) quadratic residue mod p is 1 and on a quadratic non-residue is -1.  See this
+     *  <a href="https://en.wikipedia.org/wiki/Legendre_symbol">Wikipedia article</a> for more detail.
+     *
+     *  This is a straight port with only slight modifications of the C# code I found <a href="https://www.codeproject.com/Tips/369798/Legendre-Symbol-Csharp-code">here</a>.
+     *
+     * @param _a The number to test for being a square modulo p (below).
+     * @param _p The modulus to use when testing a for squareness (above).
+     * @return 1 if a modulo p is a quadratic residue, -1 if a modulo p is not a quadratic residue, and 0 if a mod p equals 0.
+     */
+    public static int legendreSymbol( final BigInteger _a, final BigInteger _p ) {
+
+        // if a equals 0, we just return a zero...
+        if( _a.compareTo( BigInteger.ZERO ) == 0 )
+            return 0;
+
+        // if a equals 1, then (1^2) mod p equals 1, so it's a quadratic residue...
+        if( _a.compareTo( BigInteger.ONE ) == 0 )
+            return 1;
+
+        // we make different tests depending on whether a is odd or even...
+        // if it's even...
+        if( !_a.testBit( 0 ) ) {
+            boolean negate = _p.multiply( _p ).subtract( BigInteger.ONE ).divide( BigInteger.valueOf( 8 ) ).testBit( 0 );
+            return legendreSymbol( _a.shiftRight( 1 ), _p ) * (negate ? -1 : 1);
+        }
+
+        // otherwise, it's odd...
+        else {
+            boolean negate = _a.subtract( BigInteger.ONE ).multiply( _p.subtract( BigInteger.ONE ) ).divide( BigInteger.valueOf( 4 ) ).testBit( 0 );
+            return legendreSymbol( _p.mod( _a ), _a ) * (negate ? -1 : 1);
+        }
+    }
+
+
+    /**
+     * Generates standard Diffie-Hellman parameters (p, g) for the given p bit lengths, using the procedure given in "Cryptography Engineering", in the section on safe
+     * primes for Diffie-Hellman parameters starting on page 186.  Throws an {@link IllegalArgumentException} if the given bit lengths array is {@code null} or empty.  If
+     * any of the given p bit lengths are less than 512, then the result for that length is {@code null}.  Note that this method can take hours or even days to run,
+     * especially for p bit lengths longer than about 3000 bits.
+     *
+     * @param _pBitLengths An array of all the desired bit lengths for the generated p values.
+     * @return An array of {@link DHParameterSpec} instances, each containing one of the desired sets of Diffie-Hellman parameters.
+     */
+    public static DHParameterSpec[] generateDHParameters( final int[] _pBitLengths ) {
+
+        // sanity checks...
+        // noinspection RedundantCast
+        if( isNull( (Object) _pBitLengths ) || (_pBitLengths.length == 0) )
+            throw new IllegalArgumentException( "Missing desired parameter sizes" );
+
+        // get a source of random numbers...
+        SecureRandom secureRandom = new SecureRandom();
+
+        // make a place for our results...
+        DHParameterSpec[] results = new DHParameterSpec[ _pBitLengths.length ];
+
+        // iterate over all the desired sizes...
+        for( int i = 0; i < _pBitLengths.length; i++ ) {
+            int pBitLength = _pBitLengths[i];
+
+            // if the size is at least 512 bits, generate the parameters...
+            if( pBitLength >= 512 )
+                results[i] = getDHParameters( pBitLength, secureRandom );
+        }
+
+        // skedaddle with the results...
+        return results;
     }
 }
