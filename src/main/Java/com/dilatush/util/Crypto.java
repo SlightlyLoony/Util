@@ -266,8 +266,8 @@ public class Crypto {
             int qBitLen = _bitLength - 1;
             BigInteger q = BigInteger.probablePrime( qBitLen, _secureRandom );
 
-            // calculate the candidate p...
-            BigInteger p = q.multiply( BigInteger.TWO ).add( BigInteger.ONE );
+            // calculate the candidate p as 2q + 1...
+            BigInteger p = q.shiftLeft( 1 ).setBit( 0 );
 
             // if our candidate p is not prime (to a certainty of 1-2^-100, matching BigInteger.probablePrime), then start over...
             if( !p.isProbablePrime( 100 ) )
