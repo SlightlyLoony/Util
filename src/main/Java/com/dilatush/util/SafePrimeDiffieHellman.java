@@ -48,6 +48,7 @@ import static java.math.BigInteger.ONE;
  * <p>Only the third step is different -- setting the identity secret causes it to be included in the shared secret calculation.</p>
  * <p>Instances of this class are mutable and <i>not</i> threadsafe.</p>
  */
+@SuppressWarnings( "unused" )
 public class SafePrimeDiffieHellman {
 
     // forges for all of this class' possible outcome types...
@@ -139,7 +140,7 @@ public class SafePrimeDiffieHellman {
      * <p>If the given parameters pass all of these checks, then the parameters are set.</p>
      *
      * @param _spec The Diffie-Hellman parameters to set.
-     * @return The outcome of the operation, either "ok" (meaning the new parameters have been set), or "not ok" (meaning the new parameters have not been set, and an
+     * @return The outcome of the operation, either "ok" (meaning the new parameters have been set), or "not ok" (meaning the new parameters have not been set), and an
      *         explanatory string is included in the outcome.
      */
     public Outcome<Object> setParameters( final DHParameterSpec _spec ) {
@@ -263,7 +264,7 @@ public class SafePrimeDiffieHellman {
         if( Crypto.legendreSymbol( _publicKey, p ) != 1 )
             return forgeObject.notOk( "_publicKey is not a square modulo p" );
 
-        // if we get here, we passed all the tests and we can set the public key...
+        // if we get here, we passed all the tests, and we can set the public key...
         otherSidePublicKey = _publicKey;
 
         return forgeObject.ok();
@@ -339,55 +340,5 @@ public class SafePrimeDiffieHellman {
         // store the result away and return it...
         sharedSecret = ss;
         return forgeBigInteger.ok( sharedSecret );
-
-    }
-
-
-    public static void main( final String[] _args ) {
-
-        // some setup...
-        SecureRandom secureRandom = new SecureRandom();
-        DHParameterSpec dhps = Crypto.getDHParameters( 512, secureRandom );
-        BigInteger is = new BigInteger( 256, secureRandom );
-
-        // this side...
-        SafePrimeDiffieHellman tsspdh = new SafePrimeDiffieHellman( secureRandom );
-        Outcome<Object> setParametersOutcome = tsspdh.setParameters( dhps );
-        if( setParametersOutcome.notOk()) throw new IllegalStateException( "this side setParameter: " + setParametersOutcome.msg() );
-        Outcome<Object> tssis = tsspdh.setIdentitySecret( is );
-        if( tssis.notOk() ) throw new IllegalStateException( "this side setIdentitySecret: " + tssis.msg() );
-        Outcome<Object> generateOutcome = tsspdh.generateKeys();
-        if( generateOutcome.notOk() ) throw new IllegalStateException( "this side generateKeys: " + generateOutcome.msg() );
-        Outcome<BigInteger> thisSideGetPublicKeyOutcome = tsspdh.getPublicKey();
-        if( thisSideGetPublicKeyOutcome.notOk() ) throw new IllegalStateException( "this side getPublicKey: " + thisSideGetPublicKeyOutcome.msg() );
-        BigInteger thisSidePublicKey = thisSideGetPublicKeyOutcome.info();
-
-        // other side...
-        SafePrimeDiffieHellman osspdh = new SafePrimeDiffieHellman( secureRandom );
-        setParametersOutcome = osspdh.setParameters( dhps );
-        if( setParametersOutcome.notOk()) throw new IllegalStateException( "other side setParameter: " + setParametersOutcome.msg() );
-        Outcome<Object> ossis = osspdh.setIdentitySecret( is );
-        if( ossis.notOk() ) throw new IllegalStateException( "other side setIdentitySecret: " + ossis.msg() );
-        generateOutcome = osspdh.generateKeys();
-        if( generateOutcome.notOk() ) throw new IllegalStateException( "other side generateKeys: " + generateOutcome.msg() );
-        Outcome<BigInteger> otherSideGetPublicKeyOutcome = osspdh.getPublicKey();
-        if( otherSideGetPublicKeyOutcome.notOk() ) throw new IllegalStateException( "other side getPublicKey: " + thisSideGetPublicKeyOutcome.msg() );
-        BigInteger otherSidePublicKey = otherSideGetPublicKeyOutcome.info();
-
-        // this side...
-        Outcome<Object> tssospko = tsspdh.setOtherSidePublicKey( otherSidePublicKey );
-        if( tssospko.notOk() ) throw new IllegalStateException( "other side public key: " + tssospko.msg() );
-        Outcome<BigInteger> tsgsso = tsspdh.getSharedSecret();
-        if( tsgsso.notOk() ) throw new IllegalStateException( "this side get shared secret: " + tsgsso );
-        BigInteger tsss = tsgsso.info();
-
-        // other side...
-        Outcome<Object> ossospko = osspdh.setOtherSidePublicKey( thisSidePublicKey );
-        if( ossospko.notOk() ) throw new IllegalStateException( "this side public key: " + ossospko.msg() );
-        Outcome<BigInteger> osgsso = osspdh.getSharedSecret();
-        if( osgsso.notOk() ) throw new IllegalStateException( "other side get shared secret: " + osgsso );
-        BigInteger osss = osgsso.info();
-
-        dhps.hashCode();
     }
 }
