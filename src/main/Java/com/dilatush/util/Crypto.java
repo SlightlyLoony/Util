@@ -42,7 +42,7 @@ public class Crypto {
      */
     public static SecureRandom getSecureRandom() {
 
-        // if we've already constructed and it's not time for a refresh, just give it up...
+        // if we've already constructed, and it's not time for a refresh, just give it up...
         if( !isNull( random ) && (System.currentTimeMillis() <= nextRefresh) )
             return random;
 
@@ -99,7 +99,7 @@ public class Crypto {
      * bytes.  This is precisely what {@link #getSocketInputStream_AES_128_CTR(Socket, Key)} does.
      *
      * @param _socket The connected socket to make an encrypted output stream for.
-     * @param _key The valid AES 128 bit key to use.
+     * @param _key The valid AES 128-bit key to use.
      * @return the created and initialized {@link CipherOutputStream} instance
      * @throws IOException on any I/O problem
      */
@@ -149,7 +149,7 @@ public class Crypto {
      * by this method will decrypt.  This is precisely what {@link #getSocketOutputStream_AES_128_CTR(Socket, Key)} does.
      *
      * @param _socket The connected socket to make an encrypted input stream for.
-     * @param _key The valid AES 128 bit key to use.
+     * @param _key The valid AES 128-bit key to use.
      * @return the created and initialized {@link CipherInputStream} instance
      * @throws IOException on any I/O problem
      */
@@ -205,18 +205,19 @@ public class Crypto {
 
 
     /**
-     * Returns {@code true} if the given key is a 128 bit AES key.
+     * Returns {@code true} if the given key is a 128-bit AES key.
      *
      * @param _key The {@link Key} instance to check.
-     * @return {@code true} if the given key is a 128 bit AES key
+     * @return {@code true} if the given key is a 128-bit AES key
      */
+    @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     public static boolean isKey_AES_128( final Key _key ) {
         return (_key != null) && ("AES".equals( _key.getAlgorithm())) && (_key.getEncoded().length == 16);
     }
 
 
     /**
-     * Creates and returns a 128 bit AES key using the given key bytes as the key material.  Exactly 16 bytes (128 bits) must be provided.
+     * Creates and returns a 128-bit AES key using the given key bytes as the key material.  Exactly 16 bytes (128 bits) must be provided.
      *
      * @param _keyBytes The 16 bytes (128 bits) of key material.
      * @return the 128 bit AES {@link Key}
@@ -232,7 +233,7 @@ public class Crypto {
 
 
     /**
-     * Creates and returns a 128 bit AES key using the given base64-encoded key bytes as the key material.  Exactly 22 characters (which decode to
+     * Creates and returns a 128-bit AES key using the given base64-encoded key bytes as the key material.  Exactly 22 characters (which decode to
      * 16 bytes (128 bits)) must be provided.
      *
      * @param _base64KeyBytes The 22 characters of base64-encoded key material.
@@ -321,7 +322,7 @@ public class Crypto {
         if( _a.compareTo( BigInteger.ONE ) == 0 )
             return 1;
 
-        // we make different tests depending on whether a is odd or even...
+        // we make different tests depending on whether _a is odd or even...
         // if it's even...
         if( !_a.testBit( 0 ) ) {
             boolean negate = _p.multiply( _p ).subtract( BigInteger.ONE ).divide( BigInteger.valueOf( 8 ) ).testBit( 0 );
@@ -345,6 +346,7 @@ public class Crypto {
      * @param _pBitLengths An array of all the desired bit lengths for the generated p values.
      * @return An array of {@link DHParameterSpec} instances, each containing one of the desired sets of Diffie-Hellman parameters.
      */
+    @SuppressWarnings("unused")
     public static DHParameterSpec[] generateDHParameters( final int[] _pBitLengths ) {
 
         // sanity checks...
