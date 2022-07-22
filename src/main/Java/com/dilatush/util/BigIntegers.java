@@ -9,6 +9,7 @@ import static com.dilatush.util.General.isNull;
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
+@SuppressWarnings( "unused" )
 public class BigIntegers {
 
 
@@ -33,4 +34,67 @@ public class BigIntegers {
         // LCM(a, b) = (a x b) / GCD(a, b)
         return _a.abs().multiply( _b.abs() ).divide( gcd );
     }
+
+
+    /**
+     * Computes the following information about the absolute values of the two given integers:
+     * <ul>
+     *     <li>The greatest common divisor (GCD) - the largest integer by which the two given integers (a and b) are evenly divisible.</li>
+     *     <li>The coefficients of <a href="https://en.wikipedia.org/wiki/B%C3%A9zout%27s_identity">Bézout's identity</a> such that ax + by = GCD( a, b ).</li>
+     *     <li>The quotients of the two given integers (a and b) divided by their GCD.</li>
+     * </ul>
+     * <p>This method uses the <a href="https://en.wikipedia.org/wiki/Extended_Euclidean_algorithm">extended Euclidean algorithm</a> to calculate all the return values.</p>
+     *
+     * @param _a One of the given integers
+     * @param _b The other given integer
+     * @return An instance of the record {@link EGCD}, containing the values computed by this method.
+     */
+    public static EGCD extendedGCD( final BigInteger _a, final BigInteger _b ) {
+
+        // sanity check...
+        if( isNull( _a, _b ) )
+            throw new IllegalArgumentException( "_a or _b is null" );
+
+        // some setup...
+        var r1 = _b.abs();
+        var r2 = _a.abs();
+        var s1 = BigInteger.ZERO;
+        var s2 = BigInteger.ONE;
+        var t1 = BigInteger.ONE;
+        var t2 = BigInteger.ZERO;
+
+        // iterate until r1 == 0...
+        while( r1.signum() != 0 ) {
+
+            // compute the quotient for this iteration...
+            var q = r2.divide( r1 );
+
+            // calculate the results for this iteration...
+            var rx = r1;
+            r1 = r2.subtract( q.multiply( r1 ) );
+            r2 = rx;
+            var sx = s1;
+            s1 = s2.subtract( q.multiply( s1 ) );
+            s2 = sx;
+            var tx = t1;
+            t1 = t2.subtract( q.multiply( t1 ) );
+            t2 = tx;
+        }
+
+        // we're done, so return our answers...
+        return new EGCD( r2, s2, t2, t1.abs(), s1.abs() );
+    }
+
+
+    /**
+     * The results of an extended GCD computation on the absolute values of two integers (a and b).  The fields in this record (all {@link BigInteger}s) are:
+     * <ul>
+     *     <li><i>gcd</i> - the greatest common divisor (GCD) of a and b.</li>
+     *     <li><i>bcx</i> - the Bézout's identity coefficient x, where ax + by = GCD( a, b ).</li>
+     *     <li><i>bcy</i> - the Bézout's identity coefficient y, where ax + by = GCD( a, b ).</li>
+     *     <li><i>qax</i> - a / GCD( a, b ).</li>
+     *     <li><i>qby</i> - b / GCD( a, b ).</li>
+     * </ul>
+     */
+    public record EGCD( BigInteger gcd, BigInteger bcx, BigInteger bcy, BigInteger qax, BigInteger qby ) {}
 }
