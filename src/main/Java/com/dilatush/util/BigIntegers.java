@@ -97,4 +97,24 @@ public class BigIntegers {
      * </ul>
      */
     public record EGCD( BigInteger gcd, BigInteger bcx, BigInteger bcy, BigInteger qax, BigInteger qby ) {}
+
+
+    /**
+     * <p>Returns (_a / _b) mod _m, where _m is a prime number.  This method does not check for _m being a prime number.  To divide modulo a composite number, factor the number to
+     * its prime factors, do the division for each of those, then multiply the results modulo _m.</p>
+     * <p>The author has no clue why this works; he got the algorithm from Cryptography Engineering, section 10.3.5 on the Extended Euclidean Algorithm, page 171.</p>
+     *
+     * @param _a The dividend.
+     * @param _b The divisor.
+     * @param _m The modulus, which must be a prime number.
+     * @return The quotient (_a / _b) mod _m.
+     */
+    public static BigInteger divMod( final BigInteger _a, final BigInteger _b, final BigInteger _m ) {
+
+        // find the Bézout's identity coefficient x in the results from the extended GCD of _b, _m...
+        BigInteger u = extendedGCD( _b, _m ).bcx;
+
+        // multiply by _a if _a != 1)...
+        return (BigInteger.ONE.compareTo( _a ) == 0) ? u : _a.multiply( u ).mod( _m );
+    }
 }
