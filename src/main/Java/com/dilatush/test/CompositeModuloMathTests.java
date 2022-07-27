@@ -4,7 +4,6 @@ import com.dilatush.util.CompositeModuloMath;
 
 import java.math.BigInteger;
 import java.security.SecureRandom;
-import java.util.Arrays;
 
 public class CompositeModuloMathTests {
 
@@ -12,8 +11,8 @@ public class CompositeModuloMathTests {
 
         // parameters...
         int bits = 8000;  // number of bits in results...
-        int ops  = 1000;  // number of operations to do...
-        int its  = 100;   // number of iterations to do...
+        int ops  = 100;  // number of operations to do...
+        int its  = 1000;   // number of iterations to do...
 
         // get a source of randomness...
         var sr = new SecureRandom();
@@ -25,15 +24,21 @@ public class CompositeModuloMathTests {
         CompositeModuloMath.CompositeIntegerModulus m = new CompositeModuloMath.CompositeIntegerModulus( n, p, q );
 
         // generate random BigIntegers of the size we need...
-        var rbi = new BigInteger[ops + 1];
+        var rbi = new BigInteger[ops];
         for( int i = 0; i < rbi.length; i++ ) {
             rbi[i] = new BigInteger( bits, sr );
         }
 
+        // convert them to CRT form...
+        var rcrt = new CompositeModuloMath.XCRT[ops];
+        for( int i = 0; i < rcrt.length; i++ ) {
+            rcrt[i] = new CompositeModuloMath.XCRT( m, rbi[i] );
+        }
+
         // warm up and check multiply validity...
         var stdResult = multiplyStd( m, rbi );
-        var crtResult = multiplyCRT( m, rbi );
-        if( Arrays.equals( stdResult, crtResult ) )
+        var crtResult = multiplyCRT( m, rcrt );
+        if( stdResult.equals( crtResult ) )
             out( "Multiply results are equal" );
         else {
             out( "Multiply results are NOT equal" );
@@ -47,7 +52,7 @@ public class CompositeModuloMathTests {
         }
         long t2 = System.currentTimeMillis();
         for( int i = 0; i < its; i++ ) {
-            multiplyCRT( m, rbi );
+            multiplyCRT( m, rcrt );
         }
         long t3 = System.currentTimeMillis();
         out( "Multiply times: standard " + (t2 - t1) + "ms, CRT " + (t3 - t2) + "ms." );
@@ -62,20 +67,20 @@ public class CompositeModuloMathTests {
     }
 
 
-    private static BigInteger[] multiplyStd( CompositeModuloMath.CompositeIntegerModulus _m, BigInteger[] _rbi ) {
-        var result = new BigInteger[ _rbi.length - 1];
-        for( int i = 0; i < result.length; i++ ) {
-            result[i] = _rbi[i].multiply( _rbi[i + 1] ).mod( _m.n() );
+    private static BigInteger multiplyStd( CompositeModuloMath.CompositeIntegerModulus _m, BigInteger[] _rbi ) {
+        var result = BigInteger.ONE;
+        for( BigInteger _bigInteger : _rbi ) {
+            result = result.multiply( _bigInteger ).mod( _m.n() );
         }
         return result;
     }
 
 
-    private static BigInteger[] multiplyCRT( CompositeModuloMath.CompositeIntegerModulus _m, BigInteger[] _rbi ) {
-        var result = new BigInteger[ _rbi.length - 1];
-        for( int i = 0; i < result.length; i++ ) {
-            result[i] = CompositeModuloMath.multiply( _m, _rbi[i], _rbi[i + 1] );
+    private static BigInteger multiplyCRT( CompositeModuloMath.CompositeIntegerModulus _m, CompositeModuloMath.XCRT[] _rcrt ) {
+        var result = new CompositeModuloMath.XCRT( _m, BigInteger.ONE );
+        for( CompositeModuloMath.XCRT xcrt : _rcrt ) {
+            result = result.multiply( xcrt );
         }
-        return result;
+        return result.deCRT();
     }
 }
