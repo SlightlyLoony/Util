@@ -51,7 +51,7 @@ public class CompositeModuloMath {
      * Represents a number x mod n represented as the pair (a mod p, b mod q) per the Chinese Remainder Theorem (see <i>Cryptography Engineering</i> section 12.2 <i>The Chinese
      * Remainder Theorem</i>).
      */
-    public record XCRT(CompositeIntegerModulus m, BigInteger a, BigInteger b ) {
+    public record XCRT( CompositeIntegerModulus m, BigInteger a, BigInteger b ) {
 
 
         /**
@@ -62,6 +62,7 @@ public class CompositeModuloMath {
          * @param x the number mod n.
          */
         public XCRT( CompositeIntegerModulus m, BigInteger x ) {
+
             this( m, x.mod( m.p ), x.mod( m.q ) );
         }
 
@@ -92,5 +93,36 @@ public class CompositeModuloMath {
             // return the new instance with the product...
             return new XCRT( m, axy, bxy );
         }
+    }
+
+
+    /**
+     * Returns the given integer x raised to the given integer power exp, modulo the composite modulus mod.  This method uses the Chinese Remainder Theory
+     * (per <i>Cryptography Engineering</i> page 198) to optimize the exponentiation.
+     *
+     * @param _x   The integer to raise to a power.
+     * @param _exp The integer power to raise x to.
+     * @param _mod The modulus of the result; the modulus must be the product of two primes.
+     * @return The given integer x raised to the given integer power exp, modulo the composite modulus mod.
+     */
+    public static BigInteger pow( final BigInteger _x, final BigInteger _exp, final CompositeIntegerModulus _mod ) {
+
+        // sanity checks...
+        if( isNull( _x, _exp, _mod ) )
+            throw new IllegalArgumentException( "_x, _exp, or _mod is null" );
+
+        // first we reduce the exponent for each factor of our composite modulus...
+        var pExp = _exp.mod( _mod.p.subtract( BigInteger.ONE ) );
+        var qExp = _exp.mod( _mod.q.subtract( BigInteger.ONE ) );
+
+        // next we raise our number to each factor's reduced power...
+        var a = _x.modPow( pExp, _mod.p );
+        var b = _x.modPow( qExp, _mod.q );
+
+        // construct our result in CRT form...
+        var result = new XCRT( _mod, a, b );
+
+        // now return the result as an integer, and we're done...
+        return result.deCRT();
     }
 }

@@ -14,6 +14,7 @@
       <w>dilatush</w>
       <w>dnsnio</w>
       <w>egcd</w>
+      <w>exponentiate</w>
       <w>ffff</w>
       <w>forma</w>
       <w>fsm's</w>
@@ -42,6 +43,7 @@
       <w>patoot</w>
       <w>peasy</w>
       <w>pinger</w>
+      <w>pnsr</w>
       <w>pntr</w>
       <w>positionals</w>
       <w>prestart</w>
@@ -61,6 +63,7 @@
       <w>unparseable</w>
       <w>unquoter</w>
       <w>worser</w>
+      <w>xcrt</w>
       <w>zabcdefghijklmnopqrstuvwxyz</w>
     </words>
   </dictionary>
