@@ -13,9 +13,11 @@ import static java.math.BigInteger.ONE;
  */
 public class RSA {
 
-    private static final int MAX_KEY_GENERATION_ATTEMPTS = 100;
-    private static final int DEFAULT_PUBLIC_ENCRYPTING_EXPONENT = 5;
-    private static final int DEFAULT_PUBLIC_SIGNING_EXPONENT    = 3;
+    private static final int MAX_KEY_GENERATION_ATTEMPTS           = 100;
+    private static final int DEFAULT_PUBLIC_ENCRYPTING_EXPONENT    = 5;
+    private static final int DEFAULT_PUBLIC_SIGNING_EXPONENT       = 3;
+    private static final int SMALLEST_ALLOWABLE_MODULUS_BIT_LENGTH = 10;   // TODO: put this back to 2000...
+    private static final int LARGEST_ALLOWABLE_MODULUS_BIT_LENGTH  = 10000;
 
 
     /**
@@ -28,7 +30,7 @@ public class RSA {
 
         // sanity checks...
         if( isNull( _key, _plainText ) ) throw new IllegalArgumentException( "_key or _plainText is null" );
-        if( _key.n.bitLength() < _plainText.bitLength() ) throw new IllegalArgumentException( "_plainText bit length exceeds the modulus of the key" );
+        if( _key.n.compareTo( _plainText ) < 0 ) throw new IllegalArgumentException( "_plainText is not less than the modulus of the key" );
 
         // perform the encryption...
         return _plainText.modPow( _key.eEncrypting, _key.n );
@@ -45,10 +47,38 @@ public class RSA {
 
         // sanity checks...
         if( isNull( _key, _cipherText ) ) throw new IllegalArgumentException( "_key or _cipherText is null" );
-        if( _key.m.n().bitLength() < _cipherText.bitLength() ) throw new IllegalArgumentException( "_cipherText bit length exceeds the modulus of the key" );
+        if( _key.m.n().compareTo( _cipherText ) < 0 ) throw new IllegalArgumentException( "_cipherText is not less than the modulus of the key" );
 
         // perform the encryption...
         return CompositeModuloMath.pow( _cipherText, _key.dEncrypting, _key.m );
+    }
+
+
+    private static final int MAX_PRIME_ATTEMPTS_PER_BIT = 100;
+    private static final int PRIME_CERTAINTY = 100;
+
+    private static BigInteger generateRSAPrime( final SecureRandom _random, final int _bitLength, final BigInteger _pubKey1, final BigInteger _pubKey2 ) {
+
+        // figure out how many attempts we're willing to make before giving up...
+        var attempts = MAX_PRIME_ATTEMPTS_PER_BIT * _bitLength;
+
+        // iterate until we find a suitable prime, or we give up...
+        while( attempts-- > 0 ) {
+
+            // pick a random number of the desired size...
+            var trial = new BigInteger( _bitLength, _random );
+
+            // make sure that modulo either public key, the number does not equal 1...
+            if( trial.mod( _pubKey1 ).compareTo( ONE ) == 0 ) continue;
+            if( trial.mod( _pubKey2 ).compareTo( ONE ) == 0 ) continue;
+
+            // if our number is prime, to a certainty of 1-1/2^100, then we have a winner - return it...
+            if( trial.isProbablePrime( PRIME_CERTAINTY ) )
+                return trial;
+        }
+
+        // if we get here, we couldn't find a suitable prime with our maximum number of attempts...
+        throw new IllegalStateException( "couldn't find a suitable RSA prime within " + (MAX_PRIME_ATTEMPTS_PER_BIT * _bitLength) + " attempts" );
     }
 
 
@@ -69,8 +99,8 @@ public class RSA {
             throw new IllegalArgumentException( "_random was null" );
 
         // check for a reasonable modulus bit length...
-        if( _modulusBitLength < 2000  ) throw new IllegalArgumentException( _modulusBitLength + " is unreasonably small for a modulus" );
-        if( _modulusBitLength > 10000 ) throw new IllegalArgumentException( _modulusBitLength + " is unreasonably large for a modulus" );
+        if( _modulusBitLength < SMALLEST_ALLOWABLE_MODULUS_BIT_LENGTH  ) throw new IllegalArgumentException( _modulusBitLength + " is unreasonably small for a modulus" );
+        if( _modulusBitLength > LARGEST_ALLOWABLE_MODULUS_BIT_LENGTH   ) throw new IllegalArgumentException( _modulusBitLength + " is unreasonably large for a modulus" );
 
         // check for reasonable public exponents...
         if( (_ePubEncrypting < 3) || (_ePubEncrypting > 99999) ) throw new IllegalArgumentException( _ePubEncrypting + " _ePubEncrypting is not in [3..99999]" );
@@ -90,8 +120,8 @@ public class RSA {
         while( attempts++ < MAX_KEY_GENERATION_ATTEMPTS ) {
 
             // generate a trial p and q with half our desired modulus bit length...
-            var p = BigInteger.probablePrime( _modulusBitLength >> 1, _random );
-            var q = BigInteger.probablePrime( _modulusBitLength >> 1, _random );
+            var p = generateRSAPrime( _random, _modulusBitLength >> 1, ePubEncrypting, ePubSigning );
+            var q = generateRSAPrime( _random, _modulusBitLength >> 1, ePubEncrypting, ePubSigning );
 
             // if p == q, try again...
             if( p.compareTo( q ) == 0 )
@@ -107,13 +137,13 @@ public class RSA {
             var egcd = BigIntegers.extendedGCD( ePubEncrypting, t );
             if( egcd.gcd().compareTo( ONE ) != 0 )   // if the gcd is anything other than 1, we've got a nasty shared factor, so try again...
                 continue;
-            var ePriEncrypting = egcd.bcx().mod( t );
+            var ePriEncrypting = egcd.x().mod( t );
 
             // compute the private signing exponent, and verify that it shares no factors with t...
             egcd = BigIntegers.extendedGCD( ePubSigning, t );
             if( egcd.gcd().compareTo( ONE ) != 0 )   // if the gcd is anything other than 1, we've got a nasty shared factor, so try again...
                 continue;
-            var ePriSigning = egcd.bcx().mod( t );
+            var ePriSigning = egcd.x().mod( t );
 
             // if we get here, then we have all the information we need to make a usable pair of keys - so construct our result and skedaddle...
             var pubKey = new RSAPublicKey( n, ePubEncrypting, ePubSigning );

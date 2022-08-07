@@ -9,9 +9,11 @@ public class RSATests {
 
     public static void main( final String[] _args ) {
 
-        // get some RSA keys...
+        // some setup...
         var random = new SecureRandom();
-        var keys = RSA.generateKeys( random, 2500, 7, 11 );
+
+        // get some RSA keys...
+        var keys = RSA.generateKeys( random, 2048 );
 
         // make sure the public and private exponents are inverses...
         var prod = keys.privateKey().dEncrypting().multiply( keys.publicKey().eEncrypting() ).mod( keys.privateKey().t() );
@@ -22,9 +24,15 @@ public class RSATests {
             throw new IllegalStateException( "Signing exponents not inverse" );
 
         // try encrypting and decrypting...
-        var plainText = BigInteger.probablePrime( keys.privateKey().m().n().bitLength(), random );
-        var cipherText = RSA.encryptPublic( keys.publicKey(), plainText );
-        var decryptedText = RSA.decryptPrivate( keys.privateKey(), cipherText );
+        for( int i = 0; i < 10000; i++ ) {
+            var plainText = new BigInteger( keys.privateKey().m().n().bitLength(), random ).mod( keys.publicKey().n() );
+            var cipherText = RSA.encryptPublic( keys.publicKey(), plainText );
+            var decryptedText = RSA.decryptPrivate( keys.privateKey(), cipherText );
+            var goodDecrypt = (plainText.compareTo( decryptedText ) == 0);
+            if( !goodDecrypt )
+                plainText.hashCode();
+            System.out.println( plainText );
+        }
 
         new Object().hashCode();
     }

@@ -3,6 +3,7 @@ package com.dilatush.util;
 import java.math.BigInteger;
 
 import static com.dilatush.util.General.isNull;
+import static java.math.BigInteger.*;
 
 /**
  * Static container class for functions related to instances of {@link BigInteger}.
@@ -29,7 +30,7 @@ public class BigIntegers {
         // if the gcd is zero, return zero...
         BigInteger gcd =  _a.gcd( _b );
         if( gcd.signum() == 0 )
-            return BigInteger.ZERO;
+            return ZERO;
 
         // LCM(a, b) = (a x b) / GCD(a, b)
         return _a.abs().multiply( _b.abs() ).divide( gcd );
@@ -51,38 +52,47 @@ public class BigIntegers {
      */
     public static EGCD extendedGCD( final BigInteger _a, final BigInteger _b ) {
 
-        // sanity check...
-        if( isNull( _a, _b ) )
-            throw new IllegalArgumentException( "_a or _b is null" );
+        // sanity checks...
+        if( isNull( _a, _b ) )                       throw new IllegalArgumentException( "_a or _b is null" );
+        if( (_a.signum() < 0) || (_b.signum() < 0) ) throw new IllegalArgumentException( "_a or _b is negative" );
 
-        // some setup...
-        var r1 = _b.abs();
-        var r2 = _a.abs();
-        var s1 = BigInteger.ZERO;
-        var s2 = BigInteger.ONE;
-        var t1 = BigInteger.ONE;
-        var t2 = BigInteger.ZERO;
+        // some initialization...
+        var c = _a;
+        var d = _b;
+        var uC = ONE;
+        var vC = ZERO;
+        var uD = ZERO;
+        var vD = ONE;
+        BigInteger scratch;
 
-        // iterate until r1 == 0...
-        while( r1.signum() != 0 ) {
+        // iterate until c has been reduced to zero...
+        while( c.signum() != 0 ) {
 
-            // compute the quotient for this iteration...
-            var q = r2.divide( r1 );
+            // at this point, (uC * a) + (vC * b) = c, and (uD * a) + (vD * b) = d...
 
-            // calculate the results for this iteration...
-            var rx = r1;
-            r1 = r2.subtract( q.multiply( r1 ) );
-            r2 = rx;
-            var sx = s1;
-            s1 = s2.subtract( q.multiply( s1 ) );
-            s2 = sx;
-            var tx = t1;
-            t1 = t2.subtract( q.multiply( t1 ) );
-            t2 = tx;
+            // Euclidean divide...
+            var q = d.divide( c );
+
+            // update the three pairs of variables (c,d), (uC,uD), (vC, vD)...
+
+            // (c, d)...
+            scratch = c;
+            c = d.subtract( q.multiply( c ) );
+            d = scratch;
+
+            // (uC, uD)...
+            scratch = uC;
+            uC = uD.subtract( q.multiply( uC ) );
+            uD = scratch;
+
+            // (vC, vD)...
+            scratch = vC;
+            vC = vD.subtract( q.multiply( vC ) );
+            vD = scratch;
         }
 
-        // we're done, so return our answers...
-        return new EGCD( r2, s2, t2, t1.abs(), s1.abs() );
+        // we've got our answers, so skedaddle with them...
+        return new EGCD( d, uD, vD );
     }
 
 
@@ -90,13 +100,11 @@ public class BigIntegers {
      * The results of an extended GCD computation on the absolute values of two integers (a and b).  The fields in this record (all {@link BigInteger}s) are:
      * <ul>
      *     <li><i>gcd</i> - the greatest common divisor (GCD) of a and b.</li>
-     *     <li><i>bcx</i> - the Bézout's identity coefficient x, where ax + by = GCD( a, b ).</li>
-     *     <li><i>bcy</i> - the Bézout's identity coefficient y, where ax + by = GCD( a, b ).</li>
-     *     <li><i>qax</i> - a / GCD( a, b ).</li>
-     *     <li><i>qby</i> - b / GCD( a, b ).</li>
+     *     <li><i>x</i> - the Bézout's identity coefficient x, where ax + by = GCD( a, b ).</li>
+     *     <li><i>y</i> - the Bézout's identity coefficient y, where ax + by = GCD( a, b ).</li>
      * </ul>
      */
-    public record EGCD( BigInteger gcd, BigInteger bcx, BigInteger bcy, BigInteger qax, BigInteger qby ) {}
+    public record EGCD( BigInteger gcd, BigInteger x, BigInteger y ) {}
 
 
     /**
@@ -112,9 +120,9 @@ public class BigIntegers {
     public static BigInteger divMod( final BigInteger _a, final BigInteger _b, final BigInteger _m ) {
 
         // find the Bézout's identity coefficient x in the results from the extended GCD of _b, _m...
-        BigInteger u = extendedGCD( _b, _m ).bcx;
+        BigInteger u = extendedGCD( _b, _m ).x;
 
         // multiply by _a if _a != 1)...
-        return (BigInteger.ONE.compareTo( _a ) == 0) ? u : _a.multiply( u ).mod( _m );
+        return (ONE.compareTo( _a ) == 0) ? u : _a.multiply( u ).mod( _m );
     }
 }
