@@ -3,6 +3,8 @@ package com.dilatush.util;
 import java.math.BigInteger;
 import java.security.SecureRandom;
 
+import static com.dilatush.util.CompositeModuloMath.CompositeIntegerModulus;
+import static com.dilatush.util.CompositeModuloMath.pow;
 import static com.dilatush.util.General.isNull;
 import static java.math.BigInteger.ONE;
 
@@ -18,6 +20,8 @@ public class RSA {
     private static final int DEFAULT_PUBLIC_SIGNING_EXPONENT       = 3;
     private static final int SMALLEST_ALLOWABLE_MODULUS_BIT_LENGTH = 10;   // TODO: put this back to 2000...
     private static final int LARGEST_ALLOWABLE_MODULUS_BIT_LENGTH  = 10000;
+
+    private static final Outcome.Forge<RSAKeyPair> forgeRSAKeyPair = new Outcome.Forge<>();
 
 
     /**
@@ -50,7 +54,7 @@ public class RSA {
         if( _key.m.n().compareTo( _cipherText ) < 0 ) throw new IllegalArgumentException( "_cipherText is not less than the modulus of the key" );
 
         // perform the encryption...
-        return CompositeModuloMath.pow( _cipherText, _key.dEncrypting, _key.m );
+        return pow( _cipherText, _key.dEncrypting, _key.m );
     }
 
 
@@ -92,11 +96,12 @@ public class RSA {
      * @param _ePubSigning
      * @return
      */
-    public static RSAKeyPair generateKeys( final SecureRandom _random, final int _modulusBitLength, final int _ePubEncrypting, final int _ePubSigning ) {
+    public static Outcome<RSAKeyPair> generateKeys( final SecureRandom _random, final int _modulusBitLength, final int _ePubEncrypting, final int _ePubSigning ) {
+
+        // TODO: get rid of all the exceptions, in this method and all the others...
 
         // check that we got a source of randomness...
-        if( isNull( _random ))
-            throw new IllegalArgumentException( "_random was null" );
+        if( isNull( _random )) return forgeRSAKeyPair.notOk( "_random was null" );
 
         // check for a reasonable modulus bit length...
         if( _modulusBitLength < SMALLEST_ALLOWABLE_MODULUS_BIT_LENGTH  ) throw new IllegalArgumentException( _modulusBitLength + " is unreasonably small for a modulus" );
@@ -147,8 +152,8 @@ public class RSA {
 
             // if we get here, then we have all the information we need to make a usable pair of keys - so construct our result and skedaddle...
             var pubKey = new RSAPublicKey( n, ePubEncrypting, ePubSigning );
-            var priKey = new RSAPrivateKey( new CompositeModuloMath.CompositeIntegerModulus( n, p, q ), t, ePriEncrypting, ePriSigning );
-            return new RSAKeyPair( pubKey, priKey );
+            var priKey = new RSAPrivateKey( new CompositeIntegerModulus( n, p, q ), t, ePriEncrypting, ePriSigning );
+            return forgeRSAKeyPair.ok( new RSAKeyPair( pubKey, priKey ) );
         }
 
         // if we get here, we couldn't generate keys within a reasonable number of attempts...
@@ -164,7 +169,7 @@ public class RSA {
      * @param _modulusBitLength
      * @return
      */
-    public static RSAKeyPair generateKeys( final SecureRandom _random, final int _modulusBitLength ) {
+    public static Outcome<RSAKeyPair> generateKeys( final SecureRandom _random, final int _modulusBitLength ) {
         return generateKeys( _random, _modulusBitLength, DEFAULT_PUBLIC_ENCRYPTING_EXPONENT, DEFAULT_PUBLIC_SIGNING_EXPONENT );
     }
 
@@ -187,7 +192,7 @@ public class RSA {
      * @param dEncrypting
      * @param dSigning
      */
-    public record RSAPrivateKey( CompositeModuloMath.CompositeIntegerModulus m, BigInteger t, BigInteger dEncrypting, BigInteger dSigning ) {}
+    public record RSAPrivateKey( CompositeIntegerModulus m, BigInteger t, BigInteger dEncrypting, BigInteger dSigning ) {}
 
 
     /**
