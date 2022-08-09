@@ -3,6 +3,7 @@ package com.dilatush.util;
 import java.math.BigInteger;
 import java.security.SecureRandom;
 
+import static com.dilatush.util.BigIntegers.*;
 import static com.dilatush.util.CompositeModuloMath.CompositeIntegerModulus;
 import static com.dilatush.util.CompositeModuloMath.pow;
 import static com.dilatush.util.General.isNull;
@@ -16,10 +17,6 @@ import static java.math.BigInteger.ONE;
 public class RSA {
 
     private static final int MAX_KEY_GENERATION_ATTEMPTS           = 100;
-    private static final int DEFAULT_PUBLIC_ENCRYPTING_EXPONENT    = 5;
-    private static final int DEFAULT_PUBLIC_SIGNING_EXPONENT       = 3;
-    private static final int SMALLEST_ALLOWABLE_MODULUS_BIT_LENGTH = 10;   // TODO: put this back to 2000...
-    private static final int LARGEST_ALLOWABLE_MODULUS_BIT_LENGTH  = 10000;
 
     private static final Outcome.Forge<RSAKeyPair> forgeRSAKeyPair = new Outcome.Forge<>();
 
@@ -87,6 +84,57 @@ public class RSA {
 
 
     /**
+     * Returns a randomly selected integer, uniformly distributed over the range [m..n), where n is the RSA modulus, and m is the first integer larger than n^(1/3).  The
+     * upper bound is the largest number that can be encrypted by RSA using the modulus n.  The lower bound is the smallest number such that m^3 != m^3 modulo n.
+     *
+     * @param _random A source of randomness.
+     * @param _modulus The RSA modulus (n).
+     * @return A randomly selected integer, uniformly distributed over the range [m..n).
+     */
+    private static BigInteger getRandomPlainText( final SecureRandom _random, final BigInteger _modulus ) {
+
+        // sanity checks...
+        if( isNull( _random, _modulus ) ) throw new IllegalArgumentException( "_random or _modulus is null" );
+        if( _modulus.compareTo( BigInteger.valueOf( 1000 ) ) <= 0 ) throw new IllegalArgumentException( "_modulus is unreasonably small (" + _modulus + ")" );
+
+        // compute our bounds [m..n], and the range (n - m)...
+        // noinspection UnnecessaryLocalVariable
+        var n = _modulus;
+        var m = root( n, 3 ).add( ONE );
+        var r = n.subtract( m );
+
+        // iterate until we get a random number within our range...
+        BigInteger result;
+        do {
+            result = new BigInteger( r.bitLength(), _random );
+        } while( result.compareTo( r ) >= 0 );
+
+        // add the lower bound and we've got the answer we wanted...
+        return result.add( m );
+    }
+
+
+    public static BigInteger getRandomPlainText( final SecureRandom _random, final RSAPrivateKey _key ) {
+
+        // sanity check...
+        if( isNull( _key ) ) throw new IllegalArgumentException( "_key is null" );
+
+        // extract the modulus from the key; use it to compute the random result...
+        return getRandomPlainText( _random, _key.m.n() );
+    }
+
+
+    public static BigInteger getRandomPlainText( final SecureRandom _random, final RSAPublicKey _key ) {
+
+        // sanity check...
+        if( isNull( _key ) ) throw new IllegalArgumentException( "_key is null" );
+
+        // extract the modulus from the key; use it to compute the random result...
+        return getRandomPlainText( _random, _key.n );
+    }
+
+
+    /**
      * Generates a pair of RSA keys (a private key and a public key) with the given modulus length (n) in bits, the given public encrypting exponent (eEncrypting), and the given
      * public signing exponent (eSigning).
      *
@@ -94,31 +142,34 @@ public class RSA {
      * @param _modulusBitLength
      * @param _ePubEncrypting
      * @param _ePubSigning
+     * @param _bitLengthLoLimit
+     * @param _bitLengthHiLimit
      * @return
      */
-    public static Outcome<RSAKeyPair> generateKeys( final SecureRandom _random, final int _modulusBitLength, final int _ePubEncrypting, final int _ePubSigning ) {
-
-        // TODO: get rid of all the exceptions, in this method and all the others...
+    public static Outcome<RSAKeyPair> generateKeys( final SecureRandom _random, final int _modulusBitLength,
+                                                    final int _ePubEncrypting, final int _ePubSigning,
+                                                    final int _bitLengthLoLimit, final int _bitLengthHiLimit ) {
 
         // check that we got a source of randomness...
-        if( isNull( _random )) return forgeRSAKeyPair.notOk( "_random was null" );
+        if( isNull( _random )) throw new IllegalArgumentException( "_random was null" );
 
+// TODO: better checks for arguments...
         // check for a reasonable modulus bit length...
-        if( _modulusBitLength < SMALLEST_ALLOWABLE_MODULUS_BIT_LENGTH  ) throw new IllegalArgumentException( _modulusBitLength + " is unreasonably small for a modulus" );
-        if( _modulusBitLength > LARGEST_ALLOWABLE_MODULUS_BIT_LENGTH   ) throw new IllegalArgumentException( _modulusBitLength + " is unreasonably large for a modulus" );
+        if( _modulusBitLength < _bitLengthLoLimit ) return forgeRSAKeyPair.notOk( _modulusBitLength + " is an unreasonably short bit length for a modulus" );
+        if( _modulusBitLength > _bitLengthHiLimit ) return forgeRSAKeyPair.notOk( _modulusBitLength + " is an unreasonably long bit length for a modulus"  );
 
         // check for reasonable public exponents...
-        if( (_ePubEncrypting < 3) || (_ePubEncrypting > 99999) ) throw new IllegalArgumentException( _ePubEncrypting + " _ePubEncrypting is not in [3..99999]" );
-        if( (_ePubSigning    < 3) || (_ePubSigning    > 99999) ) throw new IllegalArgumentException( _ePubSigning    + " _ePubSigning is not in [3..99999]"    );
-        if( (_ePubEncrypting & 1) == 0 ) throw new IllegalArgumentException( "_ePubEncrypting is not odd" );
-        if( (_ePubSigning    & 1) == 0 ) throw new IllegalArgumentException( "_ePubSigning is not odd" );
-        if( _ePubEncrypting == _ePubSigning ) throw new IllegalArgumentException( "_ePubEncrypting cannot be the same value as _ePubSigning" );
+        if( (_ePubEncrypting < 3) || (_ePubEncrypting > 99999) ) return forgeRSAKeyPair.notOk( _ePubEncrypting + " _ePubEncrypting is not in [3..99999]" );
+        if( (_ePubSigning    < 3) || (_ePubSigning    > 99999) ) return forgeRSAKeyPair.notOk( _ePubSigning    + " _ePubSigning is not in [3..99999]"    );
+        if( (_ePubEncrypting & 1) == 0 ) return forgeRSAKeyPair.notOk( "_ePubEncrypting is not odd" );
+        if( (_ePubSigning    & 1) == 0 ) return forgeRSAKeyPair.notOk( "_ePubSigning is not odd" );
+        if( _ePubEncrypting == _ePubSigning ) return forgeRSAKeyPair.notOk( "_ePubEncrypting cannot be the same value as _ePubSigning" );
 
         // make sure that the two public exponents have no common factors...
         var ePubEncrypting = BigInteger.valueOf( _ePubEncrypting );
         var ePubSigning    = BigInteger.valueOf( _ePubSigning    );
-        if( BigIntegers.extendedGCD( ePubEncrypting, ePubSigning ).gcd().compareTo( ONE) != 0 )
-            throw new IllegalArgumentException( _ePubEncrypting + " and " + _ePubSigning + " have one or more common factors" );
+        if( extendedGCD( ePubEncrypting, ePubSigning ).gcd().compareTo( ONE) != 0 )
+            return forgeRSAKeyPair.notOk( _ePubEncrypting + " and " + _ePubSigning + " have one or more common factors" );
 
         // if we get here, then we're ready to attempt key generation - but we'll only try MAX_KEY_GENERATION_ATTEMPTS times before we throw up our hands and give up...
         var attempts = 0;
@@ -136,16 +187,16 @@ public class RSA {
             var n = p.multiply( q );
 
             // compute t as the least common multiple (p − 1, q − 1)...
-            var t = BigIntegers.lcm( p.subtract( ONE ), q.subtract( ONE ) );
+            var t = lcm( p.subtract( ONE ), q.subtract( ONE ) );
 
             // compute the private encrypting exponent, and verify that it shares no factors with t...
-            var egcd = BigIntegers.extendedGCD( ePubEncrypting, t );
+            var egcd = extendedGCD( ePubEncrypting, t );
             if( egcd.gcd().compareTo( ONE ) != 0 )   // if the gcd is anything other than 1, we've got a nasty shared factor, so try again...
                 continue;
             var ePriEncrypting = egcd.x().mod( t );
 
             // compute the private signing exponent, and verify that it shares no factors with t...
-            egcd = BigIntegers.extendedGCD( ePubSigning, t );
+            egcd = extendedGCD( ePubSigning, t );
             if( egcd.gcd().compareTo( ONE ) != 0 )   // if the gcd is anything other than 1, we've got a nasty shared factor, so try again...
                 continue;
             var ePriSigning = egcd.x().mod( t );
@@ -157,8 +208,10 @@ public class RSA {
         }
 
         // if we get here, we couldn't generate keys within a reasonable number of attempts...
-        throw new IllegalStateException( "could not generate RSA keys after " + attempts + " attempts" );
+        return forgeRSAKeyPair.notOk( "could not generate RSA keys after " + attempts + " attempts" );
     }
+    private static final int SHORTEST_REASONABLE_MODULUS_BIT_LENGTH = 2000;
+    private static final int LONGEST_REASONABLE_MODULUS_BIT_LENGTH  = 10000;
 
 
     /**
@@ -169,8 +222,29 @@ public class RSA {
      * @param _modulusBitLength
      * @return
      */
+    public static Outcome<RSAKeyPair> generateKeys( final SecureRandom _random, final int _modulusBitLength, final int _ePubEncrypting, final int _ePubSigning ) {
+        return generateKeys(
+                _random, _modulusBitLength,
+                _ePubEncrypting, _ePubSigning,
+                SHORTEST_REASONABLE_MODULUS_BIT_LENGTH, LONGEST_REASONABLE_MODULUS_BIT_LENGTH );
+    }
+
+    private static final int DEFAULT_PUBLIC_ENCRYPTING_EXPONENT    = 5;
+    private static final int DEFAULT_PUBLIC_SIGNING_EXPONENT       = 3;
+
+    /**
+     * Generates a pair of RSA keys (a private key and a public key) with the given modulus length (n) in bits, using 3 as the public encrypting exponent, and 5 as
+     * the public signing exponent.
+     *
+     * @param _random
+     * @param _modulusBitLength
+     * @return
+     */
     public static Outcome<RSAKeyPair> generateKeys( final SecureRandom _random, final int _modulusBitLength ) {
-        return generateKeys( _random, _modulusBitLength, DEFAULT_PUBLIC_ENCRYPTING_EXPONENT, DEFAULT_PUBLIC_SIGNING_EXPONENT );
+        return generateKeys(
+                _random, _modulusBitLength,
+                DEFAULT_PUBLIC_ENCRYPTING_EXPONENT, DEFAULT_PUBLIC_SIGNING_EXPONENT,
+                SHORTEST_REASONABLE_MODULUS_BIT_LENGTH, LONGEST_REASONABLE_MODULUS_BIT_LENGTH );
     }
 
 

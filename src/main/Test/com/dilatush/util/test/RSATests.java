@@ -1,4 +1,4 @@
-package com.dilatush.test;
+package com.dilatush.util.test;
 
 import com.dilatush.util.RSA;
 
@@ -13,7 +13,10 @@ public class RSATests {
         var random = new SecureRandom();
 
         // get some RSA keys...
-        var keys = RSA.generateKeys( random, 2048 );
+        var keysOutcome = RSA.generateKeys( random, 2048 );
+        if( keysOutcome.notOk() )
+            throw new IllegalStateException( keysOutcome.msg() );
+        var keys = keysOutcome.info();
 
         // make sure the public and private exponents are inverses...
         var prod = keys.privateKey().dEncrypting().multiply( keys.publicKey().eEncrypting() ).mod( keys.privateKey().t() );
@@ -25,7 +28,7 @@ public class RSATests {
 
         // try encrypting and decrypting...
         for( int i = 0; i < 10000; i++ ) {
-            var plainText = new BigInteger( keys.privateKey().m().n().bitLength(), random ).mod( keys.publicKey().n() );
+            var plainText = RSA.getRandomPlainText( random, keys.publicKey() );
             var cipherText = RSA.encryptPublic( keys.publicKey(), plainText );
             var decryptedText = RSA.decryptPrivate( keys.privateKey(), cipherText );
             var goodDecrypt = (plainText.compareTo( decryptedText ) == 0);

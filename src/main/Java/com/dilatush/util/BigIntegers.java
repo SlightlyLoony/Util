@@ -15,6 +15,37 @@ public class BigIntegers {
 
 
     /**
+     * Returns the largest integer r such that r^root <= base.  The base argument must be non-{@code null}, and &gt; zero.  The root argument
+     * must be &gt; 1.
+     *
+     * @param _base
+     * @param _root
+     * @return
+     */
+    public static BigInteger root( final BigInteger _base, final int _root ) {
+
+        // sanity checks...
+        if( isNull( _base )     ) throw new IllegalArgumentException( "_base is null" );
+        if( _base.signum() != 1 ) throw new IllegalArgumentException( "_base must be non-zero and positive" );
+        if( _root < 1           ) throw new IllegalArgumentException( "_root must be greater than one" );
+
+        // use Newton's method to find the root...
+        var result = _base.add( ONE );
+        var k1 = _root - 1;
+        var u = _base;
+        while( u.compareTo( result ) < 0 ) {
+            result = u;
+            var ua = u.multiply( BigInteger.valueOf( k1 ) );
+            var ub = u.pow( k1 );
+            var uc = _base.divide( ub );
+            var ud = ua.add( uc );
+            u = ud.divide( BigInteger.valueOf( _root ) );
+        }
+        return result;
+    }
+
+
+    /**
      * Returns the least common multiple (LCM) of the two given integers.  If both the given integers are equal to zero, returns a zero.
      *
      * @param _a One of the integers
