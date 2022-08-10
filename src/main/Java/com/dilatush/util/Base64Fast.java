@@ -1,5 +1,6 @@
 package com.dilatush.util;
 
+import java.math.BigInteger;
 import java.util.Arrays;
 
 import static com.dilatush.util.General.isNull;
@@ -81,6 +82,43 @@ public class Base64Fast {
             result = (result << 8) | (b & 0xFF);
         }
         return result;
+    }
+
+
+    /**
+     * Returns the base 64 string that encodes the given bytes.
+     *
+     * @param _number the {@link BigInteger} to encode to base 64.
+     * @return the base 64 encoding of the given numbers.
+     * @throws IllegalArgumentException if the number is missing
+     */
+    public static String encode( final BigInteger _number ) {
+
+        // sanity checks...
+        if( isNull( _number ) ) throw new IllegalArgumentException( "_number is null" );
+
+        // convert the number to an array of bytes and encode that...
+        return encode( _number.toByteArray() );
+    }
+
+
+    /**
+     * Returns the {@link BigInteger} encoded by the specified base64 string.  Throws an
+     * {@link IllegalArgumentException} if the given string is missing, or contains invalid characters.
+     *
+     * @param _base64 the base 64 encoding to decode into a long.
+     * @return the {@link BigInteger} decoded from the specified encoding.
+     */
+    public static BigInteger decodeBigInteger( final String _base64 ) {
+
+        // sanity check...
+        if( isNull( _base64 ) ) throw new IllegalArgumentException( "_base64 is null" );
+
+        // decode into a byte array...
+        var bytes = decodeBytes( _base64 );
+
+        // construct a BigInteger from the decoded bytes...
+        return new BigInteger( bytes );
     }
 
 
@@ -307,12 +345,5 @@ public class Base64Fast {
             result[ALPHABET.charAt( i )] = (byte)i;
         }
         return result;
-    }
-
-
-    public static void main( final String[] _args ) {
-
-        String x = encode( 165 );
-        String y = Base64.encode( 165 );
     }
 }

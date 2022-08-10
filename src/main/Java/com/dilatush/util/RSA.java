@@ -16,8 +16,6 @@ import static java.math.BigInteger.ONE;
  */
 public class RSA {
 
-    private static final int MAX_KEY_GENERATION_ATTEMPTS           = 100;
-
     private static final Outcome.Forge<RSAKeyPair> forgeRSAKeyPair = new Outcome.Forge<>();
 
 
@@ -134,6 +132,8 @@ public class RSA {
     }
 
 
+    private static final int MAX_KEY_GENERATION_ATTEMPTS = 100;
+
     /**
      * Generates a pair of RSA keys (a private key and a public key) with the given modulus length (n) in bits, the given public encrypting exponent (eEncrypting), and the given
      * public signing exponent (eSigning).
@@ -210,9 +210,10 @@ public class RSA {
         // if we get here, we couldn't generate keys within a reasonable number of attempts...
         return forgeRSAKeyPair.notOk( "could not generate RSA keys after " + attempts + " attempts" );
     }
+
+
     private static final int SHORTEST_REASONABLE_MODULUS_BIT_LENGTH = 2000;
     private static final int LONGEST_REASONABLE_MODULUS_BIT_LENGTH  = 10000;
-
 
     /**
      * Generates a pair of RSA keys (a private key and a public key) with the given modulus length (n) in bits, using 3 as the public encrypting exponent, and 5 as
@@ -228,6 +229,7 @@ public class RSA {
                 _ePubEncrypting, _ePubSigning,
                 SHORTEST_REASONABLE_MODULUS_BIT_LENGTH, LONGEST_REASONABLE_MODULUS_BIT_LENGTH );
     }
+
 
     private static final int DEFAULT_PUBLIC_ENCRYPTING_EXPONENT    = 5;
     private static final int DEFAULT_PUBLIC_SIGNING_EXPONENT       = 3;
@@ -255,7 +257,30 @@ public class RSA {
      * @param eEncrypting The encrypting exponent for this key.
      * @param eSigning The signing exponent for this key.
      */
-    public record RSAPublicKey( BigInteger n, BigInteger eEncrypting, BigInteger eSigning ) {}
+    public record RSAPublicKey( BigInteger n, BigInteger eEncrypting, BigInteger eSigning ) {
+
+
+        /**
+         * Returns a string that represents the value of this key, formatted as follows:
+         * <ul>
+         *     <li>The string "n:".</li>
+         *     <li>The base64 value of {@code n}.</li>
+         *     <li>A terminating semicolon (";").</li>
+         *     <li>The string "eEncrypting:".</li>
+         *     <li>The base64 value of {@code eEncrypting}</li>
+         *     <li>A terminating semicolon (";").</li>
+         *     <li>The string "eSigning:".</li>
+         *     <li>The base64 value of {@code eSigning}.</li>
+         *     <li>A terminating semicolon.</li>
+         * </ul>
+         * For example, if n = 1, eEncrypting = 2, and eSigning = 3, the string would be {@code n:1;eEncrypting:2;eSigning:3;}.
+         *
+         * @return A string representing the value of this key.
+         */
+        public String toString() {
+            return "n:" + Base64Fast.encode( n ) + ";eEncrypting:" + Base64Fast.encode( eEncrypting ) + ";eSigning:" + Base64Fast.encode( eSigning ) + ";";
+        }
+    }
 
 
     /**
