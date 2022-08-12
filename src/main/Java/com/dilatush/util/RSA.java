@@ -2,11 +2,14 @@ package com.dilatush.util;
 
 import java.math.BigInteger;
 import java.security.SecureRandom;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static com.dilatush.util.BigIntegers.*;
 import static com.dilatush.util.CompositeModuloMath.CompositeIntegerModulus;
 import static com.dilatush.util.CompositeModuloMath.pow;
 import static com.dilatush.util.General.isNull;
+import static com.dilatush.util.Strings.isEmpty;
 import static java.math.BigInteger.ONE;
 
 /**
@@ -16,8 +19,9 @@ import static java.math.BigInteger.ONE;
  */
 public class RSA {
 
-    private static final Outcome.Forge<RSAKeyPair> forgeRSAKeyPair = new Outcome.Forge<>();
-
+    private static final Outcome.Forge<RSAKeyPair>    forgeRSAKeyPair    = new Outcome.Forge<>();
+    private static final Outcome.Forge<RSAPublicKey>  forgeRSAPublicKey  = new Outcome.Forge<>();
+    private static final Outcome.Forge<RSAPrivateKey> forgeRSAPrivateKey = new Outcome.Forge<>();
 
     /**
      *
@@ -279,6 +283,27 @@ public class RSA {
          */
         public String toString() {
             return "n:" + Base64Fast.encode( n ) + ";eEncrypting:" + Base64Fast.encode( eEncrypting ) + ";eSigning:" + Base64Fast.encode( eSigning ) + ";";
+        }
+
+
+        private static final Pattern PARSE_PUBLIC_KEY = Pattern.compile( "n:([a-zA-Z0-9+/]+);eEncrypting:([a-zA-Z0-9+/]+);eSigning:([a-zA-Z0-9+/]+);" );
+
+        public static Outcome<RSAPublicKey> fromString( final String _string ) {
+
+            // sanity checks...
+            if( isEmpty( _string ) ) throw new IllegalArgumentException( "_string is null or zero length" );
+
+            // fail if we can't parse this string into fields for our three numerical values...
+            Matcher matcher = PARSE_PUBLIC_KEY.matcher( _string );
+            if( !matcher.matches() ) return forgeRSAPublicKey.notOk( "Not a public RSA key: " + _string );
+
+            // it parsed ok, so get the values for our three fields...
+            var n           = Base64Fast.decodeBigInteger( matcher.group( 1 ) );
+            var eEncrypting = Base64Fast.decodeBigInteger( matcher.group( 2 ) );
+            var eSigning    = Base64Fast.decodeBigInteger( matcher.group( 3 ) );
+
+            // construct the public key and skedaddle...
+            return forgeRSAPublicKey.ok( new RSAPublicKey( n, eEncrypting, eSigning ) );
         }
     }
 
