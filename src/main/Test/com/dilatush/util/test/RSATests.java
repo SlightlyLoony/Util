@@ -29,8 +29,8 @@ public class RSATests {
         // try encrypting and decrypting...
         for( int i = 0; i < 10000; i++ ) {
             var plainText = RSA.getRandomPlainText( random, keys.publicKey() );
-            var cipherText = RSA.encryptPublic( keys.publicKey(), plainText );
-            var decryptedText = RSA.decryptPrivate( keys.privateKey(), cipherText );
+            var cipherText = RSA.encrypt( keys.publicKey(), plainText );
+            var decryptedText = RSA.decrypt( keys.privateKey(), cipherText );
             var goodDecrypt = (plainText.compareTo( decryptedText ) == 0);
             if( !goodDecrypt )
                 plainText.hashCode();
