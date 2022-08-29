@@ -243,13 +243,14 @@ public class RSA {
 
     /**
      * Returns a randomly selected integer of the given bit length that is almost certainly a prime number (uncertainty is 2^-100) and is suitable for use as a p or q value.
-     * A prime is suitable if it is not equal to one when taken modulo either the public encryption exponent (eE) or the public signing exponent (eS).
+     * A prime is suitable if it is not equal to one when taken modulo either the public encryption exponent (eE) or the public signing exponent (eS), and if at least one bit
+     * in the most significant 87.5% of the given bit length is set to 1.  The random integer returned is in the range [2^(n/8)..2^n), where n is the bit length.
      *
      * @param _random The source of randomness to use.
-     * @param _bitLength  //TODO: finish this!
-     * @param _eE
-     * @param _eS
-     * @return
+     * @param _bitLength The bit length of the desired random number.
+     * @param _eE The encryption exponent.
+     * @param _eS The signing exponent.
+     * @return The suitable random number.
      */
     private static BigInteger generateRSAPrime( final SecureRandom _random, final int _bitLength, final BigInteger _eE, final BigInteger _eS ) {
 
@@ -261,6 +262,9 @@ public class RSA {
 
             // pick a random number of the desired size...
             var trial = new BigInteger( _bitLength, _random );
+
+            // make sure that the number is not too small...
+            if( trial.bitLength() < (_bitLength >> 3) ) continue;
 
             // make sure that modulo either public key, the number does not equal 1...
             if( trial.mod( _eE ).compareTo( ONE ) == 0 ) continue;
