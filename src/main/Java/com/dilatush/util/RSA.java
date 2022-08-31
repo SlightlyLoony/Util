@@ -17,6 +17,7 @@ import static java.math.BigInteger.ONE;
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
+@SuppressWarnings( "unused" )
 public class RSA {
 
     private static final Outcome.Forge<RSAKeyPair>    forgeRSAKeyPair    = new Outcome.Forge<>();
@@ -311,20 +312,34 @@ public class RSA {
     }
 
 
+    /**
+     * Return a random number in the range [0..n), where "n" is the RSA modulus.  The returned number is suitable for use as a random plain text for the given RSA private key.
+     *
+     * @param _random The source of randomness.
+     * @param _key The RSA private key (used only to provide the RSA modulus).
+     * @return The random plain text.
+     */
     public static BigInteger getRandomPlainText( final SecureRandom _random, final RSAPrivateKey _key ) {
 
         // sanity check...
-        if( isNull( _key ) ) throw new IllegalArgumentException( "_key is null" );
+        if( isNull( _random, _key ) ) throw new IllegalArgumentException( "_random or _key is null" );
 
         // extract the modulus from the key; use it to compute the random result...
         return getRandomPlainText( _random, _key.m().n() );
     }
 
 
+    /**
+     * Return a random number in the range [0..n), where "n" is the RSA modulus.  The returned number is suitable for use as a random plain text for the given RSA private key.
+     *
+     * @param _random The source of randomness.
+     * @param _key The RSA public key (used only to provide the RSA modulus).
+     * @return The random plain text.
+     */
     public static BigInteger getRandomPlainText( final SecureRandom _random, final RSAPublicKey _key ) {
 
         // sanity check...
-        if( isNull( _key ) ) throw new IllegalArgumentException( "_key is null" );
+        if( isNull( _random, _key ) ) throw new IllegalArgumentException( "_key is null" );
 
         // extract the modulus from the key; use it to compute the random result...
         return getRandomPlainText( _random, _key.n() );
@@ -345,8 +360,8 @@ public class RSA {
      * @param _bitLengthHiLimit
      * @return
      */
-    public static Outcome<RSAKeyPair> generateKeys( final SecureRandom _random, final int _modulusBitLength,
-                                                    final int _ePubEncrypting, final int _ePubSigning,
+    public static Outcome<RSAKeyPair> generateKeys( final SecureRandom _random,  final int _modulusBitLength,
+                                                    final int _ePubEncrypting,   final int _ePubSigning,
                                                     final int _bitLengthLoLimit, final int _bitLengthHiLimit ) {
 
         // check that we got a source of randomness...
