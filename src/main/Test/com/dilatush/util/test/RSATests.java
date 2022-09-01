@@ -34,7 +34,6 @@ public class RSATests {
             var goodDecrypt = (plainText.compareTo( decryptedText ) == 0);
             if( !goodDecrypt )
                 plainText.hashCode();
-            System.out.println( plainText );
         }
 
         new Object().hashCode();

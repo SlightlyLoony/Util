@@ -349,16 +349,17 @@ public class RSA {
     private static final int MAX_KEY_GENERATION_ATTEMPTS = 100;
 
     /**
-     * Generates a pair of RSA keys (a private key and a public key) with the given modulus length (n) in bits, the given public encrypting exponent (eEncrypting), and the given
-     * public signing exponent (eSigning).
+     * Generates a complementary pair of random RSA keys (a matching private key and public key) with the given modulus length in bits ({@code _modulusBitLength}, which must be in
+     * the range [{@code _bitLengthLoLimit}..{@code _bitLengthHiLimit}]), the given public encrypting exponent ({@code _eEncrypting}), and the given public signing exponent
+     * ({@code _eSigning}).  The source of randomness for the key generation is {@code _random}.  This method will make at most 100 attempts to find suitable keys.
      *
-     * @param _random
-     * @param _modulusBitLength
-     * @param _ePubEncrypting
-     * @param _ePubSigning
-     * @param _bitLengthLoLimit
-     * @param _bitLengthHiLimit
-     * @return
+     * @param _random The source of randomness for the key generation process.
+     * @param _modulusBitLength The desired bit length for the RSA modulus.
+     * @param _ePubEncrypting The public encryption exponent.
+     * @param _ePubSigning The public signing exponent.
+     * @param _bitLengthLoLimit The lower limit for the allowable modulus bit length.
+     * @param _bitLengthHiLimit The upper limit for the allowable modulus bit length.
+     * @return The outcome of the RSA key generation process, including (if successful) the RSA public/private key pair.
      */
     public static Outcome<RSAKeyPair> generateKeys( final SecureRandom _random,  final int _modulusBitLength,
                                                     final int _ePubEncrypting,   final int _ePubSigning,
@@ -367,7 +368,10 @@ public class RSA {
         // check that we got a source of randomness...
         if( isNull( _random )) throw new IllegalArgumentException( "_random was null" );
 
-// TODO: better checks for arguments...
+        // check for reasonable modulus bit length limits...
+        if( (_bitLengthHiLimit < _bitLengthLoLimit) || (_bitLengthLoLimit < 1000) || (_bitLengthHiLimit > 20000) )
+            return forgeRSAKeyPair.notOk( "Modulus bit length limits are not reasonable: " + _bitLengthLoLimit + "/" + _bitLengthHiLimit );
+
         // check for a reasonable modulus bit length...
         if( _modulusBitLength < _bitLengthLoLimit ) return forgeRSAKeyPair.notOk( _modulusBitLength + " is an unreasonably short bit length for a modulus" );
         if( _modulusBitLength > _bitLengthHiLimit ) return forgeRSAKeyPair.notOk( _modulusBitLength + " is an unreasonably long bit length for a modulus"  );
@@ -400,6 +404,10 @@ public class RSA {
             // compute n = p * q...
             var n = p.multiply( q );
 
+            // make sure n has the right bit length...
+            if( n.bitLength() != _modulusBitLength)
+                continue;
+
             // compute t as the least common multiple (p − 1, q − 1)...
             var t = lcm( p.subtract( ONE ), q.subtract( ONE ) );
 
@@ -416,6 +424,7 @@ public class RSA {
             var ePriSigning = egcd.x().mod( t );
 
             // if we get here, then we have all the information we need to make a usable pair of keys - so construct our result and skedaddle...
+            System.out.println( "Attempts: " + attempts );
             var pubKey = new RSAPublicKey( n, ePubEncrypting, ePubSigning );
             var priKey = new RSAPrivateKey( new CompositeIntegerModulus( n, p, q ), t, ePriEncrypting, ePriSigning );
             return forgeRSAKeyPair.ok( new RSAKeyPair( pubKey, priKey ) );
@@ -430,12 +439,15 @@ public class RSA {
     private static final int LONGEST_REASONABLE_MODULUS_BIT_LENGTH  = 10000;
 
     /**
-     * Generates a pair of RSA keys (a private key and a public key) with the given modulus length (n) in bits, using 3 as the public encrypting exponent, and 5 as
-     * the public signing exponent.
+     * Generates a complementary pair of random RSA keys (a matching private key and public key) with the given modulus length in bits ({@code _modulusBitLength}, which must be in
+     * the range [2000..10000]), the given public encrypting exponent ({@code _eEncrypting}), and the given public signing exponent ({@code _eSigning}).  The source of randomness
+     * for the key generation is {@code _random}.  This method will make at most 100 attempts to find suitable keys.
      *
-     * @param _random
-     * @param _modulusBitLength
-     * @return
+     * @param _random The source of randomness for the key generation process.
+     * @param _modulusBitLength The desired bit length for the RSA modulus.
+     * @param _ePubEncrypting The public encryption exponent.
+     * @param _ePubSigning The public signing exponent.
+     * @return The outcome of the RSA key generation process, including (if successful) the RSA public/private key pair.
      */
     public static Outcome<RSAKeyPair> generateKeys( final SecureRandom _random, final int _modulusBitLength, final int _ePubEncrypting, final int _ePubSigning ) {
         return generateKeys(
@@ -449,12 +461,13 @@ public class RSA {
     private static final int DEFAULT_PUBLIC_SIGNING_EXPONENT       = 3;
 
     /**
-     * Generates a pair of RSA keys (a private key and a public key) with the given modulus length (n) in bits, using 3 as the public encrypting exponent, and 5 as
-     * the public signing exponent.
+     * Generates a complementary pair of random RSA keys (a matching private key and public key) with the given modulus length in bits ({@code _modulusBitLength}, which must be in
+     * the range [2000..10000]), the given public encrypting exponent ({@code 5}), and the public signing exponent ({@code 3}).  The source of randomness for the key generation is
+     * {@code _random}.  This method will make at most 100 attempts to find suitable keys.
      *
-     * @param _random
-     * @param _modulusBitLength
-     * @return
+     * @param _random The source of randomness for the key generation process.
+     * @param _modulusBitLength The desired bit length for the RSA modulus.
+     * @return The outcome of the RSA key generation process, including (if successful) the RSA public/private key pair.
      */
     public static Outcome<RSAKeyPair> generateKeys( final SecureRandom _random, final int _modulusBitLength ) {
         return generateKeys(
