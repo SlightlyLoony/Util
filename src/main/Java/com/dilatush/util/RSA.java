@@ -201,7 +201,8 @@ public class RSA {
 
 
     /**
-     * Use the given RSA public key to encrypt the given plain text.  Note that the plain text is an integer in the range [0..n), where "n" is the RSA modulus.
+     * Use the given RSA public key to encrypt the given plain text, using the encrypting exponent.  Note that the plain text is an integer in the range [0..n), where "n" is the
+     * RSA modulus.
      *
      * @param _key The RSA public key.
      * @param _plainText The plain text to be encrypted.
@@ -219,9 +220,28 @@ public class RSA {
 
 
     /**
+     * Use the given RSA private key to encrypt the given plain text, using the signing exponent.  Note that the plain text is an integer in the range [0..n), where "n" is the
+     * RSA modulus.  Conventionally this operation is used to sign a message.
+     *
+     * @param _key The RSA private key.
+     * @param _plainText The plain text to be encrypted.
+     * @return The encrypted plain text (i.e., the ciphertext), which is also in the range [0..n), where "n" is the RSA modulus.
+     */
+    public static BigInteger encrypt( final RSAPrivateKey _key, final BigInteger _plainText ) {
+
+        // sanity checks...
+        if( isNull( _key, _plainText ) ) throw new IllegalArgumentException( "_key or _plainText is null" );
+        if( _key.m.n().compareTo( _plainText ) < 0 ) throw new IllegalArgumentException( "_plainText is not less than the modulus of the key" );
+
+        // perform the encryption...
+        return pow( _plainText, _key.dSigning, _key.m() );
+    }
+
+
+    /**
      * Use the given RSA private key to decrypt the given ciphertext.  Assuming the ciphertext was encrypted using the RSA public key that is complementary to this private key,
-     * the result of the decryption will be the original plaintext.  Note that the ciphertext must be an integer in the range [0..n), where "n" is the RSA modulus.  The
-     * resulting plaintext will also be an integer in the same range.
+     * and that the exponent used was the encrypting exponent, the result of the decryption will be the original plaintext.  Note that the ciphertext must be an integer in the
+     * range [0..n), where "n" is the RSA modulus.  The resulting plaintext will also be an integer in the same range.
      *
      * @param _key  The RSA private key.
      * @param _cipherText The encrypted text to be decrypted.
@@ -233,8 +253,28 @@ public class RSA {
         if( isNull( _key, _cipherText ) ) throw new IllegalArgumentException( "_key or _cipherText is null" );
         if( _key.m().n().compareTo( _cipherText ) < 0 ) throw new IllegalArgumentException( "_cipherText is not less than the modulus of the key" );
 
-        // perform the encryption...
+        // perform the decryption...
         return pow( _cipherText, _key.dEncrypting(), _key.m() );
+    }
+
+
+    /**
+     * Use the given RSA public key to decrypt the given ciphertext.  Assuming the ciphertext was encrypted using the RSA public key that is complementary to this private key,
+     * and that the exponent used was the signing exponent, the result of the decryption will be the original plaintext.  Note that the ciphertext must be an integer in the
+     * range [0..n), where "n" is the RSA modulus.  The resulting plaintext will also be an integer in the same range.
+     *
+     * @param _key  The RSA private key.
+     * @param _cipherText The encrypted text to be decrypted.
+     * @return The decrypted ciphertext (i.e., the plaintext), which is also in the range [0..n), where "n" is the RSA modulus.
+     */
+    public static BigInteger decrypt( final RSAPublicKey _key, final BigInteger _cipherText ) {
+
+        // sanity checks...
+        if( isNull( _key, _cipherText ) ) throw new IllegalArgumentException( "_key or _cipherText is null" );
+        if( _key.n.compareTo( _cipherText ) < 0 ) throw new IllegalArgumentException( "_cipherText is not less than the modulus of the key" );
+
+        // perform the decryption...
+        return _cipherText.modPow( _key.eSigning(), _key.n() );
     }
 
 
@@ -307,7 +347,7 @@ public class RSA {
             result = new BigInteger( r.bitLength(), _random );
         } while( result.compareTo( r ) >= 0 );
 
-        // add the lower bound and we've got the answer we wanted...
+        // add the lower bound; then we've got the answer we wanted...
         return result.add( m );
     }
 

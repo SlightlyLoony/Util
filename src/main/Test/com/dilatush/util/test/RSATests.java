@@ -28,10 +28,19 @@ public class RSATests {
 
         // try encrypting and decrypting...
         for( int i = 0; i < 10000; i++ ) {
+
+            // first with public key encryption...
             var plainText = RSA.getRandomPlainText( random, keys.publicKey() );
             var cipherText = RSA.encrypt( keys.publicKey(), plainText );
             var decryptedText = RSA.decrypt( keys.privateKey(), cipherText );
             var goodDecrypt = (plainText.compareTo( decryptedText ) == 0);
+            if( !goodDecrypt )
+                plainText.hashCode();
+
+            // then with private key encryption...
+            cipherText = RSA.encrypt( keys.privateKey(), plainText );
+            decryptedText = RSA.decrypt( keys.publicKey(), cipherText );
+            goodDecrypt = (plainText.compareTo( decryptedText ) == 0);
             if( !goodDecrypt )
                 plainText.hashCode();
         }

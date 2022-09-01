@@ -99,7 +99,7 @@ public class LogFormatter extends Formatter {
         sb.append( ' ' );
 
         // now the thread ID, left justified in the selected length...
-        sb.append( leftJustify( Threads.getThreadName( _record.getThreadID() ), threadIDWidth ) );
+        sb.append( leftJustify( Threads.getThreadName( _record.getLongThreadID() ), threadIDWidth ) );
         sb.append( ' ' );
 
         // now the source, right justified in the selected length...

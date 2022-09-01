@@ -60,14 +60,6 @@ public class ExecutorService implements java.util.concurrent.ExecutorService {
             thread.setDaemon( _daemon );
             thread.setName( "ExecutorService" + threadNumber );
             threadNumber++;
-
-            // make sure we've got permission to modify this thread...
-            try {
-                thread.checkAccess();
-            }
-            catch( SecurityException _se ) {
-                LOGGER.warning( "Thread can't be modified: add 'modifyThread' RuntimePermission to java.policy file" );
-            }
             return thread;
         };
 

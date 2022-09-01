@@ -39,14 +39,6 @@ public class ScheduledExecutor implements ScheduledExecutorService {
             thread.setDaemon( _daemon );
             thread.setName( "ScheduledExecutor" + threadNumber );
             threadNumber++;
-
-            // make sure we've got permission to modify this thread...
-            try {
-                thread.checkAccess();
-            }
-            catch( SecurityException _se ) {
-                LOGGER.warning( "Thread can't be modified: add 'modifyThread' RuntimePermission to java.policy file" );
-            }
             return thread;
         };
 
