@@ -1,7 +1,12 @@
 package com.dilatush.util;
 
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -23,6 +28,7 @@ public class RSA {
     private static final Outcome.Forge<RSAKeyPair>    forgeRSAKeyPair    = new Outcome.Forge<>();
     private static final Outcome.Forge<RSAPublicKey>  forgeRSAPublicKey  = new Outcome.Forge<>();
     private static final Outcome.Forge<RSAPrivateKey> forgeRSAPrivateKey = new Outcome.Forge<>();
+    private static final Outcome.Forge<byte[]>        forgeBytes         = new Outcome.Forge<>();
 
 
     /**
@@ -134,11 +140,12 @@ public class RSA {
          */
         public String toString() {
 
-            return    "p:"  + Base64Fast.encode( m.p() )       + ";"
-                    + "q:"  + Base64Fast.encode( m.q() )       + ";"
+            return "p:" + Base64Fast.encode( m.p() ) + ";"
+                    + "q:" + Base64Fast.encode( m.q() ) + ";"
                     + "dE:" + Base64Fast.encode( dEncrypting ) + ";"
-                    + "dS:" + Base64Fast.encode( dSigning )    + ";";
+                    + "dS:" + Base64Fast.encode( dSigning ) + ";";
         }
+    }
 
 
     // pattern that parses the string representation of a public RSA key...
@@ -188,10 +195,9 @@ public class RSA {
         // construct the public key and skedaddle...
         return forgeRSAPrivateKey.ok( new RSAPrivateKey( m, t, dE, dS ) );
     }
-}
 
 
-/**
+    /**
      * A complementary pair of RSA keys, one public, one private.
      *
      * @param publicKey The public key in this RSA key pair.
@@ -514,5 +520,61 @@ public class RSA {
                 _random, _modulusBitLength,
                 DEFAULT_PUBLIC_ENCRYPTING_EXPONENT, DEFAULT_PUBLIC_SIGNING_EXPONENT,
                 SHORTEST_REASONABLE_MODULUS_BIT_LENGTH, LONGEST_REASONABLE_MODULUS_BIT_LENGTH );
+    }
+
+
+    private static final String HASH_ALGORITHM = "SHA-256";          // the name of the hash algorithm to use in mask()...
+    private static final int    HASH_BYTES     = 32;                 // the number of bytes in the hash algorithm's results...
+    private static final int    MAX_MASK_BYTES = Integer.MAX_VALUE;  // maximum allowable bytes in mask...
+
+    /**
+     * Mask generator (as defined by RFC 3447, section B.2) that returns a cryptographic hash of the given bytes, with the given length determining the size of the resulting
+     * hash (in bytes).  The algorithm used is MGF1 (as defined in RFC 3447, section B.2.1.  The hash algorithm used is SHA-256.
+     *
+     * @param _bytes The bytes to compute a hash of.
+     * @param _length The desired length (in bytes) of the hash results.
+     * @return Ok with the hash results, or not ok with an explanatory message.
+     */
+    public static Outcome<byte[]> mask( final byte[] _bytes, final int _length ) {
+
+        // sanity checks...
+        if( isNull( (Object) _bytes ) || (_bytes.length == 0) )
+            return forgeBytes.notOk( "_bytes is null or empty" );
+        if( (_length < 0) )
+            return forgeBytes.notOk( "_length is negative: " + _length );
+
+        // some setup...
+        var result = new byte[0];
+        var counter = 0;
+        MessageDigest hasher;
+        try {
+            hasher = MessageDigest.getInstance( HASH_ALGORITHM );
+        }
+        catch( NoSuchAlgorithmException _e ) {
+            return forgeBytes.notOk( "Hash algorithm " + HASH_ALGORITHM + " does not exist" );
+        }
+
+        // iterate until our result is long enough...
+        while( result.length < _length ) {
+
+            // get the bytes we need to hash this time around...
+            ByteBuffer bb = ByteBuffer.allocate( HASH_BYTES + 4 );
+            bb.order( ByteOrder.BIG_ENDIAN );
+            bb.put( _bytes );
+            bb.putInt( counter );
+
+            // concatenate the hash of these bytes with what we've already got...
+            hasher.reset();
+            var newResult = new byte[result.length + HASH_BYTES];
+            System.arraycopy( result, 0, newResult, 0, result.length );
+            System.arraycopy( hasher.digest( bb.array() ), 0, newResult, result.length, HASH_BYTES );
+            result = newResult;
+
+            // update our counter; this ensures that each iteration is different...
+            counter++;
+        }
+
+        // return the requested number of bytes...
+        return forgeBytes.ok( Arrays.copyOf( result, _length ) );
     }
 }
