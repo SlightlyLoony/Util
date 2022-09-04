@@ -3,6 +3,7 @@ package com.dilatush.util;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -529,7 +530,7 @@ public class RSA {
 
     /**
      * Mask generator (as defined by RFC 3447, section B.2) that returns a cryptographic hash of the given bytes, with the given length determining the size of the resulting
-     * hash (in bytes).  The algorithm used is MGF1 (as defined in RFC 3447, section B.2.1.  The hash algorithm used is SHA-256.
+     * hash (in bytes).  The algorithm used is MGF1 (as defined in RFC 3447, section B.2.1).  The hash algorithm used is SHA-256.
      *
      * @param _bytes The bytes to compute a hash of.
      * @param _length The desired length (in bytes) of the hash results.
@@ -538,6 +539,7 @@ public class RSA {
     public static Outcome<byte[]> mask( final byte[] _bytes, final int _length ) {
 
         // sanity checks...
+        //noinspection RedundantCast
         if( isNull( (Object) _bytes ) || (_bytes.length == 0) )
             return forgeBytes.notOk( "_bytes is null or empty" );
         if( (_length < 0) )
@@ -576,5 +578,33 @@ public class RSA {
 
         // return the requested number of bytes...
         return forgeBytes.ok( Arrays.copyOf( result, _length ) );
+    }
+
+
+    /**
+     *
+     * @param _rsaModulus
+     * @param _message
+     * @param _label
+     * @return
+     */
+    public static Outcome<byte[]> pad( final BigInteger _rsaModulus, final byte[] _message, final String _label ) {
+
+        // sanity checks...
+        if( isNull( _rsaModulus, _message ) ) return forgeBytes.notOk( "_rsaModulus or _message is null" );
+
+        // get our string into a byte array with a zero terminator...
+        var label = isNull( _label ) ? "" : _label;
+        var labelBytes = label.getBytes( StandardCharsets.UTF_8 );
+        labelBytes = Bytes.adjust( labelBytes, labelBytes.length + 1 );
+
+        // some prep...
+        var k = (_rsaModulus.bitLength() >>> 3) + ((_rsaModulus.bitLength() & 7) == 0 ? 0 : 1);  // get number of bytes required to hold the modulus...
+
+        // more sanity checks...
+        if( k < HASH_BYTES ) return forgeBytes.notOk( "hash output is larger (" + HASH_BYTES + " bytes) than the message (" + k + " bytes)" );
+        if( _message.length > (k - (HASH_BYTES << 1) - 2) ) return forgeBytes.notOk( "_message is too long" );
+
+        return null;
     }
 }

@@ -1,11 +1,71 @@
 package com.dilatush.util;
 
+import static com.dilatush.util.General.isNull;
+
 /**
  * Static container class for functions related to bytes and arrays of bytes.
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
 public class Bytes {
+
+
+    /**
+     * Returns the given byte array adjusted to the given new length.  If the new length is less than the original length, the result is the given byte array truncated
+     * to the new length.  If the new length is longer than the original length, the result is the original byte array with zero bytes appended as needed to expand the
+     * array to the desired length.  Note that the returned array is <i>never</i> the given array.  Even if the new length is the same as the given byte array's length, a copy
+     * is made and returned.
+     *
+     * @param _bytes The byte array to adjust the length of
+     * @param _newLength The new length for the byte array.
+     * @return The byte array with its length adjusted.
+     * @throws IllegalArgumentException if the given bytes are null or the new length is negative
+     */
+    public static byte[] adjust( final byte[] _bytes, final int _newLength ) {
+
+        // sanity check...
+        if( isNull( (Object)_bytes ) ) throw new IllegalArgumentException( "_bytes is null" );
+        if( _newLength < 0 ) throw new IllegalArgumentException( "_newLength is negative" );
+
+        // create our result array of the right length...
+        var result = new byte[_newLength];
+
+        // copy the right number of bytes into our result...
+        System.arraycopy( _bytes, 0, result, 0, java.lang.Math.min( _bytes.length, result.length ) );
+
+        // we're done!
+        return result;
+    }
+
+
+    /**
+     * Returns a byte array that is a concatenation of the given byte arrays, in the same order.
+     *
+     * @param _bytes The byte arrays to be concatenated.
+     * @return The concatenated byte arrays.
+     */
+    public static byte[] concatenate( final byte[]... _bytes ) {
+
+        // sanity check...
+        if( isNull( (Object)_bytes ) ) throw new IllegalArgumentException( "_bytes is null" );
+
+        // compute the length of the concatenated result, and make an array for it...
+        var cLength = 0;
+        for( byte[] b: _bytes ){
+            cLength += b.length;
+        }
+        var result = new byte[cLength];
+
+        // copy each source array into the result...
+        var index = 0;
+        for( byte[] bytes : _bytes ) {
+            System.arraycopy( bytes, 0, result, index, bytes.length );
+            index += bytes.length;
+        }
+
+        // we're done!
+        return result;
+    }
 
 
     /**
