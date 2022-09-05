@@ -12,16 +12,23 @@ public class RSATests {
         // some setup...
         var random = new SecureRandom();
 
-        // mask generator function test...
-        var inBytes = new byte[32];  // the value we want to hash...
-        random.nextBytes( inBytes );
-        var mask = RSA.mask( inBytes, 100 );
-
         // get some RSA keys...
         var keysOutcome = RSA.generateKeys( random, 2000 );
         if( keysOutcome.notOk() )
             throw new IllegalStateException( keysOutcome.msg() );
         var keys = keysOutcome.info();
+
+        // mask generator function test...
+        var inBytes = new byte[32];  // the value we want to hash...
+        random.nextBytes( inBytes );
+        var mask = RSA.mask( inBytes, 100 );
+
+        // padding test...
+        var msg = new byte[32];
+        random.nextBytes( msg );
+        var label = "This is some kind of crazy test.";
+        var padded = RSA.pad( keys.publicKey().n(), msg, label, random );
+        var unpadded = RSA.unpad( padded.info(), label );
 
         // make sure the public and private exponents are inverses...
         var prod = keys.privateKey().dEncrypting().multiply( keys.publicKey().eEncrypting() ).mod( keys.privateKey().t() );

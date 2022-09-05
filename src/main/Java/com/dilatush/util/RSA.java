@@ -560,17 +560,14 @@ public class RSA {
         while( result.length < _length ) {
 
             // get the bytes we need to hash this time around...
-            ByteBuffer bb = ByteBuffer.allocate( HASH_BYTES + 4 );
+            ByteBuffer bb = ByteBuffer.allocate( _bytes.length + 4 );
             bb.order( ByteOrder.BIG_ENDIAN );
             bb.put( _bytes );
             bb.putInt( counter );
 
             // concatenate the hash of these bytes with what we've already got...
+            result = Bytes.concatenate( result, hasher.digest( bb.array() ) );
             hasher.reset();
-            var newResult = new byte[result.length + HASH_BYTES];
-            System.arraycopy( result, 0, newResult, 0, result.length );
-            System.arraycopy( hasher.digest( bb.array() ), 0, newResult, result.length, HASH_BYTES );
-            result = newResult;
 
             // update our counter; this ensures that each iteration is different...
             counter++;
@@ -581,30 +578,187 @@ public class RSA {
     }
 
 
-    /**
-     *
-     * @param _rsaModulus
-     * @param _message
-     * @param _label
-     * @return
+    /*
+
+    From RFC 3447:
+
+    2. EME-OAEP encoding (see Figure 1 below):
+
+      a. If the label L is not provided, let L be the empty string. Let
+         lHash = Hash(L), an octet string of length hLen (see the note
+         below).
+
+      b. Generate an octet string PS consisting of k - mLen - 2hLen - 2
+         zero octets.  The length of PS may be zero.
+
+      c. Concatenate lHash, PS, a single octet with hexadecimal value
+         0x01, and the message M to form a data block DB of length k -
+         hLen - 1 octets as
+
+            DB = lHash || PS || 0x01 || M.
+
+      d. Generate a random octet string seed of length hLen.
+
+      e. Let dbMask = MGF(seed, k - hLen - 1).
+
+      f. Let maskedDB = DB \xor dbMask.
+
+      g. Let seedMask = MGF(maskedDB, hLen).
+
+      h. Let maskedSeed = seed \xor seedMask.
+
+      i. Concatenate a single octet with hexadecimal value 0x00,
+         maskedSeed, and maskedDB to form an encoded message EM of
+         length k octets as
+
+            EM = 0x00 || maskedSeed || maskedDB.
+
+
+                             +----------+---------+-------+
+                        DB = |  lHash   |    PS   |   M   |
+                             +----------+---------+-------+
+                                            |
+                  +----------+              V
+                  |   seed   |--> MGF ---> xor
+                  +----------+              |
+                        |                   |
+               +--+     V                   |
+               |00|    xor <----- MGF <-----|
+               +--+     |                   |
+                 |      |                   |
+                 V      V                   V
+               +--+----------+----------------------------+
+         EM =  |00|maskedSeed|          maskedDB          |
+               +--+----------+----------------------------+
+
      */
-    public static Outcome<byte[]> pad( final BigInteger _rsaModulus, final byte[] _message, final String _label ) {
+
+    /**
+     * Implements a padding scheme that allows values smaller than the RSA modulus to be securely encrypted.  The algorithm used is called RSAES-OAEP in RFC 3447; see that
+     * document for implementation details.  The hash algorithm used is SHA-256.
+     *
+     * @param _rsaModulus The modulus ("n") of the RSA key that will be used to encrypt the result of this method.
+     * @param _message The message that will be padded in this method, then encrypted.  The message length (in bytes) must be less than or equal to k - 66, where k is the
+     *                 number of bytes in the RSA key's modulus.
+     * @param _label  The string label for this padding.  Note that the label will be encoded as ASCII, and any unmappable characters will be translated to "?".
+     * @param _random The source of randomness to use.
+     * @return The outcome of the padding operation.  If ok, the info is a byte array containing the padded message.  If not ok, the outcome contains an explanatory message.
+     */
+    public static Outcome<byte[]> pad( final BigInteger _rsaModulus, final byte[] _message, final String _label, final SecureRandom _random ) {
+
+        // see the relevant RFC 3447 text in comments above...
 
         // sanity checks...
-        if( isNull( _rsaModulus, _message ) ) return forgeBytes.notOk( "_rsaModulus or _message is null" );
+        if( isNull( _rsaModulus, _message, _random ) ) return forgeBytes.notOk( "_rsaModulus, _message, or _random is null" );
 
         // get our string into a byte array with a zero terminator...
-        var label = isNull( _label ) ? "" : _label;
-        var labelBytes = label.getBytes( StandardCharsets.UTF_8 );
-        labelBytes = Bytes.adjust( labelBytes, labelBytes.length + 1 );
+        var label = (isNull( _label ) ? "" : _label) + "\0";
+        var labelBytes = label.getBytes( StandardCharsets.US_ASCII );
 
         // some prep...
         var k = (_rsaModulus.bitLength() >>> 3) + ((_rsaModulus.bitLength() & 7) == 0 ? 0 : 1);  // get number of bytes required to hold the modulus...
+        var psLen = k - _message.length - (HASH_BYTES << 1) - 2;
+        if( psLen < 0 ) return forgeBytes.notOk( "_message is too long" );
+        MessageDigest hasher;
+        try {
+            hasher = MessageDigest.getInstance( HASH_ALGORITHM );
+        }
+        catch( NoSuchAlgorithmException _e ) {
+            return forgeBytes.notOk( "Hash algorithm " + HASH_ALGORITHM + " does not exist" );
+        }
 
-        // more sanity checks...
-        if( k < HASH_BYTES ) return forgeBytes.notOk( "hash output is larger (" + HASH_BYTES + " bytes) than the message (" + k + " bytes)" );
-        if( _message.length > (k - (HASH_BYTES << 1) - 2) ) return forgeBytes.notOk( "_message is too long" );
+        // the actual OAEP padding algorithm...
 
-        return null;
+        // hash the label bytes (which may be a single 0 byte)...
+        var lHash = hasher.digest( labelBytes );
+        hasher.reset();
+
+        // generate ps 0 bytes (length could be zero)...
+        var ps = new byte[psLen];
+
+        // generate data block db (length will be k - HASH_BYTES - 1)...
+        var db = Bytes.concatenate( lHash, ps, new byte[] {1}, _message );
+
+        // generate random seed...
+        var seed = new byte[HASH_BYTES];
+        _random.nextBytes( seed );
+
+        // generate data block mask...
+        var dbMask = mask( seed, db.length );
+        if( dbMask.notOk() ) return forgeBytes.notOk( "dbMask: " + dbMask.msg() );
+
+        // generate masked data block...
+        var maskedDb = Bytes.xor( db, 0, dbMask.info(), 0, db.length );
+
+        // generate seed mask...
+        var seedMask = mask( maskedDb, HASH_BYTES );
+        if( seedMask.notOk() ) return forgeBytes.notOk( "seedMask: " + seedMask.msg() );
+
+        // generate masked seed...
+        var maskedSeed = Bytes.xor( seed, 0, seedMask.info(), 0, seed.length );
+
+        // generate encoded message (length is k)...
+        var em = Bytes.concatenate( new byte[] {0}, maskedSeed, maskedDb );
+
+        // return our result...
+        return forgeBytes.ok( em );
+    }
+
+    /*
+
+    From RFC 3447:
+
+    3. EME-OAEP decoding:
+
+      a. If the label L is not provided, let L be the empty string. Let
+         lHash = Hash(L), an octet string of length hLen (see the note
+         in Section 7.1.1).
+
+      b. Separate the encoded message EM into a single octet Y, an octet
+         string maskedSeed of length hLen, and an octet string maskedDB
+         of length k - hLen - 1 as
+
+            EM = Y || maskedSeed || maskedDB.
+
+      c. Let seedMask = MGF(maskedDB, hLen).
+
+      d. Let seed = maskedSeed \xor seedMask.
+
+      e. Let dbMask = MGF(seed, k - hLen - 1).
+
+      f. Let DB = maskedDB \xor dbMask.
+
+      g. Separate DB into an octet string lHash' of length hLen, a
+         (possibly empty) padding string PS consisting of octets with
+         hexadecimal value 0x00, and a message M as
+
+            DB = lHash' || PS || 0x01 || M.
+
+         If there is no octet with hexadecimal value 0x01 to separate PS
+         from M, if lHash does not equal lHash', or if Y is nonzero,
+         output "decryption error" and stop.  (See the note below.)
+
+     */
+
+    public static Outcome<byte[]> unpad( final byte[] _message, final String _label ) {
+
+        // see the relevant RFC 3447 text in comments above...
+
+        // sanity checks...
+        if( isNull( (Object)_message ) ) return forgeBytes.notOk( "_message is null" );
+        if( (_message.length - HASH_BYTES - 1) <= (HASH_BYTES + 1) ) return forgeBytes.notOk( "_message is impossibly short" );
+
+        // get our string into a byte array with a zero terminator...
+        var label = (isNull( _label ) ? "" : _label) + "\0";
+        var labelBytes = label.getBytes( StandardCharsets.US_ASCII );
+
+        // the actual OAEP unpadding algorithm...
+
+        // split the given message into Y, maskedSeed, and maskedDB...
+        var s = Bytes.copy( _message, 0, 1 );
+        var maskedSeed = Bytes.copy( _message, 1, HASH_BYTES );
+        var maskedDB = Bytes.copy( _message, HASH_BYTES + 1, _message.length - HASH_BYTES -1 );
+
+        return forgeBytes.ok( maskedDB );
     }
 }

@@ -7,7 +7,162 @@ import static com.dilatush.util.General.isNull;
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
+@SuppressWarnings( "unused" )
 public class Bytes {
+
+
+    /**
+     * Return a copy of {@code _n} bytes of the given source bytes, starting at index {@code _start}.
+     *
+     * @param _source The bytes to copy from.
+     * @param _start The starting index of the range of bytes to copy.
+     * @param _n The number of bytes to copy.
+     * @return The copied bytes.
+     * @throws IllegalArgumentException if the given source bytes are null, or if the given range is not entirely contained in the given source bytes.
+     */
+    public static byte[] copy( final byte[] _source, final int _start, final int _n ) {
+
+        // sanity checks...
+        if( isNull( (Object)_source ) ) throw new IllegalArgumentException( "_source is null" );
+        if( (_start < 0) || (_start >= _source.length) ) throw new IllegalArgumentException( "_start is out of range for _source" );
+        if( (_n < 0) || ((_start + _n) > _source.length) ) throw new IllegalArgumentException( "_n is out of range for _start and _source" );
+
+        // make a place for our results...
+        var result = new byte[_n];
+
+        // copy the bytes from the source...
+        System.arraycopy( _source, _start, result, 0, _n );
+
+        // we're done!
+        return result;
+    }
+
+
+    /**
+     * Returns the result of the XOR operation on the operand bytes from {@code _a} in the range [{@code _aStart}..{@code _aStart}+{@code _n}), and the operand bytes from
+     * {@code _b} in the range [{@code _bStart}..{@code _bStart}+{@code _n}).  The result is {@code _n} bytes long.
+     *
+     * @param _a The array A of source bytes.
+     * @param _aStart The start of the range of source bytes in A.
+     * @param _b The array B of source bytes.
+     * @param _bStart The start of the range of source bytes in B.
+     * @param _n The number of bytes in the ranges of source bytes, and in the results.
+     * @return The result of XORing the range of source bytes in A with the range of source bytes in B.
+     * @throws IllegalArgumentException if the source bytes are null, or if any part of the given range is outside the given source bytes.
+     */
+    public static byte[] xor( final byte[] _a, final int _aStart, final byte[] _b, final int _bStart, final int _n ) {
+
+        // sanity checks...
+        if( isNull( _a, _b ) ) throw new IllegalArgumentException( "_a or _b is null" );
+        if( (_aStart < 0) || (_bStart < 0) || (_n < 0) ) throw new IllegalArgumentException( "_aStart or _bStart or _n is negative" );
+        if( ((_aStart + _n) > _a.length) || ((_bStart + _n) > _b.length)) throw new IllegalArgumentException( "_a or _b does not contain the full source range" );
+
+        // make a place for our result...
+        var result = new byte[_n];
+
+        // do the actual XOR operation...
+        for( int i = 0; i < _n; i++ ) {
+            result[i] = (byte)(_a[_aStart + i] ^ _b[_bStart+i]);
+        }
+
+        // ...and we're done!
+        return result;
+    }
+
+
+    /**
+     * Returns the result of the AND operation on the operand bytes from {@code _a} in the range [{@code _aStart}..{@code _aStart}+{@code _n}), and the operand bytes from
+     * {@code _b} in the range [{@code _bStart}..{@code _bStart}+{@code _n}).  The result is {@code _n} bytes long.
+     *
+     * @param _a The array A of source bytes.
+     * @param _aStart The start of the range of source bytes in A.
+     * @param _b The array B of source bytes.
+     * @param _bStart The start of the range of source bytes in B.
+     * @param _n The number of bytes in the ranges of source bytes, and in the results.
+     * @return The result of ANDing the range of source bytes in A with the range of source bytes in B.
+     * @throws IllegalArgumentException if the source bytes are null, or if any part of the given range is outside the given source bytes.
+     */
+    public static byte[] and( final byte[] _a, final int _aStart, final byte[] _b, final int _bStart, final int _n ) {
+
+        // sanity checks...
+        if( isNull( _a, _b ) ) throw new IllegalArgumentException( "_a or _b is null" );
+        if( (_aStart < 0) || (_bStart < 0) || (_n < 0) ) throw new IllegalArgumentException( "_aStart or _bStart or _n is negative" );
+        if( ((_aStart + _n) > _a.length) || ((_bStart + _n) > _b.length)) throw new IllegalArgumentException( "_a or _b does not contain the full source range" );
+
+        // make a place for our result...
+        var result = new byte[_n];
+
+        // do the actual AND operation...
+        for( int i = 0; i < _n; i++ ) {
+            result[i] = (byte)(_a[_aStart + i] & _b[_bStart+i]);
+        }
+
+        // ...and we're done!
+        return result;
+    }
+
+
+    /**
+     * Returns the result of the OR on the operand bytes from {@code _a} in the range [{@code _aStart}..{@code _aStart}+{@code _n}), and the operand bytes from
+     * {@code _b} in the range [{@code _bStart}..{@code _bStart}+{@code _n}).  The result is {@code _n} bytes long.
+     *
+     * @param _a The array A of source bytes.
+     * @param _aStart The start of the range of source bytes in A.
+     * @param _b The array B of source bytes.
+     * @param _bStart The start of the range of source bytes in B.
+     * @param _n The number of bytes in the ranges of source bytes, and in the results.
+     * @return The result of ORing the range of source bytes in A with the range of source bytes in B.
+     * @throws IllegalArgumentException if the source bytes are null, or if any part of the given range is outside the given source bytes.
+     */
+    public static byte[] or( final byte[] _a, final int _aStart, final byte[] _b, final int _bStart, final int _n ) {
+
+        // sanity checks...
+        if( isNull( _a, _b ) ) throw new IllegalArgumentException( "_a or _b is null" );
+        if( (_aStart < 0) || (_bStart < 0) || (_n < 0) ) throw new IllegalArgumentException( "_aStart or _bStart or _n is negative" );
+        if( ((_aStart + _n) > _a.length) || ((_bStart + _n) > _b.length)) throw new IllegalArgumentException( "_a or _b does not contain the full source range" );
+
+        // make a place for our result...
+        var result = new byte[_n];
+
+        // do the actual XOR operation...
+        for( int i = 0; i < _n; i++ ) {
+            result[i] = (byte)(_a[_aStart + i] | _b[_bStart+i]);
+        }
+
+        // ...and we're done!
+        return result;
+    }
+
+
+    /**
+     * Returns the result of the binary negation operation on the operand bytes from {@code _a} in the range [{@code _aStart}..{@code _aStart}+{@code _n}).  The result is
+     * {@code _n} bytes long.
+     *
+     * @param _a The array A of source bytes.
+     * @param _aStart The start of the range of source bytes in A.
+     * @param _n The number of bytes in the range of source bytes, and in the results.
+     * @return The result of ORing the range of source bytes in A with the range of source bytes in B.
+     * @throws IllegalArgumentException if the source bytes are null, or if any part of the given range is outside the given source bytes.
+     */
+    public static byte[] negate( final byte[] _a, final int _aStart, final int _n ) {
+
+        // sanity checks...
+        //noinspection RedundantCast
+        if( isNull( (Object)_a ) ) throw new IllegalArgumentException( "_a is null" );
+        if( (_aStart < 0) || (_n < 0) ) throw new IllegalArgumentException( "_aStart or _n is negative" );
+        if( ((_aStart + _n) > _a.length) ) throw new IllegalArgumentException( "_a does not contain the full source range" );
+
+        // make a place for our result...
+        var result = new byte[_n];
+
+        // do the actual XOR operation...
+        for( int i = 0; i < _n; i++ ) {
+            result[i] = (byte)(~_a[_aStart + i]);
+        }
+
+        // ...and we're done!
+        return result;
+    }
 
 
     /**
@@ -24,6 +179,7 @@ public class Bytes {
     public static byte[] adjust( final byte[] _bytes, final int _newLength ) {
 
         // sanity check...
+        //noinspection RedundantCast
         if( isNull( (Object)_bytes ) ) throw new IllegalArgumentException( "_bytes is null" );
         if( _newLength < 0 ) throw new IllegalArgumentException( "_newLength is negative" );
 
