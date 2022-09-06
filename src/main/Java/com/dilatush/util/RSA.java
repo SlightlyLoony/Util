@@ -524,19 +524,20 @@ public class RSA {
     }
 
 
-    private static final String HASH_ALGORITHM = "SHA-256";          // the name of the hash algorithm to use in mask()...
-    private static final int    HASH_BYTES     = 32;                 // the number of bytes in the hash algorithm's results...
+    private static final String DEFAULT_HASH_ALGORITHM = "SHA-256";          // the name of the default hash algorithm for use in RSA...
     private static final int    MAX_MASK_BYTES = Integer.MAX_VALUE;  // maximum allowable bytes in mask...
+
 
     /**
      * Mask generator (as defined by RFC 3447, section B.2) that returns a cryptographic hash of the given bytes, with the given length determining the size of the resulting
-     * hash (in bytes).  The algorithm used is MGF1 (as defined in RFC 3447, section B.2.1).  The hash algorithm used is SHA-256.
+     * hash (in bytes).  The algorithm used is MGF1 (as defined in RFC 3447, section B.2.1).
      *
      * @param _bytes The bytes to compute a hash of.
      * @param _length The desired length (in bytes) of the hash results.
+     * @param _hasher The {@link MessageDigest} to use within this method.
      * @return Ok with the hash results, or not ok with an explanatory message.
      */
-    public static Outcome<byte[]> mask( final byte[] _bytes, final int _length ) {
+    public static Outcome<byte[]> mask( final byte[] _bytes, final int _length, final MessageDigest _hasher ) {
 
         // sanity checks...
         //noinspection RedundantCast
@@ -548,13 +549,6 @@ public class RSA {
         // some setup...
         var result = new byte[0];
         var counter = 0;
-        MessageDigest hasher;
-        try {
-            hasher = MessageDigest.getInstance( HASH_ALGORITHM );
-        }
-        catch( NoSuchAlgorithmException _e ) {
-            return forgeBytes.notOk( "Hash algorithm " + HASH_ALGORITHM + " does not exist" );
-        }
 
         // iterate until our result is long enough...
         while( result.length < _length ) {
@@ -566,8 +560,8 @@ public class RSA {
             bb.putInt( counter );
 
             // concatenate the hash of these bytes with what we've already got...
-            result = Bytes.concatenate( result, hasher.digest( bb.array() ) );
-            hasher.reset();
+            _hasher.reset();
+            result = Bytes.concatenate( result, _hasher.digest( bb.array() ) );
 
             // update our counter; this ensures that each iteration is different...
             counter++;
@@ -575,6 +569,29 @@ public class RSA {
 
         // return the requested number of bytes...
         return forgeBytes.ok( Arrays.copyOf( result, _length ) );
+    }
+
+
+    /**
+     * Mask generator (as defined by RFC 3447, section B.2) that returns a cryptographic hash of the given bytes, with the given length determining the size of the resulting
+     * hash (in bytes).  The algorithm used is MGF1 (as defined in RFC 3447, section B.2.1).  The hash algorithm used is SHA-256.
+     *
+     * @param _bytes The bytes to compute a hash of.
+     * @param _length The desired length (in bytes) of the hash results.
+     * @return Ok with the hash results, or not ok with an explanatory message.
+     */
+    public static Outcome<byte[]> mask( final byte[] _bytes, final int _length ) {
+
+        // get the default message digest...
+        MessageDigest hasher;
+        try {
+            hasher = MessageDigest.getInstance( DEFAULT_HASH_ALGORITHM );
+        }
+        catch( NoSuchAlgorithmException _e ) {
+            return forgeBytes.notOk( "Hash algorithm does not exist: " + DEFAULT_HASH_ALGORITHM );
+        }
+
+        return mask( _bytes, _length, hasher );
     }
 
 
@@ -634,64 +651,61 @@ public class RSA {
      */
 
     /**
-     * Implements a padding scheme that allows values smaller than the RSA modulus to be securely encrypted.  The algorithm used is called RSAES-OAEP in RFC 3447; see that
-     * document for implementation details.  The hash algorithm used is SHA-256.
+     * Pad the given message so that its length (in bytes) is the same as the length (in bytes) of the RSA modulus in a public or private RSA key.  Implements a padding scheme
+     * that allows values smaller than the RSA modulus to be securely encrypted.  The algorithm used is called RSAES-OAEP in RFC 3447; see that document for implementation
+     * details.  The mask generation function used is MGF1 (also defined in RFC 3447).
      *
      * @param _rsaModulus The modulus ("n") of the RSA key that will be used to encrypt the result of this method.
      * @param _message The message that will be padded in this method, then encrypted.  The message length (in bytes) must be less than or equal to k - 66, where k is the
      *                 number of bytes in the RSA key's modulus.
-     * @param _label  The string label for this padding.  Note that the label will be encoded as ASCII, and any unmappable characters will be translated to "?".
-     * @param _random The source of randomness to use.
+     * @param _label  The string label for this padding.  Note that the label will be encoded as UTF-8 (which, for characters in the ASCII character set, is identical to ASCII).
+     *                Note that the hash of the label is used to construct the returned padded value, but not the label itself.
+     * @param _random The source of randomness for the padding operation.
+     * @param _hasher The {@link MessageDigest} to use in the padding operation.
      * @return The outcome of the padding operation.  If ok, the info is a byte array containing the padded message.  If not ok, the outcome contains an explanatory message.
      */
-    public static Outcome<byte[]> pad( final BigInteger _rsaModulus, final byte[] _message, final String _label, final SecureRandom _random ) {
+    public static Outcome<byte[]> pad( final BigInteger _rsaModulus, final byte[] _message, final String _label, final SecureRandom _random, final MessageDigest _hasher ) {
 
         // see the relevant RFC 3447 text in comments above...
 
         // sanity checks...
-        if( isNull( _rsaModulus, _message, _random ) ) return forgeBytes.notOk( "_rsaModulus, _message, or _random is null" );
+        if( isNull( _rsaModulus, _message, _random, _hasher ) ) return forgeBytes.notOk( "_rsaModulus, _message, _random, or _hasher is null" );
 
         // get our string into a byte array with a zero terminator...
         var label = (isNull( _label ) ? "" : _label) + "\0";
-        var labelBytes = label.getBytes( StandardCharsets.US_ASCII );
+        var labelBytes = label.getBytes( StandardCharsets.UTF_8 );
 
         // some prep...
+        var hashLen = _hasher.getDigestLength();
         var k = (_rsaModulus.bitLength() >>> 3) + ((_rsaModulus.bitLength() & 7) == 0 ? 0 : 1);  // get number of bytes required to hold the modulus...
-        var psLen = k - _message.length - (HASH_BYTES << 1) - 2;
+        var psLen = k - _message.length - (hashLen << 1) - 2;
         if( psLen < 0 ) return forgeBytes.notOk( "_message is too long" );
-        MessageDigest hasher;
-        try {
-            hasher = MessageDigest.getInstance( HASH_ALGORITHM );
-        }
-        catch( NoSuchAlgorithmException _e ) {
-            return forgeBytes.notOk( "Hash algorithm " + HASH_ALGORITHM + " does not exist" );
-        }
 
         // the actual OAEP padding algorithm...
 
         // hash the label bytes (which may be a single 0 byte)...
-        var lHash = hasher.digest( labelBytes );
-        hasher.reset();
+        _hasher.reset();
+        var lHash = _hasher.digest( labelBytes );
 
         // generate ps 0 bytes (length could be zero)...
         var ps = new byte[psLen];
 
-        // generate data block db (length will be k - HASH_BYTES - 1)...
+        // generate data block db (length will be k - hashLen - 1)...
         var db = Bytes.concatenate( lHash, ps, new byte[] {1}, _message );
 
         // generate random seed...
-        var seed = new byte[HASH_BYTES];
+        var seed = new byte[hashLen];
         _random.nextBytes( seed );
 
         // generate data block mask...
-        var dbMask = mask( seed, db.length );
+        var dbMask = mask( seed, db.length, _hasher );
         if( dbMask.notOk() ) return forgeBytes.notOk( "dbMask: " + dbMask.msg() );
 
         // generate masked data block...
         var maskedDb = Bytes.xor( db, 0, dbMask.info(), 0, db.length );
 
         // generate seed mask...
-        var seedMask = mask( maskedDb, HASH_BYTES );
+        var seedMask = mask( maskedDb, hashLen, _hasher );
         if( seedMask.notOk() ) return forgeBytes.notOk( "seedMask: " + seedMask.msg() );
 
         // generate masked seed...
@@ -703,6 +717,52 @@ public class RSA {
         // return our result...
         return forgeBytes.ok( em );
     }
+
+
+    /**
+     * Pad the given message so that its length (in bytes) is the same as the length (in bytes) of the RSA modulus in a public or private RSA key.  Implements a padding scheme
+     * that allows values smaller than the RSA modulus to be securely encrypted.  The algorithm used is called RSAES-OAEP in RFC 3447; see that document for implementation
+     * details.  The mask generation function used is MGF1 (also defined in RFC 3447).  The hash function used is SHA-256.
+     *
+     * @param _rsaModulus The modulus ("n") of the RSA key that will be used to encrypt the result of this method.
+     * @param _message The message that will be padded in this method, then encrypted.  The message length (in bytes) must be less than or equal to k - 66, where k is the
+     *                 number of bytes in the RSA key's modulus.
+     * @param _label  The string label for this padding.  Note that the label will be encoded as UTF-8 (which, for characters in the ASCII character set, is identical to ASCII).
+     *                Note that the hash of the label is used to construct the returned padded value, but not the label itself.
+     * @param _random The source of randomness for the padding operation.
+     * @return The outcome of the padding operation.  If ok, the info is a byte array containing the padded message.  If not ok, the outcome contains an explanatory message.
+     */
+    public static Outcome<byte[]> pad( final BigInteger _rsaModulus, final byte[] _message, final String _label, final SecureRandom _random ) {
+
+        // get the default message digest...
+        MessageDigest hasher;
+        try {
+            hasher = MessageDigest.getInstance( DEFAULT_HASH_ALGORITHM );
+        }
+        catch( NoSuchAlgorithmException _e ) {
+            return forgeBytes.notOk( "Hash algorithm does not exist: " + DEFAULT_HASH_ALGORITHM );
+        }
+
+        return pad( _rsaModulus, _message, _label, _random, hasher );
+    }
+
+
+    /**
+     * Pad the given message so that its length (in bytes) is the same as the length (in bytes) of the RSA modulus in a public or private RSA key.  Implements a padding scheme
+     * that allows values smaller than the RSA modulus to be securely encrypted.  The algorithm used is called RSAES-OAEP in RFC 3447; see that document for implementation
+     * details.  The mask generation function used is MGF1 (also defined in RFC 3447).  The hash function used is SHA-256.  No label is used.
+     *
+     * @param _rsaModulus The modulus ("n") of the RSA key that will be used to encrypt the result of this method.
+     * @param _message The message that will be padded in this method, then encrypted.  The message length (in bytes) must be less than or equal to k - 66, where k is the
+     *                 number of bytes in the RSA key's modulus.
+     * @param _random The source of randomness for the padding operation.
+     * @return The outcome of the padding operation.  If ok, the info is a byte array containing the padded message.  If not ok, the outcome contains an explanatory message.
+     */
+    public static Outcome<byte[]> pad( final BigInteger _rsaModulus, final byte[] _message, final SecureRandom _random ) {
+
+        return pad( _rsaModulus, _message, null, _random );
+    }
+
 
     /*
 
@@ -740,13 +800,23 @@ public class RSA {
 
      */
 
-    public static Outcome<byte[]> unpad( final byte[] _message, final String _label ) {
+    /**
+     * Unpad the given message (which is presumed to have been padded with RSAES-OAEP, using the same hash algorithm and the MGF1 mask generation function), verifying the given
+     * label and padded message format.  See RFC 3447 for details about both OAEP and MGF1.
+     *
+     * @param _message The padded message to be unpadded.
+     * @param _label The string label to be verified.  Note that the label will be encoded as UTF-8 (which, for characters in the ASCII character set, is identical to ASCII).
+     * @param _hasher The {@link MessageDigest} to use when unpadding (it must be the same one used when padding).
+     * @return The outcome of the unpadding operation.  If ok, the info contains the unpadded original message.  If not ok, the outcome contains an explanatory message.
+     */
+    public static Outcome<byte[]> unpad( final byte[] _message, final String _label, final MessageDigest _hasher ) {
 
         // see the relevant RFC 3447 text in comments above...
 
         // sanity checks...
-        if( isNull( (Object)_message ) ) return forgeBytes.notOk( "_message is null" );
-        if( (_message.length - HASH_BYTES - 1) <= (HASH_BYTES + 1) ) return forgeBytes.notOk( "_message is impossibly short" );
+        if( isNull( _message, _hasher ) ) return forgeBytes.notOk( "_message or _hasher is null" );
+        var hashLen = _hasher.getDigestLength();
+        if( (_message.length - hashLen - 1) <= (hashLen + 1) ) return forgeBytes.notOk( "_message is impossibly short" );
 
         // get our string into a byte array with a zero terminator...
         var label = (isNull( _label ) ? "" : _label) + "\0";
@@ -755,10 +825,85 @@ public class RSA {
         // the actual OAEP unpadding algorithm...
 
         // split the given message into Y, maskedSeed, and maskedDB...
-        var s = Bytes.copy( _message, 0, 1 );
-        var maskedSeed = Bytes.copy( _message, 1, HASH_BYTES );
-        var maskedDB = Bytes.copy( _message, HASH_BYTES + 1, _message.length - HASH_BYTES -1 );
+        var y = Bytes.copy( _message, 0, 1 );
+        var maskedSeed = Bytes.copy( _message, 1, hashLen );
+        var maskedDB = Bytes.copy( _message, hashLen + 1, _message.length - hashLen -1 );
 
-        return forgeBytes.ok( maskedDB );
+        // get the seed mask...
+        var seedMask = mask( maskedDB, hashLen, _hasher );
+        if( seedMask.notOk() ) return forgeBytes.notOk( "seedMask: " + seedMask.msg() );
+
+        // get the seed...
+        var seed = Bytes.xor( maskedSeed, 0, seedMask.info(), 0, hashLen );
+
+        // get the data block (DB) mask...
+        var dbMask = mask( seed, maskedDB.length, _hasher );
+        if( dbMask.notOk() ) return forgeBytes.notOk( "dbMask: " + dbMask.msg() );
+
+        // get the data block (DB)...
+        var db = Bytes.xor( maskedDB, 0, dbMask.info(), 0, maskedDB.length );
+
+        // scan the data block to find the beginning of the original message...
+        var msgIndex = 0;
+        for( int i = hashLen; i < db.length; i++ ) {
+            int b = db[i] & 0xff;
+            if( b == 1 ) {
+                msgIndex = i + 1;
+                if( (db.length - msgIndex) == 0 ) return forgeBytes.notOk( "Unpadded message in data block is zero bytes long" );
+                break;
+            }
+            else if( b != 0 ){
+                return forgeBytes.notOk( "Data block in padded message is malformed" );
+            }
+        }
+        if( msgIndex == 0 ) return forgeBytes.notOk( "Unpadded message in data block not found" );
+
+        // split the data block into label hash and the original message...
+        var lHash = Bytes.copy( db, 0, hashLen );
+        var msg = Bytes.copy( db, msgIndex, db.length - msgIndex );
+
+        // validity checks...
+        if( y[0] != 0 ) return forgeBytes.notOk( "Malformed padded message: initial byte of message is not zero" );
+        _hasher.reset();
+        var lHashCheck = _hasher.digest( labelBytes );
+        if( !Arrays.equals( lHash, lHashCheck ) ) return forgeBytes.notOk( "Label hash mismatch" );
+
+        return forgeBytes.ok( msg );
+    }
+
+
+    /**
+     * Unpad the given message (which is presumed to have been padded with RSAES-OAEP, using the same hash algorithm and the MGF1 mask generation function), verifying the given
+     * label and padded message format.  See RFC 3447 for details about both OAEP and MGF1.  The hash algorithm used is SHA-256.
+     *
+     * @param _message The padded message to be unpadded.
+     * @param _label The string label to be verified.  Note that the label will be encoded as UTF-8 (which, for characters in the ASCII character set, is identical to ASCII).
+     * @return The outcome of the unpadding operation.  If ok, the info contains the unpadded original message.  If not ok, the outcome contains an explanatory message.
+     */
+    public static Outcome<byte[]> unpad( final byte[] _message, final String _label ) {
+
+        // get the default message digest...
+        MessageDigest hasher;
+        try {
+            hasher = MessageDigest.getInstance( DEFAULT_HASH_ALGORITHM );
+        }
+        catch( NoSuchAlgorithmException _e ) {
+            return forgeBytes.notOk( "Hash algorithm does not exist: " + DEFAULT_HASH_ALGORITHM );
+        }
+
+        return unpad( _message, _label, hasher );
+    }
+
+
+    /**
+     * Unpad the given message (which is presumed to have been padded with RSAES-OAEP, using the same hash algorithm and the MGF1 mask generation function), verifying the given
+     * label and padded message format.  See RFC 3447 for details about both OAEP and MGF1.  The hash algorithm used is SHA-256.  The label is not used.
+     *
+     * @param _message The padded message to be unpadded.
+     * @return The outcome of the unpadding operation.  If ok, the info contains the unpadded original message.  If not ok, the outcome contains an explanatory message.
+     */
+    public static Outcome<byte[]> unpad( final byte[] _message ) {
+
+        return unpad( _message, null );
     }
 }

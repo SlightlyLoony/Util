@@ -4,6 +4,7 @@ import com.dilatush.util.RSA;
 
 import java.math.BigInteger;
 import java.security.SecureRandom;
+import java.util.Arrays;
 
 public class RSATests {
 
@@ -28,7 +29,10 @@ public class RSATests {
         random.nextBytes( msg );
         var label = "This is some kind of crazy test.";
         var padded = RSA.pad( keys.publicKey().n(), msg, label, random );
+        if( padded.notOk() ) throw new IllegalStateException( "Padded: " + padded.msg() );
         var unpadded = RSA.unpad( padded.info(), label );
+        if( unpadded.notOk() ) throw new IllegalStateException( "Unpadded: " + unpadded.msg() );
+        if( !Arrays.equals( msg, unpadded.info() )) throw new IllegalStateException( "Unpadded result not equal to original" );
 
         // make sure the public and private exponents are inverses...
         var prod = keys.privateKey().dEncrypting().multiply( keys.publicKey().eEncrypting() ).mod( keys.privateKey().t() );
