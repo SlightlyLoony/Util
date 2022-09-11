@@ -2,6 +2,7 @@ package com.dilatush.util;
 
 
 import java.math.BigInteger;
+import java.util.Objects;
 
 import static com.dilatush.util.General.isNull;
 
@@ -43,6 +44,23 @@ public class CompositeModuloMath {
          */
         public CompositeIntegerModulus( BigInteger n, BigInteger p, BigInteger q ) {
             this( n, p, q, BigIntegers.divMod( BigInteger.ONE, q, p ) );
+        }
+
+
+        @Override
+        public boolean equals( final Object _o ) {
+
+            if( this == _o ) return true;
+            if( _o == null || getClass() != _o.getClass() ) return false;
+            CompositeIntegerModulus that = (CompositeIntegerModulus) _o;
+            return n.equals( that.n ) && p.equals( that.p ) && q.equals( that.q ) && gf.equals( that.gf );
+        }
+
+
+        @Override
+        public int hashCode() {
+
+            return Objects.hash( n, p, q, gf );
         }
     }
 

@@ -8,6 +8,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -41,6 +42,14 @@ public class RSA {
      */
     public record RSAPublicKey( BigInteger n, BigInteger eEncrypting, BigInteger eSigning ) {
 
+        public RSAPublicKey {
+
+            // sanity checks...
+            if( isNull( n, eEncrypting, eSigning ) ) throw new IllegalArgumentException( "n, eEncrypting, or eSigning is null" );
+            if( n.compareTo( ONE ) < 0 )             throw new IllegalArgumentException( "n is less than one" );
+            if( eEncrypting.compareTo( ONE ) < 0 )   throw new IllegalArgumentException( "eEncrypting is less than one" );
+            if( eSigning.compareTo( ONE ) < 0 )      throw new IllegalArgumentException( "eSigning is less than one" );
+        }
 
         /**
          * Returns a string that represents the value of this key, formatted as follows:
@@ -60,9 +69,9 @@ public class RSA {
          * @return A string representing the value of this key.
          */
         public String toString() {
-            return    "n:"   + Base64Fast.encode( n )           + ";"
-                    + ";eE:" + Base64Fast.encode( eEncrypting ) + ";"
-                    + ";eS:" + Base64Fast.encode( eSigning )    + ";";
+            return    "n:"   + Base64Fast.encode( n )          + ";"
+                    + "eE:" + Base64Fast.encode( eEncrypting ) + ";"
+                    + "eS:" + Base64Fast.encode( eSigning )    + ";";
         }
 
 
@@ -104,6 +113,23 @@ public class RSA {
             // construct the public key and skedaddle...
             return forgeRSAPublicKey.ok( new RSAPublicKey( n, eEncrypting, eSigning ) );
         }
+
+
+        @Override
+        public boolean equals( final Object _o ) {
+
+            if( this == _o ) return true;
+            if( _o == null || getClass() != _o.getClass() ) return false;
+            RSAPublicKey that = (RSAPublicKey) _o;
+            return n.equals( that.n ) && eEncrypting.equals( that.eEncrypting ) && eSigning.equals( that.eSigning );
+        }
+
+
+        @Override
+        public int hashCode() {
+
+            return Objects.hash( n, eEncrypting, eSigning );
+        }
     }
 
 
@@ -116,6 +142,16 @@ public class RSA {
      * @param dSigning The signing exponent for this key.
      */
     public record RSAPrivateKey( CompositeIntegerModulus m, BigInteger t, BigInteger dEncrypting, BigInteger dSigning ) {
+
+
+        public RSAPrivateKey {
+
+            // sanity checks...
+            if( isNull( m, t, dEncrypting, dSigning ) ) throw new IllegalArgumentException( "m, t, dEncrypting, or dSigning is null" );
+            if( t.compareTo( ONE ) < 0 ) throw new IllegalArgumentException( "t is less than one" );
+            if( dEncrypting.compareTo( ONE ) < 0 ) throw new IllegalArgumentException( "dEncrypting is less than one" );
+            if( dSigning.compareTo( ONE ) < 0 ) throw new IllegalArgumentException( "dSigning is less than one" );
+        }
 
 
         /**
@@ -146,55 +182,72 @@ public class RSA {
                     + "dE:" + Base64Fast.encode( dEncrypting ) + ";"
                     + "dS:" + Base64Fast.encode( dSigning ) + ";";
         }
-    }
 
 
-    // pattern that parses the string representation of a public RSA key...
-    private static final Pattern PARSE_PRIVATE_KEY = Pattern.compile( "p:([a-zA-Z0-9+/]+);q:([a-zA-Z0-9+/]+);dE:([a-zA-Z0-9+/]+);dS:([a-zA-Z0-9+/]+);" );
+        // pattern that parses the string representation of a public RSA key...
+        private static final Pattern PARSE_PRIVATE_KEY = Pattern.compile( "p:([a-zA-Z0-9+/]+);q:([a-zA-Z0-9+/]+);dE:([a-zA-Z0-9+/]+);dS:([a-zA-Z0-9+/]+);" );
 
 
-    /**
-     * Parses a string that represents the value of a private RSA key, which must be formatted as follows:
-     * <ul>
-     *     <li>The string "p:".</li>
-     *     <li>The base64 value of {@code p}.</li>
-     *     <li>A terminating semicolon (";").</li>
-     *     <li>The string "q:".</li>
-     *     <li>The base64 value of {@code q}.</li>
-     *     <li>A terminating semicolon (";").</li>
-     *     <li>The string "dE:".</li>
-     *     <li>The base64 value of {@code eEncrypting}</li>
-     *     <li>A terminating semicolon (";").</li>
-     *     <li>The string "dS:".</li>
-     *     <li>The base64 value of {@code eSigning}.</li>
-     *     <li>A terminating semicolon.</li>
-     * </ul>
-     * For example, if p = 1, q = 2 dEncrypting = 3, and dSigning = 4, the string would be {@code p:1;q:2;dE:3;dS:4;}.
-     *
-     * @return A string representing the value of this key.
-     */
-    public static Outcome<RSAPrivateKey> fromString( final String _string ) {
+        /**
+         * Parses a string that represents the value of a private RSA key, which must be formatted as follows:
+         * <ul>
+         *     <li>The string "p:".</li>
+         *     <li>The base64 value of {@code p}.</li>
+         *     <li>A terminating semicolon (";").</li>
+         *     <li>The string "q:".</li>
+         *     <li>The base64 value of {@code q}.</li>
+         *     <li>A terminating semicolon (";").</li>
+         *     <li>The string "dE:".</li>
+         *     <li>The base64 value of {@code eEncrypting}</li>
+         *     <li>A terminating semicolon (";").</li>
+         *     <li>The string "dS:".</li>
+         *     <li>The base64 value of {@code eSigning}.</li>
+         *     <li>A terminating semicolon.</li>
+         * </ul>
+         * For example, if p = 1, q = 2 dEncrypting = 3, and dSigning = 4, the string would be {@code p:1;q:2;dE:3;dS:4;}.
+         *
+         * @return A string representing the value of this key.
+         */
+        public static Outcome<RSAPrivateKey> fromString( final String _string ) {
 
-        // sanity checks...
-        if( isEmpty( _string ) ) throw new IllegalArgumentException( "_string is null or zero length" );
+            // sanity checks...
+            if( isEmpty( _string ) ) throw new IllegalArgumentException( "_string is null or zero length" );
 
-        // fail if we can't parse this string into fields for our three numerical values...
-        Matcher matcher = PARSE_PRIVATE_KEY.matcher( _string );
-        if( !matcher.matches() ) return forgeRSAPrivateKey.notOk( "Not a private RSA key: " + _string );
+            // fail if we can't parse this string into fields for our three numerical values...
+            Matcher matcher = PARSE_PRIVATE_KEY.matcher( _string );
+            if( !matcher.matches() ) return forgeRSAPrivateKey.notOk( "Not a private RSA key: " + _string );
 
-        // it parsed ok, so get the values for our four fields...
-        var p  = Base64Fast.decodeBigInteger( matcher.group( 1 ) );
-        var q  = Base64Fast.decodeBigInteger( matcher.group( 2 ) );
-        var dE = Base64Fast.decodeBigInteger( matcher.group( 3 ) );
-        var dS = Base64Fast.decodeBigInteger( matcher.group( 4 ) );
+            // it parsed ok, so get the values for our four fields...
+            var p  = Base64Fast.decodeBigInteger( matcher.group( 1 ) );
+            var q  = Base64Fast.decodeBigInteger( matcher.group( 2 ) );
+            var dE = Base64Fast.decodeBigInteger( matcher.group( 3 ) );
+            var dS = Base64Fast.decodeBigInteger( matcher.group( 4 ) );
 
-        // compute remaining values from those parsed...
-        var n = p.multiply( q );
-        var m = new CompositeIntegerModulus( n, p, q );
-        var t = lcm( p.subtract( ONE ), q.subtract( ONE ) );
+            // compute remaining values from those parsed...
+            var n = p.multiply( q );
+            var m = new CompositeIntegerModulus( n, p, q );
+            var t = lcm( p.subtract( ONE ), q.subtract( ONE ) );
 
-        // construct the public key and skedaddle...
-        return forgeRSAPrivateKey.ok( new RSAPrivateKey( m, t, dE, dS ) );
+            // construct the public key and skedaddle...
+            return forgeRSAPrivateKey.ok( new RSAPrivateKey( m, t, dE, dS ) );
+        }
+
+
+        @Override
+        public boolean equals( final Object _o ) {
+
+            if( this == _o ) return true;
+            if( _o == null || getClass() != _o.getClass() ) return false;
+            RSAPrivateKey that = (RSAPrivateKey) _o;
+            return m.equals( that.m ) && t.equals( that.t ) && dEncrypting.equals( that.dEncrypting ) && dSigning.equals( that.dSigning );
+        }
+
+
+        @Override
+        public int hashCode() {
+
+            return Objects.hash( m, t, dEncrypting, dSigning );
+        }
     }
 
 
