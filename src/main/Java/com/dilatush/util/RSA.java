@@ -382,33 +382,26 @@ public class RSA {
 
 
     /**
-     * Returns a randomly selected integer, uniformly distributed over the range [m..n), where n is the RSA modulus, and m is the first integer larger than n^(1/3).  The
-     * upper bound is the largest number that can be encrypted by RSA using the modulus n.  The lower bound is the smallest number such that m^3 != m^3 modulo n.
+     * Returns a randomly selected integer, uniformly distributed over the range [0..n), where n is the RSA modulus.
      *
      * @param _random A source of randomness.
      * @param _modulus The RSA modulus (n).
-     * @return A randomly selected integer, uniformly distributed over the range [m..n).
+     * @return A randomly selected integer, uniformly distributed over the range [0..n).
      */
     private static BigInteger getRandomPlainText( final SecureRandom _random, final BigInteger _modulus ) {
 
         // sanity checks...
         if( isNull( _random, _modulus ) ) throw new IllegalArgumentException( "_random or _modulus is null" );
-        if( _modulus.compareTo( BigInteger.valueOf( 1000 ) ) <= 0 ) throw new IllegalArgumentException( "_modulus is unreasonably small (" + _modulus + ")" );
+        if( _modulus.bitLength() < SHORTEST_REASONABLE_MODULUS_BIT_LENGTH ) throw new IllegalArgumentException( "_modulus is unreasonably small (" + _modulus + ")" );
 
-        // compute our bounds [m..n], and the range (n - m)...
-        // noinspection UnnecessaryLocalVariable
-        var n = _modulus;
-        var m = root( n, 3 ).add( ONE );
-        var r = n.subtract( m );
-
-        // iterate until we get a random number within our range...
+        // loop until we get a random number within our range...
         BigInteger result;
         do {
-            result = new BigInteger( r.bitLength(), _random );
-        } while( result.compareTo( r ) >= 0 );
+            result = new BigInteger( _modulus.bitLength(), _random );
+        } while( result.compareTo( _modulus ) >= 0 );
 
-        // add the lower bound; then we've got the answer we wanted...
-        return result.add( m );
+        // we're done...
+        return result;
     }
 
 
