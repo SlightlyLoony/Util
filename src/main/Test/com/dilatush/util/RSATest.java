@@ -5,9 +5,9 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
 import java.security.SecureRandom;
+import java.util.Arrays;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class RSATest {
 
@@ -118,6 +118,57 @@ class RSATest {
             // verify that the encrypt/decrypt operations produced the original test number...
             assertEquals( testNum, plainText, "result of encrypt/decrypt is not the same as the original test value" );
         }
+    }
 
+
+    // test encrypt( RSAPublicKey, byte[] ) and decrypt( RSAPrivateKey, byte[] )...
+    @Test
+    void encrypt3() {
+
+        // make a place for our test bytes...
+        var testNum = new byte[ (keys.publicKey().n().bitLength() >>> 3) - 1];
+
+        // loop until we've run all our tests...
+        for( int i = 0; i < ENCRYPT_TEST_RUNS; i++ ) {
+
+            // get some random bytes to test...
+            random.nextBytes( testNum );
+
+            // encrypt the test number...
+            var cipherText = RSA.encrypt( keys.privateKey(), testNum );
+
+            // decrypt the encrypted test number...
+            var plainText = RSA.decrypt( keys.publicKey(), cipherText );
+
+            // verify that the encrypt/decrypt operations produced the original test number...
+            if( !Arrays.equals( testNum, plainText ) )
+                plainText.hashCode();
+            assertArrayEquals( testNum, plainText, "result of encrypt/decrypt is not the same as the original test value" );
+        }
+    }
+
+
+    // test encrypt( RSAPrivateKey, byte[] ) and decrypt( RSAPublicKey, byte[] )...
+    @Test
+    void encrypt4() {
+
+        // make a place for our test bytes...
+        var testNum = new byte[ (keys.publicKey().n().bitLength() >>> 3) - 1];
+
+        // loop until we've run all our tests...
+        for( int i = 0; i < ENCRYPT_TEST_RUNS; i++ ) {
+
+            // get some random bytes to test...
+            random.nextBytes( testNum );
+
+            // encrypt the test number...
+            var cipherText = RSA.encrypt( keys.privateKey(), testNum );
+
+            // decrypt the encrypted test number...
+            var plainText = RSA.decrypt( keys.publicKey(), cipherText );
+
+            // verify that the encrypt/decrypt operations produced the original test number...
+            assertArrayEquals( testNum, plainText, "result of encrypt/decrypt is not the same as the original test value" );
+        }
     }
 }
