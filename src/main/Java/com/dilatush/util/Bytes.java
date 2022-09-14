@@ -195,6 +195,35 @@ public class Bytes {
 
 
     /**
+     * Returns the given byte array representing a big-Endian positive integer value adjusted to the given new length.  If the new length is less than the original length, an
+     * {@link IllegalArgumentException} is thrown.  If the new length is longer than the original length, the result is the original byte array with zero bytes prepended as needed
+     * to expand the array to the desired length.  Note that the returned array is <i>never</i> the given array.  Even if the new length is the same as the given byte array's
+     * length, a copy is made and returned.
+     *
+     * @param _bytes The byte array to adjust the length of
+     * @param _newLength The new length for the byte array.
+     * @return The byte array with its length adjusted.
+     * @throws IllegalArgumentException if the given bytes are null or the new length is negative
+     */
+    public static byte[] adjustNumeric( final byte[] _bytes, final int _newLength ) {
+
+        // sanity check...
+        //noinspection RedundantCast
+        if( isNull( (Object)_bytes ) ) throw new IllegalArgumentException( "_bytes is null" );
+        if( _newLength < _bytes.length ) throw new IllegalArgumentException( "_newLength is less than the given array's length" );
+
+        // create our result array of the right length...
+        var result = new byte[_newLength];
+
+        // copy the right number of bytes into our result...
+        System.arraycopy( _bytes, 0, result, _newLength - _bytes.length, _bytes.length );
+
+        // we're done!
+        return result;
+    }
+
+
+    /**
      * Returns a byte array that is a concatenation of the given byte arrays, in the same order.
      *
      * @param _bytes The byte arrays to be concatenated.

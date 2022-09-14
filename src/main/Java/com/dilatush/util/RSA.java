@@ -31,6 +31,7 @@ public class RSA {
     private static final Outcome.Forge<RSAPublicKey>  forgeRSAPublicKey  = new Outcome.Forge<>();
     private static final Outcome.Forge<RSAPrivateKey> forgeRSAPrivateKey = new Outcome.Forge<>();
     private static final Outcome.Forge<byte[]>        forgeBytes         = new Outcome.Forge<>();
+    private static final Outcome.Forge<BigInteger>    forgeBigInteger    = new Outcome.Forge<>();
 
 
     /**
@@ -273,16 +274,23 @@ public class RSA {
      *
      * @param _key The RSA public key.
      * @param _plainText The plain text to be encrypted.
-     * @return The encrypted plain text (i.e., the ciphertext), which is also in the range [0..n), where "n" is the RSA modulus.
+     * @return If the outcome is ok, the info contains the encrypted plain text (i.e., the ciphertext), which is also in the range [0..n), where "n" is the RSA modulus.  If the
+     * outcome is not ok, it contains an explanatory message and possibly an exception that caused the problem.
      */
-    public static BigInteger encrypt( final RSAPublicKey _key, final BigInteger _plainText ) {
+    public static Outcome<BigInteger> encrypt( final RSAPublicKey _key, final BigInteger _plainText ) {
 
-        // sanity checks...
-        if( isNull( _key, _plainText ) ) throw new IllegalArgumentException( "_key or _plainText is null" );
-        if( _key.n().compareTo( _plainText ) < 0 ) throw new IllegalArgumentException( "_plainText is not less than the modulus of the key" );
+        try {
+            // sanity checks...
+            if( isNull( _key, _plainText ) )           return forgeBigInteger.notOk( "_key or _plainText is null"                                    );
+            if( _key.n().compareTo( _plainText ) < 0 ) return forgeBigInteger.notOk( "_plainText is greater than or equal to the modulus of the key" );
+            if( _plainText.signum() < 0  )             return forgeBigInteger.notOk( "_plaintext is not a positive integer"                          );
 
-        // perform the encryption...
-        return _plainText.modPow( _key.eEncrypting(), _key.n() );
+            // perform the encryption...
+            return forgeBigInteger.ok( _plainText.modPow( _key.eEncrypting(), _key.n() ) );
+        }
+        catch( Exception _e ) {
+            return forgeBigInteger.notOk( "Unexpected exception", _e );
+        }
     }
 
 
@@ -293,16 +301,22 @@ public class RSA {
      *
      * @param _key  The RSA private key.
      * @param _cipherText The encrypted text to be decrypted.
-     * @return The decrypted ciphertext (i.e., the plaintext), which is also in the range [0..n), where "n" is the RSA modulus.
+     * @return If the outcome is ok, the info contains the decrypted ciphertext (i.e., the plaintext), which is also in the range [0..n), where "n" is the RSA modulus.  If the
+     * outcome was not ok, then it contains an explanatory message and possibly an exception that caused the problem.
      */
-    public static BigInteger decrypt( final RSAPrivateKey _key, final BigInteger _cipherText ) {
+    public static Outcome<BigInteger> decrypt( final RSAPrivateKey _key, final BigInteger _cipherText ) {
 
-        // sanity checks...
-        if( isNull( _key, _cipherText ) ) throw new IllegalArgumentException( "_key or _cipherText is null" );
-        if( _key.m().n().compareTo( _cipherText ) < 0 ) throw new IllegalArgumentException( "_cipherText is not less than the modulus of the key" );
+        try {
+            // sanity checks...
+            if( isNull( _key, _cipherText ) )               return forgeBigInteger.notOk( "_key or _cipherText is null"                         );
+            if( _key.m().n().compareTo( _cipherText ) < 0 ) return forgeBigInteger.notOk( "_cipherText is not less than the modulus of the key" );
 
-        // perform the decryption...
-        return pow( _cipherText, _key.dEncrypting(), _key.m() );
+            // perform the decryption...
+            return forgeBigInteger.ok( pow( _cipherText, _key.dEncrypting(), _key.m() ) );
+        }
+        catch( Exception _e ) {
+            return forgeBigInteger.notOk( "Unexpected exception", _e );
+        }
     }
 
 
@@ -312,16 +326,23 @@ public class RSA {
      *
      * @param _key The RSA private key.
      * @param _plainText The plain text to be encrypted.
-     * @return The encrypted plain text (i.e., the ciphertext), which is also in the range [0..n), where "n" is the RSA modulus.
+     * @return If the outcome is ok, the info contains the encrypted plain text (i.e., the ciphertext), which is also in the range [0..n), where "n" is the RSA modulus.  If the
+     * outcome is not ok, it contains an explanatory message and possibly an exception that caused the problem.
      */
-    public static BigInteger encrypt( final RSAPrivateKey _key, final BigInteger _plainText ) {
+    public static Outcome<BigInteger> encrypt( final RSAPrivateKey _key, final BigInteger _plainText ) {
 
-        // sanity checks...
-        if( isNull( _key, _plainText ) ) throw new IllegalArgumentException( "_key or _plainText is null" );
-        if( _key.m.n().compareTo( _plainText ) < 0 ) throw new IllegalArgumentException( "_plainText is not less than the modulus of the key" );
+        try {
+            // sanity checks...
+            if( isNull( _key, _plainText ) )             return forgeBigInteger.notOk( "_key or _plainText is null"                                    );
+            if( _key.m.n().compareTo( _plainText ) < 0 ) return forgeBigInteger.notOk( "_plainText is greater than or equal to the modulus of the key" );
+            if( _plainText.signum() < 0  )               return forgeBigInteger.notOk( "_plaintext is not a positive integer"                          );
 
-        // perform the encryption...
-        return pow( _plainText, _key.dSigning, _key.m() );
+            // perform the encryption...
+            return forgeBigInteger.ok( pow( _plainText, _key.dSigning, _key.m() ) );
+        }
+        catch( Exception _e ) {
+            return forgeBigInteger.notOk( "Unexpected exception", _e );
+        }
     }
 
 
@@ -332,16 +353,22 @@ public class RSA {
      *
      * @param _key  The RSA private key.
      * @param _cipherText The encrypted text to be decrypted.
-     * @return The decrypted ciphertext (i.e., the plaintext), which is also in the range [0..n), where "n" is the RSA modulus.
+     * @return If the outcome is ok, the info contains the decrypted ciphertext (i.e., the plaintext), which is also in the range [0..n), where "n" is the RSA modulus.  If the
+     * outcome was not ok, then it contains an explanatory message and possibly an exception that caused the problem.
      */
-    public static BigInteger decrypt( final RSAPublicKey _key, final BigInteger _cipherText ) {
+    public static Outcome<BigInteger> decrypt( final RSAPublicKey _key, final BigInteger _cipherText ) {
 
-        // sanity checks...
-        if( isNull( _key, _cipherText ) ) throw new IllegalArgumentException( "_key or _cipherText is null" );
-        if( _key.n.compareTo( _cipherText ) < 0 ) throw new IllegalArgumentException( "_cipherText is not less than the modulus of the key" );
+        try {
+            // sanity checks...
+            if( isNull( _key, _cipherText ) )         return forgeBigInteger.notOk( "_key or _cipherText is null"                         );
+            if( _key.n.compareTo( _cipherText ) < 0 ) return forgeBigInteger.notOk( "_cipherText is not less than the modulus of the key" );
 
-        // perform the decryption...
-        return _cipherText.modPow( _key.eSigning(), _key.n() );
+            // perform the decryption...
+            return forgeBigInteger.ok( _cipherText.modPow( _key.eSigning(), _key.n() ) );
+        }
+        catch( Exception _e ) {
+            return forgeBigInteger.notOk( "Unexpected exception", _e );
+        }
     }
 
 
@@ -357,34 +384,52 @@ public class RSA {
      *
      * @param _key The RSA public key.
      * @param _plainText The plain text to be encrypted.
-     * @return The encrypted plain text (i.e., the ciphertext), which resolves to an integer in the range [0..n), where "n" is the RSA modulus.
+     * @return If the outcome is ok, the info contains the encrypted plain text (i.e., the ciphertext), which resolves to an integer in the range [0..n), where "n" is the RSA
+     * modulus.  If the outcome is not ok, it contains an explanatory message and possibly an exception that caused the problem.
      */
-    public static byte[] encrypt( final RSAPublicKey _key, final byte[] _plainText ) {
+    public static Outcome<byte[]> encrypt( final RSAPublicKey _key, final byte[] _plainText ) {
 
-        // sanity checks...
-        if( isNull( _key, _plainText ) ) throw new IllegalArgumentException( "_key or _plainText is null" );
+        try {
+            // sanity checks...
+            if( isNull( _key, _plainText ) ) return forgeBytes.notOk( "_key or _plainText is null" );
 
-        // do the encryption...
-        return encrypt( _key, new BigInteger( _plainText ) ).toByteArray();
+            // do the encryption...
+            var encryptOutcome = encrypt( _key, new BigInteger( _plainText ) );
+            if( encryptOutcome.notOk() ) return forgeBytes.notOk( encryptOutcome.msg() );
+            return forgeBytes.ok( encryptOutcome.info().toByteArray() );
+        }
+        catch( Exception _e ) {
+            return forgeBytes.notOk( "Unexpected exception", _e );
+        }
     }
 
 
     /**
      * Use the given RSA private key to decrypt the given ciphertext.  Assuming the ciphertext was encrypted using the RSA public key that is complementary to this private key,
      * and that the exponent used was the encrypting exponent, the result of the decryption will be the original plaintext.  Note that the ciphertext resolve to an integer in the
-     * range [0..n), where "n" is the RSA modulus.  The resulting plaintext will also resolve to an integer in the same range.
+     * range [0..n), where "n" is the RSA modulus.  The resulting plaintext will also resolve to an integer in the same range.  Note that the decrypted plaintext may not be the
+     * same byte length as the original plaintext (before encryption).  This happens when the original plaintext had leading zero bytes.  If the decrypted plaintext must be the
+     * same length as the original plaintext, consider using {@link Bytes#adjustNumeric(byte[],int)} to adjust the length.
      *
      * @param _key  The RSA private key.
      * @param _cipherText The encrypted text to be decrypted.
-     * @return The decrypted ciphertext (i.e., the plaintext), which resolves to an integer in the range [0..n), where "n" is the RSA modulus.
+     * @return If the outcome is ok, then the info contains the decrypted ciphertext (i.e., the plaintext), which resolves to an integer in the range [0..n), where "n" is the RSA
+     * modulus.  If the outcome is not ok, it contains an explanatory message and possibly an exception that caused the problem.
      */
-    public static byte[] decrypt( final RSAPrivateKey _key, final byte[] _cipherText ) {
+    public static Outcome<byte[]> decrypt( final RSAPrivateKey _key, final byte[] _cipherText ) {
 
-        // sanity checks...
-        if( isNull( _key, _cipherText ) ) throw new IllegalArgumentException( "_key or _cipherText is null" );
+        try {
+            // sanity checks...
+            if( isNull( _key, _cipherText ) ) return forgeBytes.notOk( "_key or _cipherText is null" );
 
-        // do the decryption...
-        return decrypt( _key, new BigInteger( _cipherText ) ).toByteArray();
+            // do the decryption...
+            var decryptOutcome = decrypt( _key, new BigInteger( _cipherText ) );
+            if( decryptOutcome.notOk() ) return forgeBytes.notOk( decryptOutcome.msg() );
+            return forgeBytes.ok( decryptOutcome.info().toByteArray() );
+        }
+        catch( Exception _e ) {
+            return forgeBytes.notOk( "Unexpected exception", _e );
+        }
     }
 
 
@@ -394,34 +439,52 @@ public class RSA {
      *
      * @param _key The RSA private key.
      * @param _plainText The plain text to be encrypted.
-     * @return The encrypted plain text (i.e., the ciphertext), which resolves to an integer in the range [0..n), where "n" is the RSA modulus.
+     * @return If the outcome is ok, the info contains the encrypted plain text (i.e., the ciphertext), which resolves to an integer in the range [0..n), where "n" is the RSA
+     * modulus.  If the outcome is not ok, it contains an explanatory message and possibly an exception that caused the problem.
      */
-    public static byte[] encrypt( final RSAPrivateKey _key, final byte[] _plainText ) {
+    public static Outcome<byte[]> encrypt( final RSAPrivateKey _key, final byte[] _plainText ) {
 
-        // sanity checks...
-        if( isNull( _key, _plainText ) ) throw new IllegalArgumentException( "_key or _plainText is null" );
+        try {
+            // sanity checks...
+            if( isNull( _key, _plainText ) ) return forgeBytes.notOk( "_key or _plainText is null" );
 
-        // do the encryption...
-        return encrypt( _key, new BigInteger( _plainText ) ).toByteArray();
+            // do the encryption...
+            var encryptOutcome = encrypt( _key, new BigInteger( _plainText ) );
+            if( encryptOutcome.notOk() ) return forgeBytes.notOk( encryptOutcome.msg() );
+            return forgeBytes.ok( encryptOutcome.info().toByteArray() );
+        }
+        catch( Exception _e ) {
+            return forgeBytes.notOk( "Unexpected exception", _e );
+        }
     }
 
 
     /**
      * Use the given RSA public key to decrypt the given ciphertext.  Assuming the ciphertext was encrypted using the RSA public key that is complementary to this private key,
      * and that the exponent used was the signing exponent, the result of the decryption will be the original plaintext.  Note that the ciphertext must resolve to an integer in the
-     * range [0..n), where "n" is the RSA modulus.  The resulting plaintext will also resolve to an integer in the same range.
+     * range [0..n), where "n" is the RSA modulus.  The resulting plaintext will also resolve to an integer in the same range.  Note that the decrypted plaintext may not be the
+     * same byte length as the original plaintext (before encryption).  This happens when the original plaintext had leading zero bytes.  If the decrypted plaintext must be the
+     * same length as the original plaintext, consider using {@link Bytes#adjustNumeric(byte[], int)} to adjust the length.
      *
      * @param _key  The RSA private key.
      * @param _cipherText The encrypted text to be decrypted.
-     * @return The decrypted ciphertext (i.e., the plaintext), which resolves to an integer in the range [0..n), where "n" is the RSA modulus.
+     * @return If the outcome is ok, then the info contains the decrypted ciphertext (i.e., the plaintext), which resolves to an integer in the range [0..n), where "n" is the RSA
+     * modulus.  If the outcome is not ok, it contains an explanatory message and possibly an exception that caused the problem.
      */
-    public static byte[] decrypt( final RSAPublicKey _key, final byte[] _cipherText ) {
+    public static Outcome<byte[]> decrypt( final RSAPublicKey _key, final byte[] _cipherText ) {
 
-        // sanity checks...
-        if( isNull( _key, _cipherText ) ) throw new IllegalArgumentException( "_key or _cipherText is null" );
+        try {
+            // sanity checks...
+            if( isNull( _key, _cipherText ) ) return forgeBytes.notOk( "_key or _cipherText is null" );
 
-        // do the decryption...
-        return decrypt( _key, new BigInteger( _cipherText ) ).toByteArray();
+            // do the decryption...
+            var decryptOutcome = decrypt( _key, new BigInteger( _cipherText ) );
+            if( decryptOutcome.notOk() ) return forgeBytes.notOk( decryptOutcome.msg() );
+            return forgeBytes.ok( decryptOutcome.info().toByteArray() );
+        }
+        catch( Exception _e ) {
+            return forgeBytes.notOk( "Unexpected exception", _e );
+        }
     }
 
 
