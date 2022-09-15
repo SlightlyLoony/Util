@@ -110,20 +110,25 @@ public class RSA {
          */
         public static Outcome<RSAPublicKey> fromString( final String _string ) {
 
-            // sanity checks...
-            if( isEmpty( _string ) ) throw new IllegalArgumentException( "_string is null or zero length" );
+            try {
+                // sanity checks...
+                if( isEmpty( _string ) ) return forgeRSAPublicKey.notOk( "_string is null or zero length" );
 
-            // fail if we can't parse this string into fields for our three numerical values...
-            Matcher matcher = PARSE_PUBLIC_KEY.matcher( _string );
-            if( !matcher.matches() ) return forgeRSAPublicKey.notOk( "Not a public RSA key: " + _string );
+                // fail if we can't parse this string into fields for our three numerical values...
+                Matcher matcher = PARSE_PUBLIC_KEY.matcher( _string );
+                if( !matcher.matches() ) return forgeRSAPublicKey.notOk( "Not a public RSA key: " + _string );
 
-            // it parsed ok, so get the values for our three fields...
-            var n           = Base64Fast.decodeBigInteger( matcher.group( 1 ) );
-            var eEncrypting = Base64Fast.decodeBigInteger( matcher.group( 2 ) );
-            var eSigning    = Base64Fast.decodeBigInteger( matcher.group( 3 ) );
+                // it parsed ok, so get the values for our three fields...
+                var n           = Base64Fast.decodeBigInteger( matcher.group( 1 ) );
+                var eEncrypting = Base64Fast.decodeBigInteger( matcher.group( 2 ) );
+                var eSigning    = Base64Fast.decodeBigInteger( matcher.group( 3 ) );
 
-            // construct the public key and skedaddle...
-            return forgeRSAPublicKey.ok( new RSAPublicKey( n, eEncrypting, eSigning ) );
+                // construct the public key and skedaddle...
+                return forgeRSAPublicKey.ok( new RSAPublicKey( n, eEncrypting, eSigning ) );
+            }
+            catch( Exception _e ) {
+                return forgeRSAPublicKey.notOk( "Unexpected exception", _e );
+            }
         }
 
 
@@ -139,7 +144,6 @@ public class RSA {
 
         @Override
         public int hashCode() {
-
             return Objects.hash( n, eEncrypting, eSigning );
         }
     }
@@ -232,26 +236,31 @@ public class RSA {
          */
         public static Outcome<RSAPrivateKey> fromString( final String _string ) {
 
-            // sanity checks...
-            if( isEmpty( _string ) ) throw new IllegalArgumentException( "_string is null or zero length" );
+            try {
+                // sanity checks...
+                if( isEmpty( _string ) ) return forgeRSAPrivateKey.notOk( "_string is null or zero length" );
 
-            // fail if we can't parse this string into fields for our three numerical values...
-            Matcher matcher = PARSE_PRIVATE_KEY.matcher( _string );
-            if( !matcher.matches() ) return forgeRSAPrivateKey.notOk( "Not a private RSA key: " + _string );
+                // fail if we can't parse this string into fields for our three numerical values...
+                Matcher matcher = PARSE_PRIVATE_KEY.matcher( _string );
+                if( !matcher.matches() ) return forgeRSAPrivateKey.notOk( "Not a private RSA key: " + _string );
 
-            // it parsed ok, so get the values for our four fields...
-            var p  = Base64Fast.decodeBigInteger( matcher.group( 1 ) );
-            var q  = Base64Fast.decodeBigInteger( matcher.group( 2 ) );
-            var dE = Base64Fast.decodeBigInteger( matcher.group( 3 ) );
-            var dS = Base64Fast.decodeBigInteger( matcher.group( 4 ) );
+                // it parsed ok, so get the values for our four fields...
+                var p  = Base64Fast.decodeBigInteger( matcher.group( 1 ) );
+                var q  = Base64Fast.decodeBigInteger( matcher.group( 2 ) );
+                var dE = Base64Fast.decodeBigInteger( matcher.group( 3 ) );
+                var dS = Base64Fast.decodeBigInteger( matcher.group( 4 ) );
 
-            // compute remaining values from those parsed...
-            var n = p.multiply( q );
-            var m = new CompositeIntegerModulus( n, p, q );
-            var t = lcm( p.subtract( ONE ), q.subtract( ONE ) );
+                // compute remaining values from those parsed...
+                var n = p.multiply( q );
+                var m = new CompositeIntegerModulus( n, p, q );
+                var t = lcm( p.subtract( ONE ), q.subtract( ONE ) );
 
-            // construct the public key and skedaddle...
-            return forgeRSAPrivateKey.ok( new RSAPrivateKey( m, t, dE, dS ) );
+                // construct the public key and skedaddle...
+                return forgeRSAPrivateKey.ok( new RSAPrivateKey( m, t, dE, dS ) );
+            }
+            catch( Exception _e ) {
+                return forgeRSAPrivateKey.notOk( "Unexpected exception", _e );
+            }
         }
 
 
@@ -267,7 +276,6 @@ public class RSA {
 
         @Override
         public int hashCode() {
-
             return Objects.hash( m, t, dEncrypting, dSigning );
         }
     }
@@ -653,33 +661,39 @@ public class RSA {
      * @param _bitLength The bit length of the desired random number.
      * @param _eE The encryption exponent.
      * @param _eS The signing exponent.
-     * @return The suitable random number.
+     * @return If the outcome is ok, the info contains the suitable random number.  If the outcome is not ok, it contains an explanatory message and possibly an exception that
+     * caused the problem.
      */
-    private static BigInteger generateRSAPrime( final SecureRandom _random, final int _bitLength, final BigInteger _eE, final BigInteger _eS ) {
+    private static Outcome<BigInteger> generateRSAPrime( final SecureRandom _random, final int _bitLength, final BigInteger _eE, final BigInteger _eS ) {
 
-        // figure out how many attempts we're willing to make before giving up...
-        var attempts = MAX_PRIME_ATTEMPTS_PER_BIT * _bitLength;
+        try {
+            // figure out how many attempts we're willing to make before giving up...
+            var attempts = MAX_PRIME_ATTEMPTS_PER_BIT * _bitLength;
 
-        // iterate until we find a suitable prime, or we give up...
-        while( attempts-- > 0 ) {
+            // iterate until we find a suitable prime, or we give up...
+            while( attempts-- > 0 ) {
 
-            // pick a random number of the desired size...
-            var trial = new BigInteger( _bitLength, _random );
+                // pick a random number of the desired size...
+                var trial = new BigInteger( _bitLength, _random );
 
-            // make sure that the number is not too small...
-            if( trial.bitLength() < (_bitLength >> 3) ) continue;
+                // make sure that the number is not too small...
+                if( trial.bitLength() < (_bitLength >> 3) ) continue;
 
-            // make sure that modulo either public key, the number does not equal 1...
-            if( trial.mod( _eE ).compareTo( ONE ) == 0 ) continue;
-            if( trial.mod( _eS ).compareTo( ONE ) == 0 ) continue;
+                // make sure that modulo either public key, the number does not equal 1...
+                if( trial.mod( _eE ).compareTo( ONE ) == 0 ) continue;
+                if( trial.mod( _eS ).compareTo( ONE ) == 0 ) continue;
 
-            // if our number is prime, to a certainty of 1-1/2^100, then we have a winner - return it...
-            if( trial.isProbablePrime( PRIME_CERTAINTY ) )
-                return trial;
+                // if our number is prime, to a certainty of 1-1/2^100, then we have a winner - return it...
+                if( trial.isProbablePrime( PRIME_CERTAINTY ) )
+                    return forgeBigInteger.ok( trial );
+            }
+
+            // if we get here, we couldn't find a suitable prime with our maximum number of attempts...
+            return forgeBigInteger.notOk( "couldn't find a suitable RSA prime within " + (MAX_PRIME_ATTEMPTS_PER_BIT * _bitLength) + " attempts" );
         }
-
-        // if we get here, we couldn't find a suitable prime with our maximum number of attempts...
-        throw new IllegalStateException( "couldn't find a suitable RSA prime within " + (MAX_PRIME_ATTEMPTS_PER_BIT * _bitLength) + " attempts" );
+        catch( Exception _e ) {
+            return forgeBigInteger.notOk( "Unexpected exception", _e );
+        }
     }
 
 
@@ -754,79 +768,89 @@ public class RSA {
      * @param _ePubSigning The public signing exponent.
      * @param _bitLengthLoLimit The lower limit for the allowable modulus bit length.
      * @param _bitLengthHiLimit The upper limit for the allowable modulus bit length.
-     * @return The outcome of the RSA key generation process, including (if successful) the RSA public/private key pair.
+     * @return The outcome of the RSA key generation process, including (if successful) the RSA public/private key pair.  If the outcome was not ok, it contains an explanatory
+     * message and possibly an exception that caused the problem.
      */
     public static Outcome<RSAKeyPair> generateKeys( final SecureRandom _random,  final int _modulusBitLength,
                                                     final int _ePubEncrypting,   final int _ePubSigning,
                                                     final int _bitLengthLoLimit, final int _bitLengthHiLimit ) {
 
-        // check that we got a source of randomness...
-        if( isNull( _random )) throw new IllegalArgumentException( "_random was null" );
+        try {
+            // check that we got a source of randomness...
+            if( isNull( _random )) return forgeRSAKeyPair.notOk( "_random was null" );
 
-        // check for reasonable modulus bit length limits...
-        if( (_bitLengthHiLimit < _bitLengthLoLimit) || (_bitLengthLoLimit < 1000) || (_bitLengthHiLimit > 20000) )
-            return forgeRSAKeyPair.notOk( "Modulus bit length limits are not reasonable: " + _bitLengthLoLimit + "/" + _bitLengthHiLimit );
+            // check for reasonable modulus bit length limits...
+            if( (_bitLengthHiLimit < _bitLengthLoLimit) || (_bitLengthLoLimit < 1000) || (_bitLengthHiLimit > 20000) )
+                return forgeRSAKeyPair.notOk( "Modulus bit length limits are not reasonable: " + _bitLengthLoLimit + "/" + _bitLengthHiLimit );
 
-        // check for a reasonable modulus bit length...
-        if( _modulusBitLength < _bitLengthLoLimit ) return forgeRSAKeyPair.notOk( _modulusBitLength + " is an unreasonably short bit length for a modulus" );
-        if( _modulusBitLength > _bitLengthHiLimit ) return forgeRSAKeyPair.notOk( _modulusBitLength + " is an unreasonably long bit length for a modulus"  );
+            // check for a reasonable modulus bit length...
+            if( _modulusBitLength < _bitLengthLoLimit ) return forgeRSAKeyPair.notOk( _modulusBitLength + " is an unreasonably short bit length for a modulus" );
+            if( _modulusBitLength > _bitLengthHiLimit ) return forgeRSAKeyPair.notOk( _modulusBitLength + " is an unreasonably long bit length for a modulus"  );
 
-        // check for reasonable public exponents...
-        if( (_ePubEncrypting < 3) || (_ePubEncrypting > 99999) ) return forgeRSAKeyPair.notOk( _ePubEncrypting + " _ePubEncrypting is not in [3..99999]" );
-        if( (_ePubSigning    < 3) || (_ePubSigning    > 99999) ) return forgeRSAKeyPair.notOk( _ePubSigning    + " _ePubSigning is not in [3..99999]"    );
-        if( (_ePubEncrypting & 1) == 0 ) return forgeRSAKeyPair.notOk( "_ePubEncrypting is not odd" );
-        if( (_ePubSigning    & 1) == 0 ) return forgeRSAKeyPair.notOk( "_ePubSigning is not odd" );
-        if( _ePubEncrypting == _ePubSigning ) return forgeRSAKeyPair.notOk( "_ePubEncrypting cannot be the same value as _ePubSigning" );
+            // check for reasonable public exponents...
+            if( (_ePubEncrypting < 3) || (_ePubEncrypting > 99999) ) return forgeRSAKeyPair.notOk( _ePubEncrypting + " _ePubEncrypting is not in [3..99999]" );
+            if( (_ePubSigning    < 3) || (_ePubSigning    > 99999) ) return forgeRSAKeyPair.notOk( _ePubSigning    + " _ePubSigning is not in [3..99999]"    );
+            if( (_ePubEncrypting & 1) == 0 ) return forgeRSAKeyPair.notOk( "_ePubEncrypting is not odd" );
+            if( (_ePubSigning    & 1) == 0 ) return forgeRSAKeyPair.notOk( "_ePubSigning is not odd" );
+            if( _ePubEncrypting == _ePubSigning ) return forgeRSAKeyPair.notOk( "_ePubEncrypting cannot be the same value as _ePubSigning" );
 
-        // make sure that the two public exponents have no common factors...
-        var ePubEncrypting = BigInteger.valueOf( _ePubEncrypting );
-        var ePubSigning    = BigInteger.valueOf( _ePubSigning    );
-        if( extendedGCD( ePubEncrypting, ePubSigning ).gcd().compareTo( ONE) != 0 )
-            return forgeRSAKeyPair.notOk( _ePubEncrypting + " and " + _ePubSigning + " have one or more common factors" );
+            // make sure that the two public exponents have no common factors...
+            var ePubEncrypting = BigInteger.valueOf( _ePubEncrypting );
+            var ePubSigning    = BigInteger.valueOf( _ePubSigning    );
+            if( extendedGCD( ePubEncrypting, ePubSigning ).gcd().compareTo( ONE) != 0 )
+                return forgeRSAKeyPair.notOk( _ePubEncrypting + " and " + _ePubSigning + " have one or more common factors" );
 
-        // if we get here, then we're ready to attempt key generation - but we'll only try MAX_KEY_GENERATION_ATTEMPTS times before we throw up our hands and give up...
-        var attempts = 0;
-        while( attempts++ < MAX_KEY_GENERATION_ATTEMPTS ) {
+            // if we get here, then we're ready to attempt key generation - but we'll only try MAX_KEY_GENERATION_ATTEMPTS times before we throw up our hands and give up...
+            var attempts = 0;
+            while( attempts++ < MAX_KEY_GENERATION_ATTEMPTS ) {
 
-            // generate a trial p and q with half our desired modulus bit length...
-            var p = generateRSAPrime( _random, _modulusBitLength >> 1, ePubEncrypting, ePubSigning );
-            var q = generateRSAPrime( _random, _modulusBitLength >> 1, ePubEncrypting, ePubSigning );
+                // generate a trial p and q with half our desired modulus bit length...
+                var pOutcome = generateRSAPrime( _random, _modulusBitLength >> 1, ePubEncrypting, ePubSigning );
+                if( pOutcome.notOk() ) return forgeRSAKeyPair.notOk( "Problem generating p: " + pOutcome.msg(), pOutcome.cause() );
+                var qOutcome = generateRSAPrime( _random, _modulusBitLength >> 1, ePubEncrypting, ePubSigning );
+                if( qOutcome.notOk() ) return forgeRSAKeyPair.notOk( "Problem generating q: " + qOutcome.msg(), qOutcome.cause() );
+                var p = pOutcome.info();
+                var q = qOutcome.info();
 
-            // if p == q, try again...
-            if( p.compareTo( q ) == 0 )
-                continue;
+                // if p == q, try again...
+                if( p.compareTo( q ) == 0 )
+                    continue;
 
-            // compute n = p * q...
-            var n = p.multiply( q );
+                // compute n = p * q...
+                var n = p.multiply( q );
 
-            // make sure n has the right bit length...
-            if( n.bitLength() != _modulusBitLength)
-                continue;
+                // make sure n has the right bit length...
+                if( n.bitLength() != _modulusBitLength)
+                    continue;
 
-            // compute t as the least common multiple (p − 1, q − 1)...
-            var t = lcm( p.subtract( ONE ), q.subtract( ONE ) );
+                // compute t as the least common multiple (p − 1, q − 1)...
+                var t = lcm( p.subtract( ONE ), q.subtract( ONE ) );
 
-            // compute the private encrypting exponent, and verify that it shares no factors with t...
-            var egcd = extendedGCD( ePubEncrypting, t );
-            if( egcd.gcd().compareTo( ONE ) != 0 )   // if the gcd is anything other than 1, we've got a nasty shared factor, so try again...
-                continue;
-            var ePriEncrypting = egcd.x().mod( t );
+                // compute the private encrypting exponent, and verify that it shares no factors with t...
+                var egcd = extendedGCD( ePubEncrypting, t );
+                if( egcd.gcd().compareTo( ONE ) != 0 )   // if the gcd is anything other than 1, we've got a nasty shared factor, so try again...
+                    continue;
+                var ePriEncrypting = egcd.x().mod( t );
 
-            // compute the private signing exponent, and verify that it shares no factors with t...
-            egcd = extendedGCD( ePubSigning, t );
-            if( egcd.gcd().compareTo( ONE ) != 0 )   // if the gcd is anything other than 1, we've got a nasty shared factor, so try again...
-                continue;
-            var ePriSigning = egcd.x().mod( t );
+                // compute the private signing exponent, and verify that it shares no factors with t...
+                egcd = extendedGCD( ePubSigning, t );
+                if( egcd.gcd().compareTo( ONE ) != 0 )   // if the gcd is anything other than 1, we've got a nasty shared factor, so try again...
+                    continue;
+                var ePriSigning = egcd.x().mod( t );
 
-            // if we get here, then we have all the information we need to make a usable pair of keys - so construct our result and skedaddle...
-            System.out.println( "Attempts: " + attempts );
-            var pubKey = new RSAPublicKey( n, ePubEncrypting, ePubSigning );
-            var priKey = new RSAPrivateKey( new CompositeIntegerModulus( n, p, q ), t, ePriEncrypting, ePriSigning );
-            return forgeRSAKeyPair.ok( new RSAKeyPair( pubKey, priKey ) );
+                // if we get here, then we have all the information we need to make a usable pair of keys - so construct our result and skedaddle...
+                System.out.println( "Attempts: " + attempts );
+                var pubKey = new RSAPublicKey( n, ePubEncrypting, ePubSigning );
+                var priKey = new RSAPrivateKey( new CompositeIntegerModulus( n, p, q ), t, ePriEncrypting, ePriSigning );
+                return forgeRSAKeyPair.ok( new RSAKeyPair( pubKey, priKey ) );
+            }
+
+            // if we get here, we couldn't generate keys within a reasonable number of attempts...
+            return forgeRSAKeyPair.notOk( "could not generate RSA keys after " + attempts + " attempts" );
         }
-
-        // if we get here, we couldn't generate keys within a reasonable number of attempts...
-        return forgeRSAKeyPair.notOk( "could not generate RSA keys after " + attempts + " attempts" );
+        catch( Exception _e ) {
+            return forgeRSAKeyPair.notOk( "Unexpected exception", _e );
+        }
     }
 
 
@@ -883,40 +907,45 @@ public class RSA {
      * @param _bytes The bytes to compute a hash of.
      * @param _length The desired length (in bytes) of the hash results.
      * @param _hasher The {@link MessageDigest} to use within this method.
-     * @return Ok with the hash results, or not ok with an explanatory message.
+     * @return Ok with the hash results, or not ok with an explanatory message and possibly an exception that caused the problem.
      */
     public static Outcome<byte[]> mask( final byte[] _bytes, final int _length, final MessageDigest _hasher ) {
 
-        // sanity checks...
-        //noinspection RedundantCast
-        if( isNull( (Object) _bytes ) || (_bytes.length == 0) )
-            return forgeBytes.notOk( "_bytes is null or empty" );
-        if( (_length < 0) )
-            return forgeBytes.notOk( "_length is negative: " + _length );
+        try {
+            // sanity checks...
+            //noinspection RedundantCast
+            if( isNull( (Object) _bytes ) || (_bytes.length == 0) )
+                return forgeBytes.notOk( "_bytes is null or empty" );
+            if( (_length < 0) )
+                return forgeBytes.notOk( "_length is negative: " + _length );
 
-        // some setup...
-        var result = new byte[0];
-        var counter = 0;
+            // some setup...
+            var result = new byte[0];
+            var counter = 0;
 
-        // iterate until our result is long enough...
-        while( result.length < _length ) {
+            // iterate until our result is long enough...
+            while( result.length < _length ) {
 
-            // get the bytes we need to hash this time around...
-            ByteBuffer bb = ByteBuffer.allocate( _bytes.length + 4 );
-            bb.order( ByteOrder.BIG_ENDIAN );
-            bb.put( _bytes );
-            bb.putInt( counter );
+                // get the bytes we need to hash this time around...
+                ByteBuffer bb = ByteBuffer.allocate( _bytes.length + 4 );
+                bb.order( ByteOrder.BIG_ENDIAN );
+                bb.put( _bytes );
+                bb.putInt( counter );
 
-            // concatenate the hash of these bytes with what we've already got...
-            _hasher.reset();
-            result = Bytes.concatenate( result, _hasher.digest( bb.array() ) );
+                // concatenate the hash of these bytes with what we've already got...
+                _hasher.reset();
+                result = Bytes.concatenate( result, _hasher.digest( bb.array() ) );
 
-            // update our counter; this ensures that each iteration is different...
-            counter++;
+                // update our counter; this ensures that each iteration is different...
+                counter++;
+            }
+
+            // return the requested number of bytes...
+            return forgeBytes.ok( Arrays.copyOf( result, _length ) );
         }
-
-        // return the requested number of bytes...
-        return forgeBytes.ok( Arrays.copyOf( result, _length ) );
+        catch( Exception _e ) {
+            return forgeBytes.notOk( "Unexpected exception", _e );
+        }
     }
 
 
@@ -926,7 +955,7 @@ public class RSA {
      *
      * @param _bytes The bytes to compute a hash of.
      * @param _length The desired length (in bytes) of the hash results.
-     * @return Ok with the hash results, or not ok with an explanatory message.
+     * @return Ok with the hash results, or not ok with an explanatory message and possibly an exception that caused the problem.
      */
     public static Outcome<byte[]> mask( final byte[] _bytes, final int _length ) {
 
@@ -936,7 +965,7 @@ public class RSA {
             hasher = MessageDigest.getInstance( DEFAULT_HASH_ALGORITHM );
         }
         catch( NoSuchAlgorithmException _e ) {
-            return forgeBytes.notOk( "Hash algorithm does not exist: " + DEFAULT_HASH_ALGORITHM );
+            return forgeBytes.notOk( "Hash algorithm does not exist: " + DEFAULT_HASH_ALGORITHM, _e );
         }
 
         return mask( _bytes, _length, hasher );
@@ -1010,60 +1039,66 @@ public class RSA {
      *                Note that the hash of the label is used to construct the returned padded value, but not the label itself.
      * @param _random The source of randomness for the padding operation.
      * @param _hasher The {@link MessageDigest} to use in the padding operation.
-     * @return The outcome of the padding operation.  If ok, the info is a byte array containing the padded message.  If not ok, the outcome contains an explanatory message.
+     * @return The outcome of the padding operation.  If ok, the info is a byte array containing the padded message.  If not ok, the outcome contains an explanatory message and
+     * possibly an exception that caused the problem.
      */
     public static Outcome<byte[]> pad( final BigInteger _rsaModulus, final byte[] _message, final String _label, final SecureRandom _random, final MessageDigest _hasher ) {
 
         // see the relevant RFC 3447 text in comments above...
 
-        // sanity checks...
-        if( isNull( _rsaModulus, _message, _random, _hasher ) ) return forgeBytes.notOk( "_rsaModulus, _message, _random, or _hasher is null" );
+        try {
+            // sanity checks...
+            if( isNull( _rsaModulus, _message, _random, _hasher ) ) return forgeBytes.notOk( "_rsaModulus, _message, _random, or _hasher is null" );
 
-        // get our string into a byte array with a zero terminator...
-        var label = (isNull( _label ) ? "" : _label) + "\0";
-        var labelBytes = label.getBytes( StandardCharsets.UTF_8 );
+            // get our string into a byte array with a zero terminator...
+            var label = (isNull( _label ) ? "" : _label) + "\0";
+            var labelBytes = label.getBytes( StandardCharsets.UTF_8 );
 
-        // some prep...
-        var hashLen = _hasher.getDigestLength();
-        var k = (_rsaModulus.bitLength() >>> 3) + ((_rsaModulus.bitLength() & 7) == 0 ? 0 : 1);  // get number of bytes required to hold the modulus...
-        var psLen = k - _message.length - (hashLen << 1) - 2;
-        if( psLen < 0 ) return forgeBytes.notOk( "_message is too long" );
+            // some prep...
+            var hashLen = _hasher.getDigestLength();
+            var k = (_rsaModulus.bitLength() >>> 3) + ((_rsaModulus.bitLength() & 7) == 0 ? 0 : 1);  // get number of bytes required to hold the modulus...
+            var psLen = k - _message.length - (hashLen << 1) - 2;
+            if( psLen < 0 ) return forgeBytes.notOk( "_message is too long" );
 
-        // the actual OAEP padding algorithm...
+            // the actual OAEP padding algorithm...
 
-        // hash the label bytes (which may be a single 0 byte)...
-        _hasher.reset();
-        var lHash = _hasher.digest( labelBytes );
+            // hash the label bytes (which may be a single 0 byte)...
+            _hasher.reset();
+            var lHash = _hasher.digest( labelBytes );
 
-        // generate ps 0 bytes (length could be zero)...
-        var ps = new byte[psLen];
+            // generate ps 0 bytes (length could be zero)...
+            var ps = new byte[psLen];
 
-        // generate data block db (length will be k - hashLen - 1)...
-        var db = Bytes.concatenate( lHash, ps, new byte[] {1}, _message );
+            // generate data block db (length will be k - hashLen - 1)...
+            var db = Bytes.concatenate( lHash, ps, new byte[] {1}, _message );
 
-        // generate random seed...
-        var seed = new byte[hashLen];
-        _random.nextBytes( seed );
+            // generate random seed...
+            var seed = new byte[hashLen];
+            _random.nextBytes( seed );
 
-        // generate data block mask...
-        var dbMask = mask( seed, db.length, _hasher );
-        if( dbMask.notOk() ) return forgeBytes.notOk( "dbMask: " + dbMask.msg() );
+            // generate data block mask...
+            var dbMask = mask( seed, db.length, _hasher );
+            if( dbMask.notOk() ) return forgeBytes.notOk( "dbMask: " + dbMask.msg() );
 
-        // generate masked data block...
-        var maskedDb = Bytes.xor( db, 0, dbMask.info(), 0, db.length );
+            // generate masked data block...
+            var maskedDb = Bytes.xor( db, 0, dbMask.info(), 0, db.length );
 
-        // generate seed mask...
-        var seedMask = mask( maskedDb, hashLen, _hasher );
-        if( seedMask.notOk() ) return forgeBytes.notOk( "seedMask: " + seedMask.msg() );
+            // generate seed mask...
+            var seedMask = mask( maskedDb, hashLen, _hasher );
+            if( seedMask.notOk() ) return forgeBytes.notOk( "seedMask: " + seedMask.msg() );
 
-        // generate masked seed...
-        var maskedSeed = Bytes.xor( seed, 0, seedMask.info(), 0, seed.length );
+            // generate masked seed...
+            var maskedSeed = Bytes.xor( seed, 0, seedMask.info(), 0, seed.length );
 
-        // generate encoded message (length is k)...
-        var em = Bytes.concatenate( new byte[] {0}, maskedSeed, maskedDb );
+            // generate encoded message (length is k)...
+            var em = Bytes.concatenate( new byte[] {0}, maskedSeed, maskedDb );
 
-        // return our result...
-        return forgeBytes.ok( em );
+            // return our result...
+            return forgeBytes.ok( em );
+        }
+        catch( Exception _e ) {
+            return forgeBytes.notOk( "Unexpected exception", _e );
+        }
     }
 
 
@@ -1088,7 +1123,7 @@ public class RSA {
             hasher = MessageDigest.getInstance( DEFAULT_HASH_ALGORITHM );
         }
         catch( NoSuchAlgorithmException _e ) {
-            return forgeBytes.notOk( "Hash algorithm does not exist: " + DEFAULT_HASH_ALGORITHM );
+            return forgeBytes.notOk( "Hash algorithm does not exist: " + DEFAULT_HASH_ALGORITHM, _e );
         }
 
         return pad( _rsaModulus, _message, _label, _random, hasher );
@@ -1155,68 +1190,74 @@ public class RSA {
      * @param _message The padded message to be unpadded.
      * @param _label The string label to be verified.  Note that the label will be encoded as UTF-8 (which, for characters in the ASCII character set, is identical to ASCII).
      * @param _hasher The {@link MessageDigest} to use when unpadding (it must be the same one used when padding).
-     * @return The outcome of the unpadding operation.  If ok, the info contains the unpadded original message.  If not ok, the outcome contains an explanatory message.
+     * @return The outcome of the unpadding operation.  If ok, the info contains the unpadded original message.  If not ok, the outcome contains an explanatory message and
+     * possibly an exception that caused the problem.
      */
     public static Outcome<byte[]> unpad( final byte[] _message, final String _label, final MessageDigest _hasher ) {
 
         // see the relevant RFC 3447 text in comments above...
 
-        // sanity checks...
-        if( isNull( _message, _hasher ) ) return forgeBytes.notOk( "_message or _hasher is null" );
-        var hashLen = _hasher.getDigestLength();
-        if( (_message.length - hashLen - 1) <= (hashLen + 1) ) return forgeBytes.notOk( "_message is impossibly short" );
+        try {
+            // sanity checks...
+            if( isNull( _message, _hasher ) ) return forgeBytes.notOk( "_message or _hasher is null" );
+            var hashLen = _hasher.getDigestLength();
+            if( (_message.length - hashLen - 1) <= (hashLen + 1) ) return forgeBytes.notOk( "_message is impossibly short" );
 
-        // get our string into a byte array with a zero terminator...
-        var label = (isNull( _label ) ? "" : _label) + "\0";
-        var labelBytes = label.getBytes( StandardCharsets.US_ASCII );
+            // get our string into a byte array with a zero terminator...
+            var label = (isNull( _label ) ? "" : _label) + "\0";
+            var labelBytes = label.getBytes( StandardCharsets.US_ASCII );
 
-        // the actual OAEP unpadding algorithm...
+            // the actual OAEP unpadding algorithm...
 
-        // split the given message into Y, maskedSeed, and maskedDB...
-        var y = Bytes.copy( _message, 0, 1 );
-        var maskedSeed = Bytes.copy( _message, 1, hashLen );
-        var maskedDB = Bytes.copy( _message, hashLen + 1, _message.length - hashLen -1 );
+            // split the given message into Y, maskedSeed, and maskedDB...
+            var y = Bytes.copy( _message, 0, 1 );
+            var maskedSeed = Bytes.copy( _message, 1, hashLen );
+            var maskedDB = Bytes.copy( _message, hashLen + 1, _message.length - hashLen -1 );
 
-        // get the seed mask...
-        var seedMask = mask( maskedDB, hashLen, _hasher );
-        if( seedMask.notOk() ) return forgeBytes.notOk( "seedMask: " + seedMask.msg() );
+            // get the seed mask...
+            var seedMask = mask( maskedDB, hashLen, _hasher );
+            if( seedMask.notOk() ) return forgeBytes.notOk( "seedMask: " + seedMask.msg() );
 
-        // get the seed...
-        var seed = Bytes.xor( maskedSeed, 0, seedMask.info(), 0, hashLen );
+            // get the seed...
+            var seed = Bytes.xor( maskedSeed, 0, seedMask.info(), 0, hashLen );
 
-        // get the data block (DB) mask...
-        var dbMask = mask( seed, maskedDB.length, _hasher );
-        if( dbMask.notOk() ) return forgeBytes.notOk( "dbMask: " + dbMask.msg() );
+            // get the data block (DB) mask...
+            var dbMask = mask( seed, maskedDB.length, _hasher );
+            if( dbMask.notOk() ) return forgeBytes.notOk( "dbMask: " + dbMask.msg() );
 
-        // get the data block (DB)...
-        var db = Bytes.xor( maskedDB, 0, dbMask.info(), 0, maskedDB.length );
+            // get the data block (DB)...
+            var db = Bytes.xor( maskedDB, 0, dbMask.info(), 0, maskedDB.length );
 
-        // scan the data block to find the beginning of the original message...
-        var msgIndex = 0;
-        for( int i = hashLen; i < db.length; i++ ) {
-            int b = db[i] & 0xff;
-            if( b == 1 ) {
-                msgIndex = i + 1;
-                if( (db.length - msgIndex) == 0 ) return forgeBytes.notOk( "Unpadded message in data block is zero bytes long" );
-                break;
+            // scan the data block to find the beginning of the original message...
+            var msgIndex = 0;
+            for( int i = hashLen; i < db.length; i++ ) {
+                int b = db[i] & 0xff;
+                if( b == 1 ) {
+                    msgIndex = i + 1;
+                    if( (db.length - msgIndex) == 0 ) return forgeBytes.notOk( "Unpadded message in data block is zero bytes long" );
+                    break;
+                }
+                else if( b != 0 ){
+                    return forgeBytes.notOk( "Data block in padded message is malformed" );
+                }
             }
-            else if( b != 0 ){
-                return forgeBytes.notOk( "Data block in padded message is malformed" );
-            }
+            if( msgIndex == 0 ) return forgeBytes.notOk( "Unpadded message in data block not found" );
+
+            // split the data block into label hash and the original message...
+            var lHash = Bytes.copy( db, 0, hashLen );
+            var msg = Bytes.copy( db, msgIndex, db.length - msgIndex );
+
+            // validity checks...
+            if( y[0] != 0 ) return forgeBytes.notOk( "Malformed padded message: initial byte of message is not zero" );
+            _hasher.reset();
+            var lHashCheck = _hasher.digest( labelBytes );
+            if( !Arrays.equals( lHash, lHashCheck ) ) return forgeBytes.notOk( "Label hash mismatch" );
+
+            return forgeBytes.ok( msg );
         }
-        if( msgIndex == 0 ) return forgeBytes.notOk( "Unpadded message in data block not found" );
-
-        // split the data block into label hash and the original message...
-        var lHash = Bytes.copy( db, 0, hashLen );
-        var msg = Bytes.copy( db, msgIndex, db.length - msgIndex );
-
-        // validity checks...
-        if( y[0] != 0 ) return forgeBytes.notOk( "Malformed padded message: initial byte of message is not zero" );
-        _hasher.reset();
-        var lHashCheck = _hasher.digest( labelBytes );
-        if( !Arrays.equals( lHash, lHashCheck ) ) return forgeBytes.notOk( "Label hash mismatch" );
-
-        return forgeBytes.ok( msg );
+        catch( Exception _e ) {
+            return forgeBytes.notOk( "Unexpected exception", _e );
+        }
     }
 
 
@@ -1236,7 +1277,7 @@ public class RSA {
             hasher = MessageDigest.getInstance( DEFAULT_HASH_ALGORITHM );
         }
         catch( NoSuchAlgorithmException _e ) {
-            return forgeBytes.notOk( "Hash algorithm does not exist: " + DEFAULT_HASH_ALGORITHM );
+            return forgeBytes.notOk( "Hash algorithm does not exist: " + DEFAULT_HASH_ALGORITHM, _e );
         }
 
         return unpad( _message, _label, hasher );
