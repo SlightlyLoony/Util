@@ -52,6 +52,17 @@ public class RSA {
             if( eSigning.compareTo( ONE ) < 0 )      throw new IllegalArgumentException( "eSigning is less than one" );
         }
 
+
+        /**
+         * Returns the number of bytes required to encode the modulus n.
+         *
+         * @return the number of bytes required to encode the modulus n.
+         */
+        public int byteLen() {
+            return (n.bitLength() >>> 3) + ((n.bitLength() & 7) == 0 ? 0 : 1);
+        }
+
+
         /**
          * Returns a string that represents the value of this key, formatted as follows:
          * <ul>
@@ -152,6 +163,16 @@ public class RSA {
             if( t.compareTo( ONE ) < 0 ) throw new IllegalArgumentException( "t is less than one" );
             if( dEncrypting.compareTo( ONE ) < 0 ) throw new IllegalArgumentException( "dEncrypting is less than one" );
             if( dSigning.compareTo( ONE ) < 0 ) throw new IllegalArgumentException( "dSigning is less than one" );
+        }
+
+
+        /**
+         * Returns the number of bytes required to encode the modulus n.
+         *
+         * @return the number of bytes required to encode the modulus n.
+         */
+        public int byteLen() {
+            return (m.n().bitLength() >>> 3) + ((m.n().bitLength() & 7) == 0 ? 0 : 1);
         }
 
 
@@ -351,7 +372,7 @@ public class RSA {
      * and that the exponent used was the signing exponent, the result of the decryption will be the original plaintext.  Note that the ciphertext must be an integer in the
      * range [0..n), where "n" is the RSA modulus.  The resulting plaintext will also be an integer in the same range.
      *
-     * @param _key  The RSA private key.
+     * @param _key  The RSA public key.
      * @param _cipherText The encrypted text to be decrypted.
      * @return If the outcome is ok, the info contains the decrypted ciphertext (i.e., the plaintext), which is also in the range [0..n), where "n" is the RSA modulus.  If the
      * outcome was not ok, then it contains an explanatory message and possibly an exception that caused the problem.
@@ -373,8 +394,8 @@ public class RSA {
 
 
     /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------------*
-     * The four methods below implement the RSA algorithm for plain texts and cipher texts are arrays of bytes.  All four methods convert the byte arrays to and from numeric     *
-     * form (as BigInteger instances) and then use the preceding four pure RSA methods.                                                                                           *
+     * The four methods below implement the RSA algorithm for plain texts and cipher texts that are arrays of bytes.  All four methods convert the byte arrays to and from        *
+     * numeric form (as BigInteger instances) and then use the preceding four pure RSA methods.                                                                                   *
      *----------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 
@@ -406,7 +427,7 @@ public class RSA {
 
     /**
      * Use the given RSA private key to decrypt the given ciphertext.  Assuming the ciphertext was encrypted using the RSA public key that is complementary to this private key,
-     * and that the exponent used was the encrypting exponent, the result of the decryption will be the original plaintext.  Note that the ciphertext resolve to an integer in the
+     * and that the exponent used was the encrypting exponent, the result of the decryption will be the original plaintext.  Note that the ciphertext resolves to an integer in the
      * range [0..n), where "n" is the RSA modulus.  The resulting plaintext will also resolve to an integer in the same range.  Note that the decrypted plaintext may not be the
      * same byte length as the original plaintext (before encryption).  This happens when the original plaintext had leading zero bytes.  If the decrypted plaintext must be the
      * same length as the original plaintext, consider using {@link Bytes#adjustNumeric(byte[],int)} to adjust the length.
@@ -466,7 +487,7 @@ public class RSA {
      * same byte length as the original plaintext (before encryption).  This happens when the original plaintext had leading zero bytes.  If the decrypted plaintext must be the
      * same length as the original plaintext, consider using {@link Bytes#adjustNumeric(byte[], int)} to adjust the length.
      *
-     * @param _key  The RSA private key.
+     * @param _key  The RSA public key.
      * @param _cipherText The encrypted text to be decrypted.
      * @return If the outcome is ok, then the info contains the decrypted ciphertext (i.e., the plaintext), which resolves to an integer in the range [0..n), where "n" is the RSA
      * modulus.  If the outcome is not ok, it contains an explanatory message and possibly an exception that caused the problem.
@@ -489,8 +510,134 @@ public class RSA {
 
 
     /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------------*
-     *                                                                                          *
+     * The four methods below implement the RSA algorithm for plain texts and cipher texts that are arrays of bytes that are significantly shorter than the byte length of the    *
+     * RSA modulus, by "stretching" the plain text with OAEP padding, and then unpadding while decrypting.  All four methods use the preceding RSA methods with byte array        *
+     * plain texts and cipher texts.
      *----------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+
+
+    /**
+     * Use the given RSA public key to encrypt the given plain text after padding with OAEP with SHA-256 and no label, using the encrypting exponent.  Note that the plain text
+     * must be at least 66 bytes shorter than the byte length of the RSA modulus.
+     *
+     * @param _key The RSA public key.
+     * @param _plainText The plain text to be encrypted.
+     * @param _random The source of randomness.
+     * @return If the outcome is ok, the info contains the encrypted plain text (i.e., the ciphertext), which resolves to an integer in the range [0..n), where "n" is the RSA
+     * modulus.  If the outcome is not ok, it contains an explanatory message and possibly an exception that caused the problem.
+     */
+    public static Outcome<byte[]> encryptPad( final RSAPublicKey _key, final byte[] _plainText, final SecureRandom _random ) {
+
+        try {
+            // sanity checks...
+            if( isNull( _key, _plainText, _random ) ) return forgeBytes.notOk( "_key, _plainText, or _random is null" );
+
+            // pad the plaintext...
+            var padOutcome = pad( _key.n, _plainText, _random );
+            if( padOutcome.notOk() ) return forgeBytes.notOk( padOutcome.msg(), padOutcome.cause() );
+
+            // do the encryption...
+            return encrypt( _key, padOutcome.info() );
+        }
+        catch( Exception _e ) {
+            return forgeBytes.notOk( "Unexpected exception", _e );
+        }
+    }
+
+
+    /**
+     * Use the given RSA private key to decrypt the given ciphertext and unpad it using OAEP with SHA-256 and no label.  Assuming the ciphertext was encrypted using the RSA public
+     * key that is complementary to this private key, that the exponent used was the encrypting exponent, and that the plaintext was padded with OAEP with SHA-256 and no label,
+     * then the result of the decryption will be the original plaintext.  Note that the ciphertext must resolve to an integer in the range [0..n), where "n" is the RSA modulus.
+     * The resulting plaintext will also resolve to an integer in the same range.
+     *
+     * @param _key  The RSA private key.
+     * @param _cipherText The padded and encrypted text to be decrypted and unpadded.
+     * @return If the outcome is ok, then the info contains the decrypted and unpadded ciphertext (i.e., the plaintext), which resolves to an integer in the range [0..n), where
+     * "n" is the RSA modulus.  If the outcome is not ok, it contains an explanatory message and possibly an exception that caused the problem.
+     */
+    public static Outcome<byte[]> decryptPad( final RSAPrivateKey _key, final byte[] _cipherText ) {
+
+        try {
+            // sanity checks...
+            if( isNull( _key, _cipherText ) ) return forgeBytes.notOk( "_key or _cipherText is null" );
+
+            // do the decryption...
+            var decryptOutcome = decrypt( _key, _cipherText );
+            if( decryptOutcome.notOk() ) return forgeBytes.notOk( decryptOutcome.msg() );
+
+            // make sure the decrypted bytes are the right length (may need zeroes prepended)...
+            var decryptedBytes = Bytes.adjustNumeric( decryptOutcome.info(), _key.byteLen() );
+
+            // unpad the decrypted ciphertext...
+            return unpad( decryptedBytes );
+        }
+        catch( Exception _e ) {
+            return forgeBytes.notOk( "Unexpected exception", _e );
+        }
+    }
+
+
+    /**
+     * Use the given RSA private key to encrypt the given plain text after padding with OAEP with SHA-256 and no label, using the signing exponent.  Note that the plain text
+     * must be at least 66 bytes shorter than the byte length of the RSA modulus.
+     *
+     * @param _key The RSA private key.
+     * @param _plainText The plain text to be encrypted.
+     * @param _random The source of randomness.
+     * @return If the outcome is ok, the info contains the encrypted plain text (i.e., the ciphertext), which resolves to an integer in the range [0..n), where "n" is the RSA
+     * modulus.  If the outcome is not ok, it contains an explanatory message and possibly an exception that caused the problem.
+     */
+    public static Outcome<byte[]> encryptPad( final RSAPrivateKey _key, final byte[] _plainText, final SecureRandom _random ) {
+
+        try {
+            // sanity checks...
+            if( isNull( _key, _plainText, _random ) ) return forgeBytes.notOk( "_key, _plainText, or _random is null" );
+
+            // pad the plaintext...
+            var padOutcome = pad( _key.m.n(), _plainText, _random );
+            if( padOutcome.notOk() ) return forgeBytes.notOk( padOutcome.msg(), padOutcome.cause() );
+
+            // do the encryption...
+            return encrypt( _key, padOutcome.info() );
+        }
+        catch( Exception _e ) {
+            return forgeBytes.notOk( "Unexpected exception", _e );
+        }
+    }
+
+
+    /**
+     * Use the given RSA public key to decrypt the given ciphertext and unpad it using OAEP with SHA-256 and no label.  Assuming the ciphertext was encrypted using the RSA public
+     * key that is complementary to this private key, that the exponent used was the signing exponent, and that the plaintext was padded with OAEP with SHA-256 and no label,
+     * then the result of the decryption will be the original plaintext.  Note that the ciphertext must resolve to an integer in the range [0..n), where "n" is the RSA modulus.
+     * The resulting plaintext will also resolve to an integer in the same range.
+     *
+     * @param _key  The RSA public key.
+     * @param _cipherText The padded and encrypted text to be decrypted and unpadded.
+     * @return If the outcome is ok, then the info contains the decrypted and unpadded ciphertext (i.e., the plaintext), which resolves to an integer in the range [0..n), where
+     * "n" is the RSA modulus.  If the outcome is not ok, it contains an explanatory message and possibly an exception that caused the problem.
+     */
+    public static Outcome<byte[]> decryptPad( final RSAPublicKey _key, final byte[] _cipherText ) {
+
+        try {
+            // sanity checks...
+            if( isNull( _key, _cipherText ) ) return forgeBytes.notOk( "_key or _cipherText is null" );
+
+            // do the decryption...
+            var decryptOutcome = decrypt( _key, _cipherText );
+            if( decryptOutcome.notOk() ) return forgeBytes.notOk( decryptOutcome.msg() );
+
+            // make sure the decrypted bytes are the right length (may need zeroes prepended)...
+            var decryptedBytes = Bytes.adjustNumeric( decryptOutcome.info(), _key.byteLen() );
+
+            // unpad the decrypted ciphertext...
+            return unpad( decryptedBytes );
+        }
+        catch( Exception _e ) {
+            return forgeBytes.notOk( "Unexpected exception", _e );
+        }
+    }
 
 
     private static final int MAX_PRIME_ATTEMPTS_PER_BIT = 100;

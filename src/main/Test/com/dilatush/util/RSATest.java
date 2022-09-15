@@ -185,4 +185,60 @@ class RSATest {
             assertArrayEquals( testNum, plainText, "result of encrypt/decrypt is not the same as the original test value" );
         }
     }
+
+
+    // test encryptPad( RSAPublicKey, byte[], SecureRandom ) and decryptPad( RSAPrivateKey, byte[] )...
+    @Test
+    void encrypt5() {
+
+        // some setup...
+        var maxBytes = keys.publicKey().byteLen() - 66;
+
+        // loop until we've run all our tests...
+        for( int i = 0; i < ENCRYPT_TEST_RUNS; i++ ) {
+
+            // get some random bytes to test with...
+            var randomBytes = new byte[1 + random.nextInt( maxBytes - 1 ) ];
+            random.nextBytes( randomBytes );
+
+            // encrypt the test bytes...
+            var cipherTextOutcome = RSA.encryptPad( keys.publicKey(), randomBytes, random );
+            assertTrue( cipherTextOutcome.ok(), "Encryption problem: " + cipherTextOutcome.msg() );
+
+            // decrypt the encrypted test bytes...
+            var plainTextOutcome = RSA.decryptPad( keys.privateKey(), cipherTextOutcome.info() );
+            assertTrue( plainTextOutcome.ok(), "Decryption problem: " + plainTextOutcome.msg() );
+
+            // verify that the encryption and padding/decryption and unpadding operations produced the original test bytes...
+            assertArrayEquals( randomBytes, plainTextOutcome.info(), "result of encryptPad/decryptPad is not the same as the original test value" );
+        }
+    }
+
+
+    // test encryptPad( RSAPrivateKey, byte[], SecureRandom ) and decryptPad( RSAPublicKey, byte[] )...
+    @Test
+    void encrypt6() {
+
+        // some setup...
+        var maxBytes = keys.publicKey().byteLen() - 66;
+
+        // loop until we've run all our tests...
+        for( int i = 0; i < ENCRYPT_TEST_RUNS; i++ ) {
+
+            // get some random bytes to test with...
+            var randomBytes = new byte[1 + random.nextInt( maxBytes - 1 ) ];
+            random.nextBytes( randomBytes );
+
+            // encrypt the test bytes...
+            var cipherTextOutcome = RSA.encryptPad( keys.privateKey(), randomBytes, random );
+            assertTrue( cipherTextOutcome.ok(), "Encryption problem: " + cipherTextOutcome.msg() );
+
+            // decrypt the encrypted test bytes...
+            var plainTextOutcome = RSA.decryptPad( keys.publicKey(), cipherTextOutcome.info() );
+            assertTrue( plainTextOutcome.ok(), "Decryption problem: " + plainTextOutcome.msg() );
+
+            // verify that the encryption and padding/decryption and unpadding operations produced the original test bytes...
+            assertArrayEquals( randomBytes, plainTextOutcome.info(), "result of encryptPad/decryptPad is not the same as the original test value" );
+        }
+    }
 }
