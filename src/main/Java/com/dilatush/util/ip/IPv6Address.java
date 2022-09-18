@@ -23,7 +23,7 @@ final public class IPv6Address extends IPAddress {
     public static final IPv6Address UNSPECIFIED = WILDCARD;
 
     /** The loopback IPv6 address "::1". */
-    public static final IPv6Address LOOPBACK    = new IPv6Address( new byte[] {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1} );
+    public static final IPv6Address LOOPBACK    = new IPv6Address( new byte[] {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1} );
 
     private static final Outcome.Forge<IPv6Address> outcomeIP = new Outcome.Forge<>();
 

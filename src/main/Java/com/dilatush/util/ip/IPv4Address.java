@@ -25,6 +25,9 @@ final public class IPv4Address extends IPAddress {
     /** The broadcast IPv4 address: "255.255.255.255". */
     public static final IPv4Address BROADCAST   = new IPv4Address( new byte[] {-1,-1,-1,-1} );
 
+    /** The loopback IPv4 address: "127.0.0.1". */
+    public static final IPv4Address LOOPBACK    = new IPv4Address( new byte[] {127,0,0,1} );
+
     private static final Outcome.Forge<IPv4Address> outcomeIP = new Outcome.Forge<>();
 
 
@@ -71,9 +74,9 @@ final public class IPv4Address extends IPAddress {
      */
     @Override
     public boolean isLoopback() {
-        return LOOPBACK.contains( this );
+        return LOOPBACK_NETWORK.contains( this );
     }
-    private static final IPNetwork LOOPBACK  = new IPNetwork( IPv4Address.fromString( "127.0.0.0" ).info(),  8 );
+    private static final IPNetwork LOOPBACK_NETWORK  = new IPNetwork( IPv4Address.fromString( "127.0.0.0" ).info(),  8 );
 
 
     /**
