@@ -4,11 +4,13 @@ import com.dilatush.util.General;
 import com.dilatush.util.Outcome;
 import com.dilatush.util.ip.IPv4Address;
 
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.channels.ServerSocketChannel;
 import java.util.logging.Logger;
 
 import static java.lang.System.exit;
+import static java.lang.Thread.sleep;
 
 public class Test {
 
@@ -18,12 +20,14 @@ public class Test {
     private static ServerSocket serverSocket;
 
 
-    public static void main( final String[] _args ) {
+    public static void main( final String[] _args ) throws InterruptedException {
 
         // set the configuration file location (must do before any logging actions occur)...
         General.initLogging( "networkEngineLogging.properties" );
         LOGGER = General.getLogger();
         LOGGER.info( "Networking Engine Test Started" );
+
+        var x = new InetSocketAddress( 333 );
 
         // get an instance of a networking engine...
         var engineOutcome = NetworkingEngine.getInstance( "Test" );
@@ -34,7 +38,7 @@ public class Test {
         var engine = engineOutcome.info();
 
         // set up a TCP listener...
-        Outcome<TCPListener> listenerOutcome = engine.newTCPListener( IPv4Address.LOOPBACK, 12345 );
+        Outcome<TCPListener> listenerOutcome = engine.newTCPListener( IPv4Address.LOOPBACK, 12345, Test::onAccept );
         if( listenerOutcome.notOk() ) {
             LOGGER.severe( listenerOutcome.msg() );
             exit( 1 );
@@ -42,7 +46,7 @@ public class Test {
         var listener = listenerOutcome.info();
 
         // set up a TCP client pipe to connect to the listener...
-        Outcome<TCPPipe> clientPipeOutcome = TCPPipe.getTCPPipe( engine );
+        Outcome<TCPPipe> clientPipeOutcome = TCPPipe.getTCPPipe( engine, IPv4Address.WILDCARD, 0 );
         if( clientPipeOutcome.notOk() ) {
             LOGGER.severe( clientPipeOutcome.msg() );
             exit( 1 );
@@ -50,13 +54,14 @@ public class Test {
         var clientPipe = clientPipeOutcome.info();
 
         // connect to the listener...
-//        var connectOutcome = clientPipe.connect( IPv4Address.LOOPBACK, 12345 );
-        var connectOutcome = clientPipe.connect( IPv4Address.fromString( "151.101.71.5" ).info(), 80 );
+        var connectOutcome = clientPipe.connect( IPv4Address.LOOPBACK, 12345 );
+//        var connectOutcome = clientPipe.connect( IPv4Address.fromString( "13.52.82.44" ).info(), 22 );
         if( connectOutcome.notOk() ) {
             LOGGER.severe( "Client connection outcome: " + connectOutcome.msg() );
             exit( 1 );
         }
 
+        sleep(1000);
         LOGGER.hashCode();
 
 //        try {
@@ -80,5 +85,10 @@ public class Test {
 //        catch( InterruptedException _e ) {
 //            LOGGER.info( "interrupted" );
 //        }
+    }
+
+
+    private static void onAccept( final TCPPipe _pipe ) {
+        LOGGER.finest( "onAccept: " + _pipe );
     }
 }

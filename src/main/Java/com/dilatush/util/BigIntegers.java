@@ -15,7 +15,7 @@ public class BigIntegers {
 
 
     /**
-     * Returns the largest integer r such that r^root <= base.  The base argument must be non-{@code null}, and &gt; zero.  The root argument
+     * Returns the largest integer r such that r^root &lt;= base.  The base argument must be non-{@code null}, and &gt; zero.  The root argument
      * must be &gt; 1.
      *
      * @param _base
