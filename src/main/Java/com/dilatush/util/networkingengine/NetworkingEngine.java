@@ -5,10 +5,7 @@ import com.dilatush.util.ScheduledExecutor;
 import com.dilatush.util.ip.IPAddress;
 
 import java.io.IOException;
-import java.nio.channels.ClosedChannelException;
-import java.nio.channels.SelectableChannel;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
+import java.nio.channels.*;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
@@ -40,12 +37,22 @@ import static java.util.logging.Level.SEVERE;
  * {@link TCPPipe} to make an {@code HTTPPipe} to implement individual connections to your web server.</p>
  * <p>Note that it is permissible for a single process to have multiple instances of this class, all active at the same time.  While it is possible that doing so might increase
  * the overall networking performance, this has not been verified.</p>
+ * <p>Internally, instance of this class use a {@link ScheduledExecutor} for two purposes: (1) to offload non-trivial tasks from the I/O loop thread, and (2) to support
+ * timeouts.  The {@link ScheduledExecutor} uses a thread pool with a fixed number of threads, and an unbounded queue, so it is important to make sure that the tasks it
+ * executes are not blocking or compute intensive, and that there are sufficient threads to handle the number of concurrent tasks it might be asked to process.  If a
+ * {@link ScheduledExecutor} is not provided at instantiation, a default {@link ScheduledExecutor} with 3 threads will be used.</p>
+ * <p></p>
+ * <p></p>
+ * <p></p>
+ * <p></p>
+ * <p></p>
+ * <p></p>
  */
 @SuppressWarnings( "unused" )
 public final class NetworkingEngine {
 
     private static final Logger       LOGGER                    = getLogger();
-    private static final int          DEFAULT_NUMBER_OF_THREADS = 3;   // default number of threads in the default ScheduledExecutor...
+    private static final int          DEFAULT_NUMBER_OF_THREADS = 3;   // number of threads in the default ScheduledExecutor...
 
     private static final Outcome.Forge<NetworkingEngine> forgeNetworkingEngine = new Outcome.Forge<>();
 
@@ -74,7 +81,7 @@ public final class NetworkingEngine {
         // get an engine and start it up...
         try {
             var engine = new NetworkingEngine( _name, _scheduledExecutor );
-            engine.start();
+            engine.ioLoopThread.start();
             return forgeNetworkingEngine.ok( engine );
         }
         catch( IOException _e ) {
@@ -132,55 +139,79 @@ public final class NetworkingEngine {
     }
 
 
-    public Outcome<TCPListener> newTCPListener( final IPAddress _ip, final int _port, final Consumer<TCPPipe> _onAccept ) {
-        return TCPListener.getInstance( this, _ip, _port, _onAccept );
+    /**
+     * Attempts to create and initiate a new {@link TCPListener} instance to listen for new connections on the network interface and IP version specified by the given
+     * {@link IPAddress}, on the given port.  If the given {@link IPAddress} is the wildcard address, then the new instance will listen on all network interfaces for new
+     * connections with the given IP version, on the given port.  When a new connection occurs, the given handler (with a new {@link TCPPipe} instance for the new connection) will
+     * be called.
+     *
+     * @param _bindToIP The IP address (either IPv4 or IPv6) identifying the network interface to listen for new connections on, and the IP version to listen for.  If the IP
+     *                  address is the wildcard address (0.0.0.0 or ::), then listen on <i>all</i> network interfaces.
+     * @param _bindToPort The port address [1..65535] to listen on.  Note that on most Unix systems, ports below 1024 are reserved for processes running with root privileges.
+     * @param _onAcceptHandler The handler to be called (with a new {@link TCPPipe} instance) when a new connection is made.
+     * @return If ok, then info contains the new {@link TCPListener} instance.  If not ok, then there is an explanatory message and possible an exception that caused the problem.
+     */
+    public Outcome<TCPListener> newTCPListener( final IPAddress _bindToIP, final int _bindToPort, final Consumer<TCPPipe> _onAcceptHandler ) {
+        return TCPListener.getInstance( this, _bindToIP, _bindToPort, _onAcceptHandler );
     }
 
 
-    public Outcome<TCPListener> newTCPListener( final IPAddress _ip, final int _port ) {
-        return TCPListener.getInstance( this, _ip, _port, null );
-    }
+    /**
+     * Register a new selection key for the given channel, with the given initial operations interest set and the given (optional) attachment.  This method both registers the new
+     * selection key and wakes up the selector to ensure the key takes immediate effect.
+     *
+     * @param _channel The channel to register a new selection key for.
+     * @param _ops The initial operations interest set for the new key.
+     * @param _attachment The optional attachment on the new key (the attachment may be null).
+     * @return The new {@link SelectionKey}.
+     * @throws ClosedChannelException if this method is called when a key for the given channel has already been registered, but was cancelled.
+     */
+    /* package-private */ SelectionKey register( final SelectableChannel _channel, final int _ops, final Object _attachment ) throws ClosedChannelException {
 
-
-    public SelectionKey register( final SelectableChannel _channel, final int _ops, final Object _attachment ) throws ClosedChannelException {
-
-        selectorLock.lock();
         try {
+            // lock out concurrent access for other threads...
+            selectorLock.lock();
+
+            // the actual registration...
             var key = _channel.register( selector, _ops, _attachment );
+
+            // make certain the new key has immediate effect...
             selector.wakeup();
+
+            // and we're done...
             return key;
         }
         finally {
+            // release the lock...
             selectorLock.unlock();
         }
     }
 
 
     /**
-     * Starts the I/O loop thread if it has not aleady been started.
-     */
-    private void start() {
-        if( !ioLoopThread.isAlive() ) ioLoopThread.start();
-    }
-
-
-    /**
-     * The main I/O loop for the network engine.  In normal operation the {@code while()} loop will run forever.
+     * The main I/O loop for the network engine.  In normal operation the {@code while()} loop will run forever.  Note that all code executed in this loop is trivially simple.
+     * This is intentional, to guarantee the performance within the I/O loop.  Do not make changes that upset this apple cart!
      */
     private void ioLoop() {
 
         LOGGER.finest( "I/O Loop starting..." );
 
-        // we're going to loop here basically forever...
+        // we're going to loop here basically forever, unless something goes horribly wrong...
         while( !ioLoopThread.isInterrupted() ) {
 
-            // any exceptions in this code are a serious problem; if we get one, we just log it and make no attempt to recover...
+            // any unhandled exceptions in this code are a serious problem; if we get one, we just log it and make no attempt to recover...
             try {
 
                 LOGGER.finest( "Selecting..." );
 
                 // select and get any keys...
-                selector.select();
+                try {
+                    selector.select();
+                }
+                catch( IOException _e ) {
+                    LOGGER.log( SEVERE, "I/O error when selecting", _e );
+                    throw new IllegalStateException( "Selector I/O errors doom the NetworkingEngine" );
+                }
 
                 // iterate over any selected keys, and handle them...
                 Set<SelectionKey> keys = selector.selectedKeys();
@@ -221,24 +252,23 @@ public final class NetworkingEngine {
                     keyIterator.remove();
                 }
             }
+            catch( ClosedSelectorException _e ) {
+                LOGGER.log( SEVERE, "Selector closed", _e );
+            }
 
-            // getting here means something seriously wrong happened; log and let the loop die...
-            catch( Throwable _e ) {
+// TODO: uncomment this once I know that all expected exceptions are handled...
 
-                LOGGER.log( SEVERE, "Unhandled exception in NIO selector loop", _e );
+//            // getting here means something seriously wrong happened; log and let the loop die...
+//            catch( Exception _e ) {
+//                LOGGER.log( SEVERE, "Unhandled exception in NIO selector loop", _e );
+//            }
+            finally {
+                LOGGER.severe( "Fatal NetworkingEngine error; exiting I/O loop" );
 
-                // this will cause the IO Runner thread to exit, and all I/O will cease...
-                break;
+                // all hope is lost; terminate this thread...
+                ioLoopThread.interrupt();
             }
         }
-
-        LOGGER.finest( "I/O Loop terminating" );
-    }
-
-
-    public Selector getSelector() {
-
-        return selector;
     }
 
 
@@ -248,13 +278,13 @@ public final class NetworkingEngine {
     }
 
 
-    public ScheduledExecutor getScheduledExecutor() {
+    /* package-private */ ScheduledExecutor getScheduledExecutor() {
 
         return scheduledExecutor;
     }
 
 
     public String toString() {
-        return "Networking Engine " + name;
+        return "NetworkingEngine " + name;
     }
 }

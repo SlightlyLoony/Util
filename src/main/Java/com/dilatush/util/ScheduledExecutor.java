@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.concurrent.*;
 import java.util.logging.Logger;
 
+import static com.dilatush.util.General.isNull;
+
 /**
  * This class embeds the Java standard scheduled executor and delegates all the standard {@link ScheduledExecutorService} methods to it.  However,
  * this class provides much more convenient constructors and provides scheduling methods that use the {@code java.time} package's classes.
@@ -30,8 +32,12 @@ public class ScheduledExecutor implements ScheduledExecutorService {
      *
      * @param _threads The number of executor threads to use.
      * @param _daemon If {@code true}, the executor threads will be daemon threads; otherwise they will be standard user threads.
+     * @param _handler The {@link RejectedExecutionHandler} to use if no thread is available to handle a job.
      */
-    public ScheduledExecutor( final int _threads, final boolean _daemon ) {
+    public ScheduledExecutor( final int _threads, final boolean _daemon, final RejectedExecutionHandler _handler ) {
+
+        // sanity check...
+        if( isNull( _handler ) ) throw new IllegalArgumentException( "_handler is null" );
 
         // make a thread factory...
         ThreadFactory threadFactory = (runnable) -> {
@@ -42,7 +48,18 @@ public class ScheduledExecutor implements ScheduledExecutorService {
             return thread;
         };
 
-        service = new ScheduledThreadPoolExecutor( _threads, threadFactory );
+        service = new ScheduledThreadPoolExecutor( _threads, threadFactory, _handler );
+    }
+
+
+    /**
+     * Create a new instance of this class with the given number of executor threads and daemon status.
+     *
+     * @param _threads The number of executor threads to use.
+     * @param _daemon If {@code true}, the executor threads will be daemon threads; otherwise they will be standard user threads.
+     */
+    public ScheduledExecutor( final int _threads, final boolean _daemon ) {
+        this( _threads, _daemon, new ThreadPoolExecutor.AbortPolicy() );
     }
 
 

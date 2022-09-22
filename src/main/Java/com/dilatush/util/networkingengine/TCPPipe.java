@@ -9,7 +9,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.StandardSocketOptions;
 import java.nio.channels.ClosedChannelException;
-import java.nio.channels.Selector;
+import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -33,6 +33,7 @@ public class TCPPipe {
     private final AtomicBoolean    connectFlag;
     private final NetworkingEngine engine;
     private final int              finishConnectionTimeoutMs;
+    private final SelectionKey     key;
 
     private int  finishConnectionIntervalMs;  // delay (in milliseconds) until the next finish connection check...
     private long finishConnectionStartTime;   // when we started the finish connection process...
@@ -45,10 +46,16 @@ public class TCPPipe {
             _channel.configureBlocking( false );
             _channel.setOption( StandardSocketOptions.SO_REUSEADDR, true );  // reuse connections in TIME_WAIT (e.g., after close and reconnect)...
             _channel.setOption( StandardSocketOptions.SO_KEEPALIVE, true );  // enable keep-alive packets on this connection (mainly to detect broken connections)...
-            return forgeTCPConnection.ok( new TCPPipe( _engine, _channel,_finishConnectionTimeoutMs ) );
         }
         catch( IOException _e ) {
             return forgeTCPConnection.notOk( "Problem configuring TCP pipe: " + _e.getMessage(), _e );
+        }
+
+        try {
+            return forgeTCPConnection.ok( new TCPPipe( _engine, _channel,_finishConnectionTimeoutMs ) );
+        }
+        catch( IOException _e ) {
+            return forgeTCPConnection.notOk( "Problem registering selection key: " + _e.getMessage(), _e );
         }
     }
 
@@ -85,11 +92,12 @@ public class TCPPipe {
     }
 
 
-    private TCPPipe( final NetworkingEngine _engine, final SocketChannel _channel, final int _finishConnectionTimeoutMs ) {
-        engine = _engine;
+    private TCPPipe( final NetworkingEngine _engine, final SocketChannel _channel, final int _finishConnectionTimeoutMs ) throws ClosedChannelException {
+        engine                    = _engine;
         finishConnectionTimeoutMs = _finishConnectionTimeoutMs;
-        connectFlag = new AtomicBoolean( false );
-        channel = _channel;
+        connectFlag               = new AtomicBoolean( false );
+        channel                   = _channel;
+        key                       = engine.register( channel, 0, this );
     }
 
 
@@ -170,11 +178,6 @@ public class TCPPipe {
         catch( Exception _e ) {
             _completionHandler.accept( forge.notOk( "Problem connecting: " + _e.getMessage(), _e ) );
         }
-    }
-
-
-    /* package-private */ void register( final Selector _selector) throws ClosedChannelException {
-        channel.register( _selector, 0, this );
     }
 
 

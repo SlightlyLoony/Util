@@ -37,11 +37,14 @@ public class TCPListener {
         try {
 
             // sanity checks...
-            if( isNull( _engine, _ip) )           return forgeTCPListener.notOk( "_engine or _ip is null" );
+            if( isNull( _engine, _ip) )           return forgeTCPListener.notOk( "_engine, _ip, or _onAccept is null" );
             if( (_port < 1) || (_port > 0xFFFF) ) return forgeTCPListener.notOk( "_port is out of range (1-65535): " + _port );
 
             // attempt to get our instance...
             return forgeTCPListener.ok( new TCPListener( _engine, _ip, _port, _onAccept ) );
+        }
+        catch( IOException _e ) {
+            return forgeTCPListener.notOk( "Problem opening selector for TCPListener: " + _e.getMessage(), _e );
         }
         catch( Exception _e ) {
             return forgeTCPListener.notOk( "Problem instantiating TCPListener: " + _e.getMessage(), _e );
@@ -49,10 +52,10 @@ public class TCPListener {
     }
 
 
-    private TCPListener( final NetworkingEngine _engine, final IPAddress _ip, final int _port, final Consumer<TCPPipe> _onAccept ) throws IOException {
+    private TCPListener( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort, final Consumer<TCPPipe> _onAccept ) throws IOException {
 
-        ip = _ip;
-        port = _port;
+        ip = _bindToIP;
+        port = _bindToPort;
         engine = _engine;
         onAccept = _onAccept;
 
@@ -79,7 +82,6 @@ public class TCPListener {
             var getPipeOutcome = getPipe();
             if( getPipeOutcome.ok() ) {
                 var pipe = getPipeOutcome.info();
-                pipe.register( key.selector() );
                 if( onAccept != null ) onAccept.accept( pipe );
                 LOGGER.finest( "Accepted TCP connection from " + pipe );
             }
@@ -92,6 +94,7 @@ public class TCPListener {
     }
 
 
+    // this is a method so that it can be easily overridden...
     protected Outcome<TCPPipe> getPipe() throws IOException {
         return TCPPipe.getTCPPipe( engine, channel.accept() );
     }
