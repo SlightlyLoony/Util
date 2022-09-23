@@ -92,7 +92,7 @@ public class TCPPipe {
     }
 
 
-    private TCPPipe( final NetworkingEngine _engine, final SocketChannel _channel, final int _finishConnectionTimeoutMs ) throws ClosedChannelException {
+    protected TCPPipe( final NetworkingEngine _engine, final SocketChannel _channel, final int _finishConnectionTimeoutMs ) throws ClosedChannelException {
         engine                    = _engine;
         finishConnectionTimeoutMs = _finishConnectionTimeoutMs;
         connectFlag               = new AtomicBoolean( false );

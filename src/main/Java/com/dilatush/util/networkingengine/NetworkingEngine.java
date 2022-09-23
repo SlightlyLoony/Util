@@ -11,6 +11,7 @@ import java.util.Iterator;
 import java.util.Set;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 
@@ -151,10 +152,29 @@ public final class NetworkingEngine {
      *                  address is the wildcard address (0.0.0.0 or ::), then listen on <i>all</i> network interfaces.
      * @param _bindToPort The port address [1..65535] to listen on.  Note that on most Unix systems, ports below 1024 are reserved for processes running with root privileges.
      * @param _onAcceptHandler The handler to be called (with a new {@link TCPPipe} instance) when a new connection is made.
+     * @param _onErrorHandler The handler to be called if an error occurs while accepting a TCP connection, or {@code null} if there is none.
+     * @return If ok, then info contains the new {@link TCPListener} instance.  If not ok, then there is an explanatory message and possible an exception that caused the problem.
+     */
+    public Outcome<TCPListener> newTCPListener( final IPAddress _bindToIP, final int _bindToPort,
+                                                final Consumer<TCPPipe> _onAcceptHandler, final BiConsumer<String,Exception> _onErrorHandler ) {
+        return TCPListener.getInstance( this, _bindToIP, _bindToPort, _onAcceptHandler, _onErrorHandler );
+    }
+
+
+    /**
+     * Attempts to create and initiate a new {@link TCPListener} instance to listen for new connections on the network interface and IP version specified by the given
+     * {@link IPAddress}, on the given port.  If the given {@link IPAddress} is the wildcard address, then the new instance will listen on all network interfaces for new
+     * connections with the given IP version, on the given port.  When a new connection occurs, the given handler (with a new {@link TCPPipe} instance for the new connection) will
+     * be called.
+     *
+     * @param _bindToIP The IP address (either IPv4 or IPv6) identifying the network interface to listen for new connections on, and the IP version to listen for.  If the IP
+     *                  address is the wildcard address (0.0.0.0 or ::), then listen on <i>all</i> network interfaces.
+     * @param _bindToPort The port address [1..65535] to listen on.  Note that on most Unix systems, ports below 1024 are reserved for processes running with root privileges.
+     * @param _onAcceptHandler The handler to be called (with a new {@link TCPPipe} instance) when a new connection is made.
      * @return If ok, then info contains the new {@link TCPListener} instance.  If not ok, then there is an explanatory message and possible an exception that caused the problem.
      */
     public Outcome<TCPListener> newTCPListener( final IPAddress _bindToIP, final int _bindToPort, final Consumer<TCPPipe> _onAcceptHandler ) {
-        return TCPListener.getInstance( this, _bindToIP, _bindToPort, _onAcceptHandler );
+        return TCPListener.getInstance( this, _bindToIP, _bindToPort, _onAcceptHandler, null );
     }
 
 
