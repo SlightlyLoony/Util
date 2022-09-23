@@ -6,8 +6,10 @@ import com.dilatush.util.ip.IPAddress;
 
 import java.io.IOException;
 import java.nio.channels.*;
+import java.time.Duration;
 import java.util.Iterator;
 import java.util.Set;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
@@ -272,18 +274,44 @@ public final class NetworkingEngine {
     }
 
 
+    /**
+     * Returns the name of this instance.
+     *
+     * @return The name of this instance.
+     */
     public String getName() {
-
         return name;
     }
 
 
-    /* package-private */ ScheduledExecutor getScheduledExecutor() {
-
-        return scheduledExecutor;
+    /**
+     * Schedule the given task to execute in another thread one time after the given delay.
+     *
+     * @param _task The {@link Runnable} task to execute.
+     * @param _delay The {@link Duration} minimum delay until the task will be executed.
+     * @return The {@link ScheduledFuture} representing pending completion of the task and whose get() method will return null upon completion.
+     */
+    /* package-private */
+    @SuppressWarnings( "UnusedReturnValue" )
+    ScheduledFuture<?> schedule( final Runnable _task, final Duration _delay ) {
+        return scheduledExecutor.schedule( _task, _delay );
     }
 
 
+    /**
+     * Execute the given task in another thread as soon as one becomes available.
+     *
+     * @param _task The {@link Runnable} task to execute.
+     */
+    /* package-private */ void execute( final Runnable _task ) {
+        scheduledExecutor.execute( _task );
+    }
+
+
+    /**
+     * Returns a string representing this instance.
+     * @return a string representing this instance.
+     */
     public String toString() {
         return "NetworkingEngine " + name;
     }

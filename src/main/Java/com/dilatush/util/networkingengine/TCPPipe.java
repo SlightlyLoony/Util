@@ -125,7 +125,7 @@ public class TCPPipe {
             // we get here if the connection did not complete immediately, and so must be finished, which could take some time...
             finishConnectionStartTime = System.currentTimeMillis();     // record when we started the process of finishing the completion...
             finishConnectionIntervalMs = 1;  // we're going to check for connection completion in about a millisecond...
-            engine.getScheduledExecutor().schedule( () -> checkConnection( _completionHandler ), Duration.ofMillis( finishConnectionIntervalMs ) );
+            engine.schedule( () -> checkConnection( _completionHandler ), Duration.ofMillis( finishConnectionIntervalMs ) );
         }
         catch( Exception _e ) {
             _completionHandler.accept( forge.notOk( "Problem connecting: " + _e.getMessage(), _e ) );
@@ -141,7 +141,7 @@ public class TCPPipe {
 
 
     private void postConnectionCompletion( final Consumer<Outcome<?>> _completionHandler, final Outcome<?> _outcome ) {
-        engine.getScheduledExecutor().execute( () -> _completionHandler.accept( _outcome ) );
+        engine.execute( () -> _completionHandler.accept( _outcome ) );
     }
 
 
@@ -171,7 +171,7 @@ public class TCPPipe {
 
             // otherwise, schedule another check...
             else {
-                engine.getScheduledExecutor().schedule( () -> checkConnection( _completionHandler ), Duration.ofMillis( finishConnectionIntervalMs ) );
+                engine.schedule( () -> checkConnection( _completionHandler ), Duration.ofMillis( finishConnectionIntervalMs ) );
             }
 
         }
