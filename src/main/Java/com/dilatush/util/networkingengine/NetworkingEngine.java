@@ -2,17 +2,15 @@ package com.dilatush.util.networkingengine;
 
 import com.dilatush.util.Outcome;
 import com.dilatush.util.ScheduledExecutor;
-import com.dilatush.util.ip.IPAddress;
 
 import java.io.IOException;
 import java.nio.channels.*;
 import java.time.Duration;
 import java.util.Iterator;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.logging.Logger;
 
 import static com.dilatush.util.General.getLogger;
@@ -44,18 +42,16 @@ import static java.util.logging.Level.SEVERE;
  * timeouts.  The {@link ScheduledExecutor} uses a thread pool with a fixed number of threads, and an unbounded queue, so it is important to make sure that the tasks it
  * executes are not blocking or compute intensive, and that there are sufficient threads to handle the number of concurrent tasks it might be asked to process.  If a
  * {@link ScheduledExecutor} is not provided at instantiation, a default {@link ScheduledExecutor} with 3 threads will be used.</p>
- * <p></p>
- * <p></p>
- * <p></p>
- * <p></p>
- * <p></p>
- * <p></p>
  */
 @SuppressWarnings( "unused" )
 public final class NetworkingEngine {
 
     private static final Logger       LOGGER                    = getLogger();
     private static final int          DEFAULT_NUMBER_OF_THREADS = 3;   // number of threads in the default ScheduledExecutor...
+
+    private static final int ALL_INTERESTS     = SelectionKey.OP_READ | SelectionKey.OP_ACCEPT | SelectionKey.OP_WRITE | SelectionKey.OP_CONNECT;
+    private static final int NO_READ_INTEREST  = ALL_INTERESTS ^ SelectionKey.OP_READ;
+    private static final int NO_WRITE_INTEREST = ALL_INTERESTS ^ SelectionKey.OP_WRITE;
 
     private static final Outcome.Forge<NetworkingEngine> forgeNetworkingEngine = new Outcome.Forge<>();
 
@@ -143,42 +139,6 @@ public final class NetworkingEngine {
 
 
     /**
-     * Attempts to create and initiate a new {@link TCPListener} instance to listen for new connections on the network interface and IP version specified by the given
-     * {@link IPAddress}, on the given port.  If the given {@link IPAddress} is the wildcard address, then the new instance will listen on all network interfaces for new
-     * connections with the given IP version, on the given port.  When a new connection occurs, the given handler (with a new {@link TCPPipe} instance for the new connection) will
-     * be called.
-     *
-     * @param _bindToIP The IP address (either IPv4 or IPv6) identifying the network interface to listen for new connections on, and the IP version to listen for.  If the IP
-     *                  address is the wildcard address (0.0.0.0 or ::), then listen on <i>all</i> network interfaces.
-     * @param _bindToPort The port address [1..65535] to listen on.  Note that on most Unix systems, ports below 1024 are reserved for processes running with root privileges.
-     * @param _onAcceptHandler The handler to be called (with a new {@link TCPPipe} instance) when a new connection is made.
-     * @param _onErrorHandler The handler to be called if an error occurs while accepting a TCP connection, or {@code null} if there is none.
-     * @return If ok, then info contains the new {@link TCPListener} instance.  If not ok, then there is an explanatory message and possible an exception that caused the problem.
-     */
-    public Outcome<TCPListener> newTCPListener( final IPAddress _bindToIP, final int _bindToPort,
-                                                final Consumer<TCPPipe> _onAcceptHandler, final BiConsumer<String,Exception> _onErrorHandler ) {
-        return TCPListener.getInstance( this, _bindToIP, _bindToPort, _onAcceptHandler, _onErrorHandler );
-    }
-
-
-    /**
-     * Attempts to create and initiate a new {@link TCPListener} instance to listen for new connections on the network interface and IP version specified by the given
-     * {@link IPAddress}, on the given port.  If the given {@link IPAddress} is the wildcard address, then the new instance will listen on all network interfaces for new
-     * connections with the given IP version, on the given port.  When a new connection occurs, the given handler (with a new {@link TCPPipe} instance for the new connection) will
-     * be called.
-     *
-     * @param _bindToIP The IP address (either IPv4 or IPv6) identifying the network interface to listen for new connections on, and the IP version to listen for.  If the IP
-     *                  address is the wildcard address (0.0.0.0 or ::), then listen on <i>all</i> network interfaces.
-     * @param _bindToPort The port address [1..65535] to listen on.  Note that on most Unix systems, ports below 1024 are reserved for processes running with root privileges.
-     * @param _onAcceptHandler The handler to be called (with a new {@link TCPPipe} instance) when a new connection is made.
-     * @return If ok, then info contains the new {@link TCPListener} instance.  If not ok, then there is an explanatory message and possible an exception that caused the problem.
-     */
-    public Outcome<TCPListener> newTCPListener( final IPAddress _bindToIP, final int _bindToPort, final Consumer<TCPPipe> _onAcceptHandler ) {
-        return TCPListener.getInstance( this, _bindToIP, _bindToPort, _onAcceptHandler, null );
-    }
-
-
-    /**
      * Register a new selection key for the given channel, with the given initial operations interest set and the given (optional) attachment.  This method both registers the new
      * selection key and wakes up the selector to ensure the key takes immediate effect.
      *
@@ -214,6 +174,7 @@ public final class NetworkingEngine {
      * The main I/O loop for the network engine.  In normal operation the {@code while()} loop will run forever.  Note that all code executed in this loop is trivially simple.
      * This is intentional, to guarantee the performance within the I/O loop.  Do not make changes that upset this apple cart!
      */
+    @SuppressWarnings( "ConstantConditions" )
     private void ioLoop() {
 
         LOGGER.finest( "I/O Loop starting..." );
@@ -268,6 +229,10 @@ public final class NetworkingEngine {
                     // handle reading from the network...
                     if( key.isValid() && key.isReadable() ) {
                         LOGGER.finest( "Readable" );
+                        if( key.attachment() instanceof TCPPipe pipe ) {
+                            scheduledExecutor.execute( pipe::onReadable );
+                            key.interestOpsAnd( NO_READ_INTEREST );
+                        }
                     }
 
                     // get rid the key we just processed...
@@ -291,6 +256,11 @@ public final class NetworkingEngine {
                 ioLoopThread.interrupt();
             }
         }
+    }
+
+
+    /* package-private */ public void wakeSelector() {
+        selector.wakeup();
     }
 
 
@@ -334,5 +304,25 @@ public final class NetworkingEngine {
      */
     public String toString() {
         return "NetworkingEngine " + name;
+    }
+
+
+    @Override
+    public boolean equals( final Object _o ) {
+
+        if( this == _o ) return true;
+        if( _o == null || getClass() != _o.getClass() ) return false;
+        NetworkingEngine that = (NetworkingEngine) _o;
+        return ioLoopThread.equals( that.ioLoopThread ) &&
+                selector.equals( that.selector ) &&
+                name.equals( that.name ) &&
+                selectorLock.equals( that.selectorLock ) &&
+                scheduledExecutor.equals( that.scheduledExecutor );
+    }
+
+
+    @Override
+    public int hashCode() {
+        return Objects.hash( ioLoopThread, selector, name, selectorLock, scheduledExecutor );
     }
 }

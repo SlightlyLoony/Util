@@ -1,197 +1,224 @@
 package com.dilatush.util.networkingengine;
 
 import com.dilatush.util.Outcome;
-import com.dilatush.util.Waiter;
-import com.dilatush.util.ip.IPAddress;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.Socket;
+import java.net.SocketOption;
 import java.net.StandardSocketOptions;
-import java.nio.channels.ClosedChannelException;
+import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
-import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static com.dilatush.util.General.getLogger;
 import static com.dilatush.util.General.isNull;
 
-public class TCPPipe {
+/**
+ *
+ */
+@SuppressWarnings( "unused" )
+public abstract class TCPPipe {
 
     private static final Logger                      LOGGER                                      = getLogger();
-    private static final int                         DEFAULT_FINISH_CONNECTION_TIMEOUT_MS        = 2000;
-    private static final int                         MAX_FINISH_CONNECTION_INTERVAL_INCREMENT_MS = 100;
 
-    private static final Outcome.Forge<TCPPipe>      forgeTCPConnection = new Outcome.Forge<>();
-    private static final Outcome.Forge<?>            forge              = new Outcome.Forge<>();
+    protected static final Outcome.Forge<?>            forge              = new Outcome.Forge<>();
+    protected static final Outcome.Forge<ByteBuffer>   forgeByteBuffer    = new Outcome.Forge<>();
 
+    protected static final int                   NO_INTEREST    = 0;
+    protected static final int                   READ_INTEREST  = SelectionKey.OP_READ;
+    protected static final int                   WRITE_INTEREST = SelectionKey.OP_WRITE;
 
-    private final SocketChannel    channel;
-    private final AtomicBoolean    connectFlag;
-    private final NetworkingEngine engine;
-    private final int              finishConnectionTimeoutMs;
-    private final SelectionKey     key;
+    protected final SocketChannel                 channel;
+    protected final NetworkingEngine              engine;
+    protected final Consumer<Outcome<ByteBuffer>> onReadReadyHandler;
+    protected final Runnable                      onWriteReadyHandler;
+    protected final BiConsumer<String,Exception>  onErrorHandler;
+    protected final SelectionKey                  key;
+    protected final AtomicBoolean                 readInProgress;
+    protected final AtomicBoolean                 writeInProgress;
 
-    private int  finishConnectionIntervalMs;  // delay (in milliseconds) until the next finish connection check...
-    private long finishConnectionStartTime;   // when we started the finish connection process...
-
-
-    /* package-private */ static Outcome<TCPPipe> getTCPPipe( final NetworkingEngine _engine, final SocketChannel _channel, final int _finishConnectionTimeoutMs ) {
-        try {
-            if( isNull( _channel, _engine ) ) return forgeTCPConnection.notOk( "_channel or _engine is null" );
-            if( _finishConnectionTimeoutMs < 1 ) return forgeTCPConnection.notOk( "_finishConnectionTimeoutMs is not valid: " + _finishConnectionTimeoutMs );
-            _channel.configureBlocking( false );
-            _channel.setOption( StandardSocketOptions.SO_REUSEADDR, true );  // reuse connections in TIME_WAIT (e.g., after close and reconnect)...
-            _channel.setOption( StandardSocketOptions.SO_KEEPALIVE, true );  // enable keep-alive packets on this connection (mainly to detect broken connections)...
-        }
-        catch( IOException _e ) {
-            return forgeTCPConnection.notOk( "Problem configuring TCP pipe: " + _e.getMessage(), _e );
-        }
-
-        try {
-            return forgeTCPConnection.ok( new TCPPipe( _engine, _channel,_finishConnectionTimeoutMs ) );
-        }
-        catch( IOException _e ) {
-            return forgeTCPConnection.notOk( "Problem registering selection key: " + _e.getMessage(), _e );
-        }
-    }
+    private ByteBuffer readBuffer;
+    private int minBytes;
 
 
-    /* package-private */ static Outcome<TCPPipe> getTCPPipe( final NetworkingEngine _engine, final SocketChannel _channel ) {
-        return getTCPPipe( _engine, _channel, DEFAULT_FINISH_CONNECTION_TIMEOUT_MS );
-    }
-
-
-    /* package-private */ static Outcome<TCPPipe> getTCPPipe( final NetworkingEngine _engine,
-                                                              final IPAddress _bindToIP, final int _bindToPort, final int _finishConnectionTimeoutMs ) {
+    /**
+     * Creates a new instance of this superclass, configured for inbound connections that have already been completed by the {@link TCPListener}.
+     *
+     * @param _engine
+     * @param _config
+     * @throws IOException
+     */
+    protected TCPPipe( final NetworkingEngine _engine, final TCPPipeInboundConfig _config ) throws IOException {
 
         // sanity checks...
-        if( isNull( _engine, _bindToIP ) )                return forgeTCPConnection.notOk( "_engine or _bindToIP is null" );
-        if( (_bindToPort < 0) || (_bindToPort > 0xFFFF) ) return forgeTCPConnection.notOk( "_port is out of range: " + _bindToPort );
-            if( _finishConnectionTimeoutMs < 1 )          return forgeTCPConnection.notOk( "_finishConnectionTimeoutMs is not valid: " + _finishConnectionTimeoutMs );
+        if( isNull( _engine, _config, _config.channel(), _config.onErrorHandler(), _config.onReadReadyHandler(), _config.onWriteReadyHandler() ))
+            throw new IllegalArgumentException( "_config, _engine, _config.channel, _config.onErrorHandler, _config.onReadReadyHandler, or _config.onWriteReadyHandler is null" );
+        //noinspection resource
+        if( !_config.channel().isConnected() )
+            throw new IllegalStateException( "_config.channel is not connected" );
 
-        // instantiate a socket channel...
-        SocketChannel channel = null;
+        // some initialization...
+        engine                    = _engine;
+        channel                   = _config.channel();
+        onReadReadyHandler        = _config.onReadReadyHandler();
+        onWriteReadyHandler       = _config.onWriteReadyHandler();
+        onErrorHandler            = _config.onErrorHandler();
+
+        // configure our channel...
+        channel.configureBlocking( false );
+        channel.setOption( StandardSocketOptions.SO_REUSEADDR, true );  // reuse connections in TIME_WAIT (e.g., after close and reconnect)...
+        channel.setOption( StandardSocketOptions.SO_KEEPALIVE, true );  // enable keep-alive packets on this connection (mainly to detect broken connections)...
+
+        // attempt to register a key for this instance with our engine, with (for now) no interest in any notifications...
+        key                       = engine.register( channel, NO_INTEREST, this );
+
+        // create and initialize our operation in progress flags...
+        readInProgress  = new AtomicBoolean( false );
+        writeInProgress = new AtomicBoolean( false );
+    }
+
+
+    /**
+     * Initiates a read operation into the given read buffer, which is cleared (via {@link ByteBuffer#clear()}) before reading.
+     *
+     * @param _readBuffer
+     * @param _minBytes
+     */
+    public void read( final ByteBuffer _readBuffer, final int _minBytes ) {
+
         try {
-            channel = SocketChannel.open();
-            channel.bind( new InetSocketAddress( _bindToIP.toInetAddress(), _bindToPort ) );
+
+            // sanity checks...
+            if( isNull( _readBuffer ) ) throw new TCPPipeException( "_readBuffer is null" );
+            if( (_minBytes < 1) || (_minBytes > _readBuffer.capacity())) throw new TCPPipeException( "_minBytes out of range: " + _minBytes );
+
+            // make sure we haven't already got a read operation in progress...
+            if( readInProgress.getAndSet( true ) ) throw new TCPPipeException( "Read operation already in progress" );
+
+            // clear the read buffer, so we know it's ready to read into, and squirrel it away...
+            _readBuffer.clear();
+            readBuffer = _readBuffer;
+        }
+        catch( TCPPipeException _e ) {
+            postReadCompletion( forgeByteBuffer.notOk( _e.getMessage() ) );
+        }
+
+        read();
+    }
+
+
+    public void read( final ByteBuffer _readBuffer ) {
+        read( _readBuffer, 1 );
+    }
+
+
+    // called by NetworkingEngine when the channel is readable...
+    /* package-private */ void onReadable() {
+
+        // if there's no read in progress, we just log and ignore this call...
+        if( !readInProgress.get() ) {
+            LOGGER.log( Level.WARNING, "TCPPipe::onReadable() called when no read was in progress; ignoring" );
+            return;
+        }
+
+        read();
+    }
+
+
+    private void read() {
+        try {
+            // read what data we can...
+            var bytesRead = channel.read( readBuffer );
+
+            // if the total bytes read is at least the minimum number of bytes, then we're done...
+            if( readBuffer.position() >= minBytes ) {
+                postReadCompletion( forgeByteBuffer.ok( readBuffer ) );
+            }
+
+            // otherwise, we need to express interest again...
+            else {
+                key.interestOpsOr( READ_INTEREST );
+                engine.wakeSelector();
+            }
         }
         catch( IOException _e ) {
-            return forgeTCPConnection.notOk( "Problem instantiating SocketChannel: " + _e.getMessage(), _e );
+            postReadCompletion( forgeByteBuffer.notOk( "Problem reading from channel: " + _e.getMessage(), _e ) );
         }
-
-        return getTCPPipe( _engine, channel, _finishConnectionTimeoutMs );
     }
 
 
-    /* package-private */ static Outcome<TCPPipe> getTCPPipe( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort ) {
-        return getTCPPipe( _engine, _bindToIP, _bindToPort, DEFAULT_FINISH_CONNECTION_TIMEOUT_MS );
+    private void postReadCompletion( final Outcome<ByteBuffer> _outcome ) {
+        readInProgress.set( false );
+        engine.execute( () -> onReadReadyHandler.accept( _outcome ) );
     }
 
 
-    protected TCPPipe( final NetworkingEngine _engine, final SocketChannel _channel, final int _finishConnectionTimeoutMs ) throws ClosedChannelException {
-        engine                    = _engine;
-        finishConnectionTimeoutMs = _finishConnectionTimeoutMs;
-        connectFlag               = new AtomicBoolean( false );
-        channel                   = _channel;
-        key                       = engine.register( channel, 0, this );
-    }
-
-
-    // ip address may NOT be wildcard
-    public void connect( final IPAddress _ip, final int _port, final Consumer<Outcome<?>> _completionHandler ) {
-
-        // if there's no completion handler, then we really can't do anything at all...
-        if( isNull( _completionHandler ) ) throw new IllegalArgumentException( "_completionHandler is null" );
+    /**
+     * Attempts to set the given socket option to the given value.
+     *
+     * @param _name The socket option.
+     * @param _value The value for the socket option.
+     * @param <T> The type of the socket option value.
+     * @return The result of this operation.  If ok, the socket option value was successfully set.  If not ok, there is an explanatory message and possibly the exception that
+     * caused the problem.
+     */
+    public <T> Outcome<?> setOption( final SocketOption<T> _name, final T _value ) {
 
         try {
             // sanity checks...
-            if( isNull( _ip ) )                   { postConnectionCompletion( _completionHandler, forge.notOk( "_ip is null" ));                      return; }
-            if( (_port < 1) || (_port > 0xFFFF) ) { postConnectionCompletion( _completionHandler, forge.notOk( "_port is out of range: " + _port ) ); return; }
+            if( isNull( _name, _value ) ) return forge.notOk( "_name or _value is null" );
 
-            // make sure we're not trying to connect more than once...
-            if( connectFlag.getAndSet( true ) )   { postConnectionCompletion( _completionHandler, forge.notOk( "Connect has already been called" ) ); return; }
-
-            // initiate the connection attempt, which may complete immediately...
-            if( channel.connect( new InetSocketAddress( _ip.toInetAddress(), _port ) ) || channel.finishConnect() ) {
-                postConnectionCompletion( _completionHandler, forge.ok() );
-                LOGGER.finest( "Connected immediately to " + channel.socket().getInetAddress().getHostAddress() + ":" + channel.socket().getPort() );
-                return;
-            }
-
-            // we get here if the connection did not complete immediately, and so must be finished, which could take some time...
-            finishConnectionStartTime = System.currentTimeMillis();     // record when we started the process of finishing the completion...
-            finishConnectionIntervalMs = 1;  // we're going to check for connection completion in about a millisecond...
-            engine.schedule( () -> checkConnection( _completionHandler ), Duration.ofMillis( finishConnectionIntervalMs ) );
+            // try to set the option...
+            channel.setOption( _name, _value );
+            return forge.ok();
         }
         catch( Exception _e ) {
-            _completionHandler.accept( forge.notOk( "Problem connecting: " + _e.getMessage(), _e ) );
+            return forge.notOk( "Problem setting socket option: " + _e.getMessage(), _e );
         }
     }
 
 
-    public Outcome<?> connect( final IPAddress _ip, final int _port ) {
-        Waiter<Outcome<?>> waiter = new Waiter<>();
-        connect( _ip, _port, waiter::complete );
-        return waiter.waitForCompletion();
-    }
+    /**
+     * Attempts to get the value of the given socket option.
+     *
+     * @param _name The socket option.
+     * @return The result of this operation.  If ok, the info contains the socket option's value.  If not ok, there is an explanatory message and possibly the exception that
+     * caused the problem.
+     * @param <T> The type of the socket option's value.
+     */
+    @SuppressWarnings( "DuplicatedCode" )
+    public <T> Outcome<T> getOption( final SocketOption<T> _name ) {
 
-
-    private void postConnectionCompletion( final Consumer<Outcome<?>> _completionHandler, final Outcome<?> _outcome ) {
-        engine.execute( () -> _completionHandler.accept( _outcome ) );
-    }
-
-
-    private void checkConnection( final Consumer<Outcome<?>> _completionHandler ) {
+        // get the typed forge...
+        var forgeT = new Outcome.Forge<T>();
 
         try {
+            // sanity checks...
+            if( isNull( _name ) ) return forgeT.notOk( "_name is null" );
 
-            LOGGER.finest( "checkConnection after " + finishConnectionIntervalMs + "ms" );
+            // attempt to get the option's value...
+            T value = channel.getOption( _name );
 
-            // compute how long we have taken so far...
-            var finishConnectionTimeMs = System.currentTimeMillis() - finishConnectionStartTime;
-
-            // increase the interval between checks by 50% - but at least 1ms, and no more than 100ms...
-            finishConnectionIntervalMs = Math.min( MAX_FINISH_CONNECTION_INTERVAL_INCREMENT_MS, finishConnectionIntervalMs + Math.max( 1, (finishConnectionIntervalMs >>> 1) ) );
-
-            // if we've finished connecting, send the notice...
-            if( channel.finishConnect() ) {
-                LOGGER.finest( "Connected to " + channel.socket().getInetAddress().getHostAddress() + ":" + channel.socket().getPort() + " in " + finishConnectionTimeMs + "ms" );
-                _completionHandler.accept( forge.ok() );
-            }
-
-            // then see if we've run out of time...
-            else if( finishConnectionTimeMs >= finishConnectionTimeoutMs ) {
-                LOGGER.finest( "Connection attempt timed out" );
-                _completionHandler.accept( forge.notOk( "Connection timed out: " + finishConnectionTimeMs + "ms" ) );
-            }
-
-            // otherwise, schedule another check...
-            else {
-                engine.schedule( () -> checkConnection( _completionHandler ), Duration.ofMillis( finishConnectionIntervalMs ) );
-            }
-
+            return forgeT.ok( value );
         }
         catch( Exception _e ) {
-            _completionHandler.accept( forge.notOk( "Problem connecting: " + _e.getMessage(), _e ) );
+            return forgeT.notOk( "Problem getting socket option: " + _e.getMessage(), _e );
         }
     }
 
 
-    /* package-private */ SocketChannel getChannel() {
-        return channel;
+    public void close() {
+
     }
 
 
-    public Socket getSocket() {
-        return channel.socket();
-    }
-
-
-    public String toString() {
-        return "TCPPipe: " + channel.socket().getInetAddress().getHostAddress() + ":" + channel.socket().getPort();
+    protected static class TCPPipeException extends Exception {
+        public TCPPipeException( final String message ) {
+            super( message );
+        }
     }
 }

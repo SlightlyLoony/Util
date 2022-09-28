@@ -38,7 +38,9 @@ public class Test {
         var engine = engineOutcome.info();
 
         // set up a TCP listener...
-        Outcome<TCPListener> listenerOutcome = engine.newTCPListener( IPv4Address.LOOPBACK, 12345, Test::onAccept );
+        var TCPPConfig = new TCPPipeInboundConfig();
+        var TCPLConfig = new TCPListenerConfig( IPv4Address.LOOPBACK, 12345, Test::onAccept, TCPPConfig );
+        Outcome<TCPListener> listenerOutcome = TCPListener.getInstance( engine, TCPLConfig );
         if( listenerOutcome.notOk() ) {
             LOGGER.severe( listenerOutcome.msg() );
             exit( 1 );
@@ -46,7 +48,7 @@ public class Test {
         var listener = listenerOutcome.info();
 
         // set up a TCP client pipe to connect to the listener...
-        Outcome<TCPPipe> clientPipeOutcome = TCPPipe.getTCPPipe( engine, IPv4Address.WILDCARD, 0 );
+        Outcome<TCPOutboundPipe> clientPipeOutcome = TCPOutboundPipe.getTCPOutboundPipe( engine, IPv4Address.WILDCARD, 0 );
         if( clientPipeOutcome.notOk() ) {
             LOGGER.severe( clientPipeOutcome.msg() );
             exit( 1 );

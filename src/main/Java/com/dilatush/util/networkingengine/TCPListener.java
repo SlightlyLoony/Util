@@ -10,26 +10,34 @@ import java.net.StandardSocketOptions;
 import java.nio.channels.ServerSocketChannel;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static com.dilatush.util.General.getLogger;
 import static com.dilatush.util.General.isNull;
 
+
+/**
+ * Instances of this class (or its subclasses) implement servers using the TCP protocol.  In particular, they listen for inbound TCP connections to a particular IP address and TCP
+ * port number.  When a listener detects an inbound TCP connection, it obtains and initializes a new instance of {@link TCPPipe} (or a subclass) to handle that connection.
+ */
 @SuppressWarnings( "unused" )
 public class TCPListener {
 
     private static final Logger                      LOGGER = getLogger();
 
-    private static final Outcome.Forge<TCPListener>  forgeTCPListener = new Outcome.Forge<>();
-    private static final Outcome.Forge<?>            forge            = new Outcome.Forge<>();
+    protected static final Outcome.Forge<TCPListener>  forgeTCPListener = new Outcome.Forge<>();
+    protected static final Outcome.Forge<?>            forge            = new Outcome.Forge<>();
 
-    private final IPAddress                     ip;               // the IP address to bind this listener to...
-    private final int                           port;             // the TCP port to bind this listener to...
-    private final ServerSocketChannel           channel;          // the server socket channel that implements this listener...
-    private final NetworkingEngine              engine;           // the networking engine associated with this instance...
-    private final Consumer<TCPPipe>             onAcceptHandler;  // the handler that will be called when an inbound TCP connection is ready to be accepted...
-    private final BiConsumer<String, Exception> onErrorHandler;   // the handler that will be called if an error occurs while accepting a TCP connection...
+    protected final IPAddress                     ip;                       // the IP address to bind this listener to...
+    protected final int                           port;                     // the TCP port to bind this listener to...
+    protected final ServerSocketChannel           channel;                  // the server socket channel that implements this listener...
+    protected final NetworkingEngine              engine;                   // the networking engine associated with this instance...
+    protected final Consumer<TCPPipe>             onAcceptHandler;          // the handler that will be called when an inbound TCP connection is ready to be accepted...
+    protected final BiConsumer<String, Exception> onErrorHandler;           // the handler that will be called if an error occurs while accepting a TCP connection...
+    protected final Function<TCPPipe,Boolean>     rejectConnectionHandler;  // the handler that returns {@code true} if the connection {@link TCPPipe} should be rejected...
+    protected final TCPPipeInboundConfig          pipeConfig;               // the configuration for TCPPipe instances created by inbound connections...
 
 
     /**
@@ -38,28 +46,15 @@ public class TCPListener {
      * accepted.
      *
      * @param _engine The {@link NetworkingEngine} instance to register this TCP listener with.
-     * @param _bindToIP The local IP address to bind this TCP listener to.  The IP address may be either IPv4 or IPv6 for a particular local network interface, or it may be the
-     *                  wildcard address for all local network interfaces.
-     * @param _bindToPort The local TCP port to bind this TCP listener to.
-     * @param _onAcceptHandler The handler to be called when an inbound TCP connection is accepted.
-     * @param _onErrorHandler The handler to be called if an error occurs while accepting a TCP connection, or {@code null} if there is none.
+     * @param _config The configuration for the new instance.
      * @return The outcome of the attempt.  If ok, the info contains the new {@link TCPListener} instance, configured and registered.  If not ok, it contains an explanatory
      * message and possibly an exception that caused the problem.
      */
-    /* package-private */ static Outcome<TCPListener> getInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort,
-                                                                   final Consumer<TCPPipe> _onAcceptHandler, final BiConsumer<String,Exception> _onErrorHandler ) {
+    public static Outcome<TCPListener> getInstance( final NetworkingEngine _engine, final TCPListenerConfig _config ) {
 
         try {
-
-            // sanity checks...
-            if( isNull( _engine, _bindToIP, _onAcceptHandler) ) return forgeTCPListener.notOk( "_engine, _ip, or _onAcceptHandler is null" );
-            if( (_bindToPort < 1) || (_bindToPort > 0xFFFF) )   return forgeTCPListener.notOk( "_port is out of range (1-65535): " + _bindToPort );
-
             // attempt to get our instance...
-            return forgeTCPListener.ok( new TCPListener( _engine, _bindToIP, _bindToPort, _onAcceptHandler, _onErrorHandler ) );
-        }
-        catch( IOException _e ) {
-            return forgeTCPListener.notOk( "Problem opening selector for TCPListener: " + _e.getMessage(), _e );
+            return forgeTCPListener.ok( new TCPListener( _engine, _config ) );
         }
         catch( Exception _e ) {
             return forgeTCPListener.notOk( "Problem instantiating TCPListener: " + _e.getMessage(), _e );
@@ -73,20 +68,25 @@ public class TCPListener {
      * accepted.
      *
      * @param _engine The {@link NetworkingEngine} instance to register this TCP listener with.
-     * @param _bindToIP The local IP address to bind this TCP listener to.  The IP address may be either IPv4 or IPv6 for a particular local network interface, or it may be the
-     *                  wildcard address for all local network interfaces.
-     * @param _bindToPort The local TCP port to bind this TCP listener to.
-     * @param _onAcceptHandler The handler to be called when an inbound TCP connection is accepted.
-     * @throws IOException if anything goes wrong.
+     * @param _config The {@link TCPListenerConfig} for this instance.
+     * @throws IllegalArgumentException if any arguments are invalid.
+     * @throws IOException if there is a problem opening or configuring the {@link ServerSocketChannel} for this instance, or in registering it with the network engine's selector.
      */
-    protected TCPListener( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort,
-                         final Consumer<TCPPipe> _onAcceptHandler, final BiConsumer<String,Exception> _onErrorHandler ) throws IOException {
+    protected TCPListener( final NetworkingEngine _engine, final TCPListenerConfig _config ) throws IOException {
 
-        ip              = _bindToIP;
-        port            = _bindToPort;
-        engine          = _engine;
-        onAcceptHandler = _onAcceptHandler;
-        onErrorHandler  = (_onErrorHandler == null) ? this::defaultOnErrorHandler : _onErrorHandler;
+        // sanity checks...
+        if( isNull( _engine, _config, _config.bindToIP(), _config.pipeConfig(), _config.onAcceptHandler() ) )
+            throw new IllegalArgumentException( "_engine, _config, _config.bindToIP(), _config.onAcceptHandler(), or _config.pipeConfig() is null" );
+        if( (_config.bindToPort() < 1) || (_config.bindToPort() > 0xFFFF) )
+            throw new IllegalArgumentException( "_config.bindToPort is out of range (1-65535): " + _config.bindToPort() );
+
+        ip                      = _config.bindToIP();
+        port                    = _config.bindToPort();
+        engine                  = _engine;
+        pipeConfig              = _config.pipeConfig();
+        onAcceptHandler         = _config.onAcceptHandler();
+        onErrorHandler          = (_config.onErrorHandler() == null) ? this::defaultOnErrorHandler : _config.onErrorHandler();
+        rejectConnectionHandler = (_config.rejectConnectionHandler() == null) ? this::defaultRejectConnectionHandler : _config.rejectConnectionHandler();
 
         // open and configure our server socket channel...
         channel = ServerSocketChannel.open();
@@ -110,7 +110,12 @@ public class TCPListener {
             var getPipeOutcome = getPipe();
             if( getPipeOutcome.ok() ) {
                 var pipe = getPipeOutcome.info();
-                if( onAcceptHandler != null ) onAcceptHandler.accept( pipe );
+                if( rejectConnectionHandler.apply( pipe ) ) {
+                    LOGGER.finest( "Rejected TCP connection from " + pipe );
+                    pipe.close();
+                    return;
+                }
+                onAcceptHandler.accept( pipe );
                 LOGGER.finest( "Accepted TCP connection from " + pipe );
             }
             else
@@ -127,15 +132,15 @@ public class TCPListener {
      * <pre> {@code
      * return TCPPipe.getTCPPipe( engine, channel.accept() );}
      * </pre>
-     * This method exists to facilitate subclassing both {@link TCPListener} and {@link TCPPipe}.  For instance, if you were building a web server, you might subclass
+     * This method exists to facilitate subclassing both {@link TCPListener} and {@link TCPPipe}.  For instance, if you were building a web server, you might extend
      * {@link TCPListener} to make {@code HTTPListener}, and {@link TCPPipe} to make {@code HTTPPipe}.  In {@code HTTPListener}, you would then override this method to create and
      * return a new instance of {@code HTTPPipe}.
      * @return The outcome of the attempt to accept the incoming connection.  If ok, the info contains the new instance of {@code TCPPipe} (or a subclass of it).  If not ok
      * there is an explanatory message and possibly the exception that caused the problem.
      * @throws IOException if there was a problem accepting the connection.
      */
-    protected Outcome<TCPPipe> getPipe() throws IOException {
-        return TCPPipe.getTCPPipe( engine, channel.accept() );
+    protected Outcome<TCPInboundPipe> getPipe() throws IOException {
+        return TCPInboundPipe.getTCPInboundPipe( engine, pipeConfig );
     }
 
 
@@ -151,23 +156,66 @@ public class TCPListener {
 
 
     /**
+     * The default {@code rejectConnectionHandler}, which always returns {@code false} (meaning do <i>not</i> reject the given connection.
+     *
+     * @param _pipe The {@link TCPPipe} instance with the inbound connection.
+     * @return {@code true} to reject the connection, {@code false} to accept it.
+     */
+    private boolean defaultRejectConnectionHandler( final TCPPipe _pipe ) {
+        return false;
+    }
+
+
+    /**
      * Attempts to set the given socket option to the given value.
      *
-     * @param name The socket option.
-     * @param value The value for the socket option.
+     * @param _name The socket option.
+     * @param _value The value for the socket option.
      * @param <T> The type of the socket option value.
-     * @return If ok, the socket option value was successfully set.  If not ok, there is an explanatory message and the exception that caused the problem.
+     * @return The result of this operation.  If ok, the socket option value was successfully set.  If not ok, there is an explanatory message and possibly the exception that
+     * caused the problem.
      */
-    public <T> Outcome<?> setOption( final SocketOption<T> name, final T value ) {
+    public <T> Outcome<?> setOption( final SocketOption<T> _name, final T _value ) {
 
         try {
+            // sanity checks...
+            if( isNull( _name, _value ) ) return forge.notOk( "_name or _value is null" );
 
             // try to set the option...
-            channel.setOption( name, value );
+            channel.setOption( _name, _value );
             return forge.ok();
         }
         catch( Exception _e ) {
             return forge.notOk( "Problem setting socket option: " + _e.getMessage(), _e );
+        }
+    }
+
+
+    /**
+     * Attempts to get the value of the given socket option.
+     *
+     * @param _name The socket option.
+     * @return The result of this operation.  If ok, the info contains the socket option's value.  If not ok, there is an explanatory message and possibly the exception that
+     * caused the problem.
+     * @param <T> The type of the socket option's value.
+     */
+    @SuppressWarnings( "DuplicatedCode" )
+    public <T> Outcome<T> getOption( final SocketOption<T> _name ) {
+
+        // get the typed forge...
+        var forgeT = new Outcome.Forge<T>();
+
+        try {
+            // sanity checks...
+            if( isNull( _name ) ) return forgeT.notOk( "_name is null" );
+
+            // attempt to get the option's value...
+            T value = channel.getOption( _name );
+
+            return forgeT.ok( value );
+        }
+        catch( Exception _e ) {
+            return forgeT.notOk( "Problem getting socket option: " + _e.getMessage(), _e );
         }
     }
 
