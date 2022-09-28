@@ -38,8 +38,7 @@ public class Test {
         var engine = engineOutcome.info();
 
         // set up a TCP listener...
-        var TCPPConfig = new TCPPipeInboundConfig();
-        var TCPLConfig = new TCPListenerConfig( IPv4Address.LOOPBACK, 12345, Test::onAccept, TCPPConfig );
+        var TCPLConfig = new TCPListenerConfig( IPv4Address.LOOPBACK, 12345, Test::onAccept );
         Outcome<TCPListener> listenerOutcome = TCPListener.getInstance( engine, TCPLConfig );
         if( listenerOutcome.notOk() ) {
             LOGGER.severe( listenerOutcome.msg() );

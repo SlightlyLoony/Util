@@ -3,6 +3,7 @@ package com.dilatush.util.networkingengine;
 import com.dilatush.util.Outcome;
 
 import java.io.IOException;
+import java.nio.channels.SocketChannel;
 import java.util.logging.Logger;
 
 import static com.dilatush.util.General.getLogger;
@@ -25,9 +26,9 @@ public class TCPInboundPipe extends TCPPipe {
     private long finishConnectionStartTime;   // when we started the finish connection process...
 
 
-    /* package-private */ static Outcome<TCPInboundPipe> getTCPInboundPipe( final NetworkingEngine _engine, final TCPPipeInboundConfig _config ) {
+    /* package-private */ static Outcome<TCPInboundPipe> getTCPInboundPipe( final NetworkingEngine _engine, final SocketChannel _channel ) {
         try {
-            var pipe = new TCPInboundPipe( _engine, _config );
+            var pipe = new TCPInboundPipe( _engine, _channel );
             return forgeTCPInboundPipe.ok( pipe );
         }
         catch( Exception _e ) {
@@ -37,8 +38,8 @@ public class TCPInboundPipe extends TCPPipe {
 
 
 
-    protected TCPInboundPipe( final NetworkingEngine _engine, final TCPPipeInboundConfig _config ) throws IOException {
-        super( _engine, _config );
+    protected TCPInboundPipe( final NetworkingEngine _engine, final SocketChannel _channel ) throws IOException {
+        super( _engine, _channel );
     }
 
 

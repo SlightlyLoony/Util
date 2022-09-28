@@ -37,7 +37,6 @@ public class TCPListener {
     protected final Consumer<TCPPipe>             onAcceptHandler;          // the handler that will be called when an inbound TCP connection is ready to be accepted...
     protected final BiConsumer<String, Exception> onErrorHandler;           // the handler that will be called if an error occurs while accepting a TCP connection...
     protected final Function<TCPPipe,Boolean>     rejectConnectionHandler;  // the handler that returns {@code true} if the connection {@link TCPPipe} should be rejected...
-    protected final TCPPipeInboundConfig          pipeConfig;               // the configuration for TCPPipe instances created by inbound connections...
 
 
     /**
@@ -75,15 +74,14 @@ public class TCPListener {
     protected TCPListener( final NetworkingEngine _engine, final TCPListenerConfig _config ) throws IOException {
 
         // sanity checks...
-        if( isNull( _engine, _config, _config.bindToIP(), _config.pipeConfig(), _config.onAcceptHandler() ) )
-            throw new IllegalArgumentException( "_engine, _config, _config.bindToIP(), _config.onAcceptHandler(), or _config.pipeConfig() is null" );
+        if( isNull( _engine, _config, _config.bindToIP(), _config.onAcceptHandler() ) )
+            throw new IllegalArgumentException( "_engine, _config, _config.bindToIP(), or _config.onAcceptHandler() is null" );
         if( (_config.bindToPort() < 1) || (_config.bindToPort() > 0xFFFF) )
             throw new IllegalArgumentException( "_config.bindToPort is out of range (1-65535): " + _config.bindToPort() );
 
         ip                      = _config.bindToIP();
         port                    = _config.bindToPort();
         engine                  = _engine;
-        pipeConfig              = _config.pipeConfig();
         onAcceptHandler         = _config.onAcceptHandler();
         onErrorHandler          = (_config.onErrorHandler() == null) ? this::defaultOnErrorHandler : _config.onErrorHandler();
         rejectConnectionHandler = (_config.rejectConnectionHandler() == null) ? this::defaultRejectConnectionHandler : _config.rejectConnectionHandler();
@@ -133,14 +131,14 @@ public class TCPListener {
      * return TCPPipe.getTCPPipe( engine, channel.accept() );}
      * </pre>
      * This method exists to facilitate subclassing both {@link TCPListener} and {@link TCPPipe}.  For instance, if you were building a web server, you might extend
-     * {@link TCPListener} to make {@code HTTPListener}, and {@link TCPPipe} to make {@code HTTPPipe}.  In {@code HTTPListener}, you would then override this method to create and
-     * return a new instance of {@code HTTPPipe}.
+     * {@link TCPListener} to make {@code HTTPListener}, and {@link TCPInboundPipe} to make {@code HTTPPipe}.  In {@code HTTPListener}, you would then override this method to
+     * create and return a new instance of {@code HTTPPipe}.
      * @return The outcome of the attempt to accept the incoming connection.  If ok, the info contains the new instance of {@code TCPPipe} (or a subclass of it).  If not ok
      * there is an explanatory message and possibly the exception that caused the problem.
      * @throws IOException if there was a problem accepting the connection.
      */
     protected Outcome<TCPInboundPipe> getPipe() throws IOException {
-        return TCPInboundPipe.getTCPInboundPipe( engine, pipeConfig );
+        return TCPInboundPipe.getTCPInboundPipe( engine, channel.accept() );
     }
 
 
