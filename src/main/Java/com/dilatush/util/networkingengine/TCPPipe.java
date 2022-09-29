@@ -1,6 +1,7 @@
 package com.dilatush.util.networkingengine;
 
 import com.dilatush.util.Outcome;
+import com.dilatush.util.ScheduledExecutor;
 import com.dilatush.util.Waiter;
 
 import java.io.IOException;
@@ -10,6 +11,8 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -33,20 +36,27 @@ public abstract class TCPPipe {
     protected static final int READ_INTEREST  = SelectionKey.OP_READ;
     protected static final int WRITE_INTEREST = SelectionKey.OP_WRITE;
 
-    protected final SocketChannel                 channel;          // the channel for the TCP connection this instance abstracts...
-    protected final NetworkingEngine              engine;           // the networking engine whose Selector our channel's SelectionKey is registered with...
-    protected final SelectionKey                  key;              // the SelectionKey for our channel...
-    protected final AtomicBoolean                 readInProgress;   // true when a read operation is in progress...
-    protected final AtomicBoolean                 writeInProgress;  // true when a write operation is in progress...
+    protected final SocketChannel    channel;                 // the channel for the TCP connection this instance abstracts...
+    protected final NetworkingEngine engine;                  // the networking engine whose Selector our channel's SelectionKey is registered with...
+    protected final SelectionKey     key;                     // the SelectionKey for our channel...
+
+    private final AtomicBoolean    readInProgress;          // true when a read operation is in progress...
+    private final AtomicBoolean    writeInProgress;         // true when a write operation is in progress...
+    private final AtomicLong       cumulativeBytesRead;     // total number of bytes read by this instance since instantiation or counters cleared...
+    private final AtomicLong       cumulativeBytesWritten;  // total number of bytes written by this instance since instantiation or counters cleared...
+    private final AtomicInteger    bytesRead;               // the number of bytes read in the current read operation...
+    private final AtomicInteger    bytesWritten;            // the number of bytes written in the current write operation...
 
     private ByteBuffer                    readBuffer;
+    private ByteBuffer                    writeBuffer;
     private int                           minBytes;
     private Consumer<Outcome<ByteBuffer>> onReadCompleteHandler;
+    private Consumer<Outcome<?>>          onWriteCompleteHandler;
 
 
     /**
-     * Creates a new instance of this abstract base class, configured for inbound connections that have already been completed by the {@link TCPListener}. Socket options
-     * SO_REUSEADDR and SO_KEEPALIVE are both set to {@code true}, and the channel's selection key (with no interests) is registered with the {@link NetworkingEngine}'s selector.
+     * Creates a new instance of this abstract base class. Socket options SO_REUSEADDR and SO_KEEPALIVE are both set to {@code true}, and the channel's selection key (with no
+     * interests) is registered with the {@link NetworkingEngine}'s selector.
      *
      * @param _engine The {@link NetworkingEngine} whose selector our channel's selection key should be registered with.
      * @param _channel The {@link SocketChannel} accepted by {@link TCPListener}.
@@ -59,8 +69,6 @@ public abstract class TCPPipe {
         // sanity checks...
         if( isNull( _engine, _channel ))
             throw new IllegalArgumentException( "_engine or _channel is null" );
-        if( !_channel.isConnected() )
-            throw new IllegalStateException( "_channel is not connected" );
 
         // some initialization...
         engine                    = _engine;
@@ -77,25 +85,36 @@ public abstract class TCPPipe {
         // create and initialize our operation in progress and cancel flags...
         readInProgress  = new AtomicBoolean( false );
         writeInProgress = new AtomicBoolean( false );
+
+        // create and initialize our bytes read and written accumulators...
+        cumulativeBytesRead    = new AtomicLong( 0 );
+        cumulativeBytesWritten = new AtomicLong( 0 );
+        bytesRead              = new AtomicInteger( 0 );
+        bytesWritten           = new AtomicInteger( 0 );
     }
 
 
     /**
      * <p>Initiates an asynchronous (non-blocking) operation to read network data from the TCP connection represented by this instance.  The data is received from the network and
-     * copied into the given read buffer.  The read buffer is cleared (via {@link ByteBuffer#clear()}) before reading, so the first byte read from the network is always at index
-     * 0 in the read buffer, and the read buffer's position ({@link ByteBuffer#position()}) is always equal to the number of bytes read.  The {@code _onReadCompleteHandler} is
-     * called when the read operation completes, whether that operation completed normally, was terminated because of an error, or was canceled.</p>
+     * copied into the given read buffer.  The {@code _onReadCompleteHandler} is called when the read operation completes, whether that operation completed normally, was
+     * terminated because of an error, or was canceled.  Note that the {@code _onReadCompleteHandler} will always be called in one of the threads from the associated
+     * {@link NetworkingEngine}'s {@link ScheduledExecutor}, never in the thread that calls this method.</p>
+     * <p>If the given read buffer's position is zero and its limit is equal to its capacity (in other words, the buffer appears to be cleared), then the read buffer is used as is.
+     * However, if the position is not zero, or the limit is less than the capacity, then the buffer is assumed to have valid (but not processed) data between its position and its
+     * limit.  In that case, the buffer will be compacted (i.e., {@link ByteBuffer#compact()} will be called) before reading, so those unprocessed bytes will be the first bytes in
+     * the buffer after the read.  When the read operation is complete, the buffer is flipped (i.e., {@link ByteBuffer#flip()} is called), so the buffer's position upon completion
+     * will always be zero, and its limit will indicate the end of the data previously unprocessed along with the network data just read.  Because the read buffer may have already
+     * contained data when this method is called, the number of bytes in the read buffer upon completion may be greater than the number of bytes actually read.  If the number of
+     * bytes actually read is needed, the {@link #getBytesRead()} method can be used (upon the read operation completing) to obtain that value.</p>
      * <p>The number of bytes that will actually be read into the read buffer depends on a number of factors, not all of which are predictable or controllable.  In general, the
      * read operation will complete after reading the contents of a received TCP packet <i>and</i> the total number of bytes read is at least equal to the minimum number of bytes
-     * specified in {@code _minBytes}.  If {@code _minBytes} is 1, that means the read operation will complete after the first packet is read.</p>
-     * <p>Note that if the read buffer's capacity is less than the received data queued by the TCP/IP stack, then a read operation may fill the read buffer to its capacity, but
-     * leave some data queued by the TCP/IP stack.  In cases like this, only <i>part</i> of a packet's data may be in the read buffer.  You cannot safely depend on the end of the
-     * data in the read buffer being the same as the end of a packet.  Even if the read buffer wasn't completely filled, the TCP/IP stack can split the data any way it feels like
-     * doing.</p>
+     * specified in {@code _minBytes}.  If {@code _minBytes} is 1, that means the read operation will complete after the first successful read operation - which could be part of
+     * a packet, exactly one packet, or multiple packets with the last one possibly not completely read.  The code calling this method should always treat the data read as a
+     * stream, and not a series of discrete packets.</p>
      *
-     * @param _readBuffer The read buffer to read network data into.  Note that this buffer is cleared by this method before any data is read.  While the read operation is in
-     *                    progress (i.e, before the {@code _onReadCompleteHandler} is called), the read buffer must not be manipulated other than by this instance - hands off the
-     *                    read buffer!
+     * @param _readBuffer The read buffer to read network data into.  Note that this buffer may be compacted by this method before any data is read.  While the read operation is
+     *                    in  progress (i.e, before the {@code _onReadCompleteHandler} is called), the read buffer must not be manipulated other than by this instance - hands off
+     *                    the read buffer!
      * @param _minBytes The minimum number of bytes that must be read for this read operation to be considered complete.  This must be at least 1, and no greater than the capacity
      *                  of the read buffer.
      * @param _onReadCompleteHandler This handler is called with the outcome of the read operation, when the read operation completes, whether normally, terminated by an error, or
@@ -104,7 +123,7 @@ public abstract class TCPPipe {
      */
     public void read( final ByteBuffer _readBuffer, final int _minBytes, final Consumer<Outcome<ByteBuffer>> _onReadCompleteHandler ) {
 
-        // if we didn't get a read ready handler, then we really don't have any choice but to throw an exception...
+        // if we didn't get a read complete handler, then we really don't have any choice but to throw an exception...
         if( isNull( _onReadCompleteHandler ) ) throw new IllegalArgumentException( "_onReadCompleteHandler is null" );
 
         // in the code below, the TCPPipeException exists only to make the code easier to read and understand...
@@ -117,11 +136,13 @@ public abstract class TCPPipe {
             // make sure we haven't already got a read operation in progress...
             if( readInProgress.getAndSet( true ) ) throw new TCPPipeException( "Read operation already in progress" );
 
-            // clear the read buffer, so we know it's ready to read into, and squirrel away our read state...
-            _readBuffer.clear();
+            // ready the read buffer and squirrel away our read state...
+            if( (_readBuffer.position() > 0) || (_readBuffer.limit() < _readBuffer.capacity()) )
+                _readBuffer.compact();
             minBytes              = _minBytes;
             readBuffer            = _readBuffer;
             onReadCompleteHandler = _onReadCompleteHandler;
+            bytesRead.set( 0 );
 
             // initiate the actual read process...
             read();
@@ -134,20 +155,24 @@ public abstract class TCPPipe {
 
     /**
      * <p>Initiates an asynchronous (non-blocking) operation to read network data from the TCP connection represented by this instance.  The data is received from the network and
-     * copied into the given read buffer.  The read buffer is cleared (via {@link ByteBuffer#clear()}) before reading, so the first byte read from the network is always at index
-     * 0 in the read buffer, and the read buffer's position ({@link ByteBuffer#position()}) is always equal to the number of bytes read.  The {@code _onReadCompleteHandler} is
-     * called when the read operation completes, whether that operation completed normally, was terminated because of an error, or was canceled.</p>
+     * copied into the given read buffer.  The {@code _onReadCompleteHandler} is called when the read operation completes, whether that operation completed normally, was
+     * terminated because of an error, or was canceled.  Note that the {@code _onReadCompleteHandler} will always be called in one of the threads from the associated
+     * {@link NetworkingEngine}'s {@link ScheduledExecutor}, never in the thread that calls this method.</p>
+     * <p>If the given read buffer's position is zero and its limit is equal to its capacity (in other words, the buffer appears to be cleared), then the read buffer is used as is.
+     * However, if the position is not zero, or the limit is less than the capacity, then the buffer is assumed to have valid (but not processed) data between its position and its
+     * limit.  In that case, the buffer will be compacted (i.e., {@link ByteBuffer#compact()} will be called) before reading, so those unprocessed bytes will be the first bytes in
+     * the buffer after the read.  When the read operation is complete, the buffer is flipped (i.e., {@link ByteBuffer#flip()} is called), so the buffer's position upon completion
+     * will always be zero, and its limit will indicate the end of the data previously unprocessed along with the network data just read.  Because the read buffer may have already
+     * contained data when this method is called, the number of bytes in the read buffer upon completion may be greater than the number of bytes actually read.  If the number of
+     * bytes actually read is needed, the {@link #getBytesRead()} method can be used (upon the read operation completing) to obtain that value.</p>
      * <p>The number of bytes that will actually be read into the read buffer depends on a number of factors, not all of which are predictable or controllable.  In general, the
-     * read operation will complete after reading the contents of a received TCP packet <i>and</i> at least one byte is read, which means the read operation will complete after
-     * the first packet is read.</p>
-     * <p>Note that if the read buffer's capacity is less than the received data queued by the TCP/IP stack, then a read operation may fill the read buffer to its capacity, but
-     * leave some data queued by the TCP/IP stack.  In cases like this, only <i>part</i> of a packet's data may be in the read buffer.  You cannot safely depend on the end of the
-     * data in the read buffer being the same as the end of a packet.  Even if the read buffer wasn't completely filled, the TCP/IP stack can split the data any way it feels like
-     * doing.</p>
+     * read operation will complete after reading the contents of a received TCP packet <i>and</i> the at least one byte has been read from the network.  That means the read
+     * operation will complete after the first successful read operation - which could be part of a packet, exactly one packet, or multiple packets with the last one possibly not
+     * completely read.  The code calling this method should always treat the data read as a stream, and not a series of discrete packets.</p>
      *
-     * @param _readBuffer The read buffer to read network data into.  Note that this buffer is cleared by this method before any data is read.  While the read operation is in
-     *                    progress (i.e, before the {@code _onReadCompleteHandler} is called), the read buffer must not be manipulated other than by this instance - hands off the
-     *                    read buffer!
+     * @param _readBuffer The read buffer to read network data into.  Note that this buffer may be compacted by this method before any data is read.  While the read operation is
+     *                    in  progress (i.e, before the {@code _onReadCompleteHandler} is called), the read buffer must not be manipulated other than by this instance - hands off
+     *                    the read buffer!
      * @param _onReadCompleteHandler This handler is called with the outcome of the read operation, when the read operation completes, whether normally, terminated by an error, or
      *                            canceled.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the network data read.  If not
      *                            ok, then there is an explanatory message and possibly the exception that caused the problem.
@@ -158,20 +183,24 @@ public abstract class TCPPipe {
 
 
     /**
-     * <p>Performs a synchronous (blocking) operation to read network data from the TCP connection represented by this instance.  The data is received from the network and
-     * copied into the given read buffer.  The read buffer is cleared (via {@link ByteBuffer#clear()}) before reading, so the first byte read from the network is always at index
-     * 0 in the read buffer, and the read buffer's position ({@link ByteBuffer#position()}) is always equal to the number of bytes read.</p>
+     * <p>Initiates a synchronous (blocking) operation to read network data from the TCP connection represented by this instance.  The data is received from the network and
+     * copied into the given read buffer.  This method will return when the operation is complete, whether it completed normally, with an error, or was canceled</p>
+     * <p>If the given read buffer's position is zero and its limit is equal to its capacity (in other words, the buffer appears to be cleared), then the read buffer is used as is.
+     * However, if the position is not zero, or the limit is less than the capacity, then the buffer is assumed to have valid (but not processed) data between its position and its
+     * limit.  In that case, the buffer will be compacted (i.e., {@link ByteBuffer#compact()} will be called) before reading, so those unprocessed bytes will be the first bytes in
+     * the buffer after the read.  When the read operation is complete, the buffer is flipped (i.e., {@link ByteBuffer#flip()} is called), so the buffer's position upon completion
+     * will always be zero, and its limit will indicate the end of the data previously unprocessed along with the network data just read.  Because the read buffer may have already
+     * contained data when this method is called, the number of bytes in the read buffer upon completion may be greater than the number of bytes actually read.  If the number of
+     * bytes actually read is needed, the {@link #getBytesRead()} method can be used (upon the read operation completing) to obtain that value.</p>
      * <p>The number of bytes that will actually be read into the read buffer depends on a number of factors, not all of which are predictable or controllable.  In general, the
      * read operation will complete after reading the contents of a received TCP packet <i>and</i> the total number of bytes read is at least equal to the minimum number of bytes
-     * specified in {@code _minBytes}.  If {@code _minBytes} is 1, that means the read operation will complete after the first packet is read.</p>
-     * <p>Note that if the read buffer's capacity is less than the received data queued by the TCP/IP stack, then a read operation may fill the read buffer to its capacity, but
-     * leave some data queued by the TCP/IP stack.  In cases like this, only <i>part</i> of a packet's data may be in the read buffer.  You cannot safely depend on the end of the
-     * data in the read buffer being the same as the end of a packet.  Even if the read buffer wasn't completely filled, the TCP/IP stack can split the data any way it feels like
-     * doing.</p>
+     * specified in {@code _minBytes}.  If {@code _minBytes} is 1, that means the read operation will complete after the first successful read operation - which could be part of
+     * a packet, exactly one packet, or multiple packets with the last one possibly not completely read.  The code calling this method should always treat the data read as a
+     * stream, and not a series of discrete packets.</p>
      *
-     * @param _readBuffer The read buffer to read network data into.  Note that this buffer is cleared by this method before any data is read.  While the read operation is in
-     *                    progress, the read buffer must not be manipulated other than by this instance - hands off the read
-     *                    buffer!
+     * @param _readBuffer The read buffer to read network data into.  Note that this buffer may be compacted by this method before any data is read.  While the read operation is
+     *                    in  progress (i.e, before the {@code _onReadCompleteHandler} is called), the read buffer must not be manipulated other than by this instance - hands off
+     *                    the read buffer!
      * @param _minBytes The minimum number of bytes that must be read for this read operation to be considered complete.  This must be at least 1, and no greater than the capacity
      *                  of the read buffer.
      * @return The outcome of this operation.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the network data read.  If not
@@ -186,20 +215,23 @@ public abstract class TCPPipe {
 
 
     /**
-     * <p>Performs a synchronous (blocking) operation to read network data from the TCP connection represented by this instance.  The data is received from the network and
-     * copied into the given read buffer.  The read buffer is cleared (via {@link ByteBuffer#clear()}) before reading, so the first byte read from the network is always at index
-     * 0 in the read buffer, and the read buffer's position ({@link ByteBuffer#position()}) is always equal to the number of bytes read.</p>
+     * <p>Initiates a synchronous (blocking) operation to read network data from the TCP connection represented by this instance.  The data is received from the network and
+     * copied into the given read buffer.  This method will return when the operation is complete, whether it completed normally, with an error, or was canceled</p>
+     * <p>If the given read buffer's position is zero and its limit is equal to its capacity (in other words, the buffer appears to be cleared), then the read buffer is used as is.
+     * However, if the position is not zero, or the limit is less than the capacity, then the buffer is assumed to have valid (but not processed) data between its position and its
+     * limit.  In that case, the buffer will be compacted (i.e., {@link ByteBuffer#compact()} will be called) before reading, so those unprocessed bytes will be the first bytes in
+     * the buffer after the read.  When the read operation is complete, the buffer is flipped (i.e., {@link ByteBuffer#flip()} is called), so the buffer's position upon completion
+     * will always be zero, and its limit will indicate the end of the data previously unprocessed along with the network data just read.  Because the read buffer may have already
+     * contained data when this method is called, the number of bytes in the read buffer upon completion may be greater than the number of bytes actually read.  If the number of
+     * bytes actually read is needed, the {@link #getBytesRead()} method can be used (upon the read operation completing) to obtain that value.</p>
      * <p>The number of bytes that will actually be read into the read buffer depends on a number of factors, not all of which are predictable or controllable.  In general, the
-     * read operation will complete after reading the contents of a received TCP packet <i>and</i> at least one byte is read, which means the read operation will complete after
-     * the first packet is read.</p>
-     * <p>Note that if the read buffer's capacity is less than the received data queued by the TCP/IP stack, then a read operation may fill the read buffer to its capacity, but
-     * leave some data queued by the TCP/IP stack.  In cases like this, only <i>part</i> of a packet's data may be in the read buffer.  You cannot safely depend on the end of the
-     * data in the read buffer being the same as the end of a packet.  Even if the read buffer wasn't completely filled, the TCP/IP stack can split the data any way it feels like
-     * doing.</p>
+     * read operation will complete after reading the contents of a received TCP packet <i>and</i> the at least one byte has been read from the network.  That means the read
+     * operation will complete after the first successful read operation - which could be part of a packet, exactly one packet, or multiple packets with the last one possibly not
+     * completely read.  The code calling this method should always treat the data read as a stream, and not a series of discrete packets.</p>
      *
-     * @param _readBuffer The read buffer to read network data into.  Note that this buffer is cleared by this method before any data is read.  While the read operation is in
-     *                    progress, the read buffer must not be manipulated other than by this instance - hands off the read
-     *                    buffer!
+     * @param _readBuffer The read buffer to read network data into.  Note that this buffer may be compacted by this method before any data is read.  While the read operation is
+     *                    in  progress (i.e, before the {@code _onReadCompleteHandler} is called), the read buffer must not be manipulated other than by this instance - hands off
+     *                    the read buffer!
      * @return The outcome of this operation.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the network data read.  If not
      *         ok, then there is an explanatory message and possibly the exception that caused the problem.
      */
@@ -209,7 +241,8 @@ public abstract class TCPPipe {
 
 
     /**
-     * Called by the {@link NetworkingEngine} whenever read interest is indicated in the selection key, and the engine detects that the connection is readable.
+     * Called by the {@link NetworkingEngine} whenever read interest is indicated in the selection key, and the engine detects that the connection is readable.  Note that this
+     * method is <i>always</i> called in one of the threads from the {@link NetworkingEngine}'s {@link ScheduledExecutor}.
      */
     /* package-private */ void onReadable() {
 
@@ -225,16 +258,21 @@ public abstract class TCPPipe {
 
 
     /**
-     * Implements the core of the read operation.  It is called once when the read is initiated, and again for each readable event detected by the engine...
+     * Implements the core of the read operation.  It is called once when the read is initiated, and again for each readable event detected by the engine.  Note that this method
+     * may be called in the user's thread <i>or</i> in one of the threads from the {@link NetworkingEngine}'s {@link ScheduledExecutor}.
      */
     private void read() {
 
         try {
             // read what data we can...
-            var bytesRead = channel.read( readBuffer );  // this can throw an IOException...
+            bytesRead.addAndGet( channel.read( readBuffer ) );  // this can throw an IOException...
 
             // if the total bytes read is at least the minimum number of bytes, then we're done...
-            if( readBuffer.position() >= minBytes ) {
+            if( bytesRead.get() >= minBytes ) {
+
+                // set up the read buffer for use by our caller, accumulate the bytes read, and post our completion...
+                readBuffer.flip();
+                cumulativeBytesRead.addAndGet( 0xFFFFFFFFL & bytesRead.get() );
                 postReadCompletion( forgeByteBuffer.ok( readBuffer ) );
             }
 
@@ -244,7 +282,7 @@ public abstract class TCPPipe {
                 engine.wakeSelector();  // this guarantees that the key change will be effective immediately...
             }
         }
-        catch( IOException _e ) {
+        catch( Exception _e ) {
             postReadCompletion( forgeByteBuffer.notOk( "Problem reading from channel: " + _e.getMessage(), _e ) );
         }
     }
@@ -252,7 +290,7 @@ public abstract class TCPPipe {
 
     /**
      * If a read operation is still in progress, marks it as complete (i.e., {@code readInProgress} set to false) and posts the given {@link Outcome} to the
-     * {@code onReadReadyHandler}.  If no read operation was in progress, this method does nothing.
+     * {@code onReadCompleteHandler}.  If no read operation was in progress, this method does nothing.
      *
      * @param _outcome The {@link Outcome} to post.
      */
@@ -269,10 +307,210 @@ public abstract class TCPPipe {
 
 
     /**
-     * Cancels a read operation in progress.
+     * <p>Initiates an asynchronous (non-blocking) operation to write network data to the TCP connection represented by this instance, from the given write buffer.  The
+     * {@code _onWriteCompleteHandler} is called when the write operation completes, whether that operation completed normally, was terminated because of an error, or was canceled.
+     * Note that the {@code _onWriteCompleteHandler} will always be called in one of the threads from the associated {@link NetworkingEngine}'s {@link ScheduledExecutor}, never in
+     * the thread that calls this method.</p>
+     * <p>The data remaining in the given write buffer (i.e., the bytes between the position and the limit) will be written to the network.  When the write operation completes
+     * normally, the write buffer will be cleared.  Otherwise, the buffer's position is set to the first byte that was <i>not</i> successfully written.  Note that this is not
+     * a guarantee in any way that the bytes that were successfully written actually reached the destination - only that they were successfully written to the local TCP/IP
+     * queue.</p>
+     *
+     * @param _writeBuffer The write buffer to write network data from.  While the write operation is in  progress (i.e, before the {@code _onWriteCompleteHandler} is called),
+     *                     the write buffer must not be manipulated other than by this instance - hands off the write buffer!
+     * @param _onWriteCompleteHandler This handler is called with the outcome of the write operation, when the write operation completes, whether normally, terminated by an error, or
+     *                            canceled.  If the outcome is ok, then the operation completed normally.  If not ok, then there is an explanatory message and possibly the
+     *                                exception that caused the problem.
+     */
+    public void write( final ByteBuffer _writeBuffer, final Consumer<Outcome<?>> _onWriteCompleteHandler ) {
+
+        // set our write buffer to null, so in the postWriteCompletion we can tell if the mark has been set...
+        writeBuffer = null;
+
+        // if we didn't get a write complete handler, then we really don't have any choice but to throw an exception...
+        if( isNull( _onWriteCompleteHandler ) ) throw new IllegalArgumentException( "_onWriteCompleteHandler is null" );
+
+        // in the code below, the TCPPipeException exists only to make the code easier to read and understand...
+        try {
+
+            // sanity checks...
+            if( isNull( _writeBuffer ) || (_writeBuffer.remaining() == 0) ) throw new TCPPipeException( "_writeBuffer is null or has no data to write" );
+
+            // make sure we haven't already got a write operation in progress...
+            if( writeInProgress.getAndSet( true ) ) throw new TCPPipeException( "Write operation already in progress" );
+
+            // mark the current position, so that we may return the buffer to its initial state if the write does not complete normally...
+            _writeBuffer.mark();
+
+            // squirrel away our write state...
+            writeBuffer            = _writeBuffer;
+            onWriteCompleteHandler = _onWriteCompleteHandler;
+            bytesWritten.set( 0 );
+
+            // initiate the actual write process...
+            write();
+        }
+        catch( TCPPipeException _e ) {
+            postWriteCompletion( forge.notOk( _e.getMessage() ) );
+        }
+    }
+
+
+    /**
+     * <p>Initiates a synchronous (blocking) operation to write network data to the TCP connection represented by this instance, from the given write buffer.  This method returns
+     * when the write operation completes, whether that operation completed normally, was terminated because of an error, or was canceled.</p>
+     * <p>The data remaining in the given write buffer (i.e., the bytes between the position and the limit) will be written to the network.  When the write operation completes
+     * normally, the write buffer will be cleared.  Otherwise, the buffer's position is set to the first byte that was <i>not</i> successfully written.  Note that this is not
+     * a guarantee in any way that the bytes that were successfully written actually reached the destination - only that they were successfully written to the local TCP/IP
+     * queue.</p>
+     *
+     * @param _writeBuffer The write buffer to write network data from.  While the write operation is in  progress (i.e, before the {@code _onWriteCompleteHandler} is called),
+     *                     the write buffer must not be manipulated other than by this instance - hands off the write buffer!
+     */
+    public Outcome<?> write( final ByteBuffer _writeBuffer ) {
+        Waiter<Outcome<?>> waiter = new Waiter<>();
+        read( _writeBuffer, waiter::complete );
+        return waiter.waitForCompletion();
+    }
+
+
+    /**
+     * Called by the {@link NetworkingEngine} whenever write interest is indicated in the selection key, and the engine detects that the connection is writeable.  Note that this
+     * method is <i>always</i> called in one of the threads from the {@link NetworkingEngine}'s {@link ScheduledExecutor}.
+     */
+    /* package-private */ void onWriteable() {
+
+        // if there's no write in progress, we just log and ignore this call...
+        if( !writeInProgress.get() ) {
+            LOGGER.log( Level.WARNING, "TCPPipe::onWriteable() called when no write was in progress; ignoring" );
+            return;
+        }
+
+        // handle the writeable event...
+        write();
+    }
+
+
+    /**
+     * Implements the core of the write operation.  It is called once when the write is initiated, and again for each writable event detected by the engine.  Note that this method
+     * may be called in the user's thread <i>or</i> in one of the threads from the {@link NetworkingEngine}'s {@link ScheduledExecutor}.
+     */
+    private void write() {
+
+        try {
+            // write what data we can, and set the mark...
+            bytesWritten.set( channel.write( writeBuffer ) );  // this can throw an IOException...
+            writeBuffer.mark();
+
+            // if there are no bytes remaining, then we're done...
+            if( !writeBuffer.hasRemaining() ) {
+
+                // clear the write buffer for use by our caller, accumulate the bytes written, and post our completion...
+                writeBuffer.clear();
+                cumulativeBytesWritten.addAndGet( 0xFFFFFFFFL & bytesWritten.get() );
+                postWriteCompletion( forge.ok() );
+            }
+
+            // otherwise, we need to express write interest...
+            else {
+                key.interestOpsOr( WRITE_INTEREST );
+                engine.wakeSelector();  // this guarantees that the key change will be effective immediately...
+            }
+        }
+        catch( Exception _e ) {
+            postWriteCompletion( forge.notOk( "Problem writing to channel: " + _e.getMessage(), _e ) );
+        }
+    }
+
+
+    /**
+     * If a write operation is still in progress, marks it as complete (i.e., {@code writeInProgress} set to false) and posts the given {@link Outcome} to the
+     * {@code onWriteCompleteHandler}.  If no write operation was in progress, this method does nothing.
+     *
+     * @param _outcome The {@link Outcome} to post.
+     */
+    private void postWriteCompletion( final Outcome<?> _outcome ) {
+
+        // if there was no write in progress, just return...
+        // this catches a race condition when a cancelWrite occurs just as a write is completing normally...
+        // or when a write "completes" just after a cancelWrite...
+        if( !writeInProgress.getAndSet( false ) ) return;
+
+        // if we're sending a completion that's ok, clear the buffer, otherwise, reset position to the mark...
+        if( writeBuffer != null ) {
+            if(  _outcome.ok() )
+                writeBuffer.clear();
+            else
+                writeBuffer.reset();
+        }
+
+        // otherwise, send the completion...
+        engine.execute( () -> onWriteCompleteHandler.accept( _outcome ) );
+    }
+
+
+    /**
+     * Cancels a read operation in progress.  If there is no read operation in progress, it has no effect.  Canceling a read operation does not affect future read operations.
      */
     public void cancelRead() {
         postReadCompletion( forgeByteBuffer.notOk( "Read canceled" ) );
+    }
+
+
+    /**
+     * Cancels a write operation in progress.  If there is no write operation in progress, it has no effect.  Canceling a write operation does not affect future write operations.
+     */
+    public void cancelWrite() {
+        postWriteCompletion( forge.notOk( "Write canceled" ) );
+    }
+
+
+    /**
+     * Returns the number of bytes read by the most recent read operation, assuming that read has not been called again.
+     *
+     * @return The number of bytes read by the most recent read operation.
+     */
+    public int getBytesRead() {
+        return bytesRead.get();
+    }
+
+
+    /**
+     * Returns the number of bytes written by the most recent write operation, assuming that write has not been called again.
+     *
+     * @return The number of bytes written by the most recent write operation.
+     */
+    public int getBytesWritten() {
+        return bytesWritten.get();
+    }
+
+
+    /**
+     * Resets the counters for cumulative bytes read or written to zero.
+     */
+    public void clearAccumulators() {
+        cumulativeBytesRead.set( 0 );
+        cumulativeBytesWritten.set( 0 );
+    }
+
+
+    /**
+     * Returns the total number of bytes read by this instance since its instantiation or since the most recent time {@link #clearAccumulators()} was called.
+     *
+     * @return The total number of bytes read by this instance.
+     */
+    public long getCumulativeBytesRead() {
+        return cumulativeBytesRead.get();
+    }
+
+
+    /**
+     * Returns the total number of bytes written by this instance since its instantiation or since the most recent time {@link #clearAccumulators()} was called.
+     *
+     * @return The total number of bytes written by this instance.
+     */
+    public long getCumulativeBytesWritten() {
+        return cumulativeBytesWritten.get();
     }
 
 

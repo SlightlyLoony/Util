@@ -7,11 +7,9 @@ import com.dilatush.util.ip.IPAddress;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.StandardSocketOptions;
-import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 
@@ -25,89 +23,55 @@ import static com.dilatush.util.General.isNull;
 public class TCPOutboundPipe extends TCPPipe {
 
     private static final Logger                      LOGGER                                      = getLogger();
+
     private static final int                         DEFAULT_FINISH_CONNECTION_TIMEOUT_MS        = 2000;
     private static final int                         MAX_FINISH_CONNECTION_INTERVAL_INCREMENT_MS = 100;
 
-    private static final Outcome.Forge<TCPOutboundPipe>      forgeTCPConnection = new Outcome.Forge<>();
-    private static final Outcome.Forge<?>            forge              = new Outcome.Forge<>();
+    private static final Outcome.Forge<TCPOutboundPipe>   forgeTCPOutboundPipe = new Outcome.Forge<>();
+    private static final Outcome.Forge<?>                 forge                = new Outcome.Forge<>();
 
 
-    private final SocketChannel                channel;
-    private final AtomicBoolean                connectFlag;
-    private final NetworkingEngine             engine;
-    private final int                          finishConnectionTimeoutMs;
-    private final Runnable                     onReadReadyHandler;
-    private final Runnable                     onWriteReadyHandler;
-    private final BiConsumer<String,Exception> onErrorHandler;
-    private final SelectionKey                 key;
+    private final AtomicBoolean connectFlag;
+    private final int           finishConnectionTimeoutMs;
 
     private int  finishConnectionIntervalMs;  // delay (in milliseconds) until the next finish connection check...
     private long finishConnectionStartTime;   // when we started the finish connection process...
 
 
-    /* package-private */ static Outcome<TCPOutboundPipe> getTCPOutboundPipe( final NetworkingEngine _engine, final SocketChannel _channel, final int _finishConnectionTimeoutMs ) {
+    public static Outcome<TCPOutboundPipe> getTCPOutboundPipe( final NetworkingEngine _engine,
+                                                               final IPAddress _bindToIP, final int _bindToPort, final int _finishConnectionTimeoutMs ) {
         try {
-            if( isNull( _channel, _engine ) ) return forgeTCPConnection.notOk( "_channel or _engine is null" );
-            if( _finishConnectionTimeoutMs < 1 ) return forgeTCPConnection.notOk( "_finishConnectionTimeoutMs is not valid: " + _finishConnectionTimeoutMs );
-            _channel.configureBlocking( false );
-            _channel.setOption( StandardSocketOptions.SO_REUSEADDR, true );  // reuse connections in TIME_WAIT (e.g., after close and reconnect)...
-            _channel.setOption( StandardSocketOptions.SO_KEEPALIVE, true );  // enable keep-alive packets on this connection (mainly to detect broken connections)...
-        }
-        catch( IOException _e ) {
-            return forgeTCPConnection.notOk( "Problem configuring TCP pipe: " + _e.getMessage(), _e );
-        }
+            // sanity checks...
+            if( isNull( _engine, _bindToIP ) )   return forgeTCPOutboundPipe.notOk( "_engine or _bindToIP is null" );
+            if( _finishConnectionTimeoutMs < 1 ) return forgeTCPOutboundPipe.notOk( "_finishConnectionTimeoutMs is not valid: " + _finishConnectionTimeoutMs );
 
-        try {
-            return forgeTCPConnection.ok( new TCPOutboundPipe( _engine, _channel,_finishConnectionTimeoutMs ) );
+            // open our channel and configure it...
+            var channel = SocketChannel.open();
+            channel.configureBlocking( false );
+            channel.setOption( StandardSocketOptions.SO_REUSEADDR, true );  // reuse connections in TIME_WAIT (e.g., after close and reconnect)...
+            channel.setOption( StandardSocketOptions.SO_KEEPALIVE, true );  // enable keep-alive packets on this connection (mainly to detect broken connections)...
+
+            // get our new instance...
+            var pipe = new TCPOutboundPipe( _engine, channel, _bindToIP, _bindToPort, _finishConnectionTimeoutMs );
+            return forgeTCPOutboundPipe.ok( pipe );
         }
-        catch( IOException _e ) {
-            return forgeTCPConnection.notOk( "Problem registering selection key: " + _e.getMessage(), _e );
+        catch( Exception _e ) {
+            return forgeTCPOutboundPipe.notOk( "Problem creating or configuring TCP outbound pipe: " + _e.getMessage(), _e );
         }
     }
 
 
-    /* package-private */ static Outcome<TCPOutboundPipe> getTCPPipe( final NetworkingEngine _engine, final SocketChannel _channel ) {
-        return getTCPPipe( _engine, _channel, DEFAULT_FINISH_CONNECTION_TIMEOUT_MS );
+    public static Outcome<TCPOutboundPipe> getTCPOutboundPipe( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort ) {
+        return getTCPOutboundPipe( _engine, _bindToIP, _bindToPort, DEFAULT_FINISH_CONNECTION_TIMEOUT_MS );
     }
 
 
-    /* package-private */ static Outcome<TCPOutboundPipe> getTCPPipe( final NetworkingEngine _engine,
-                                                                      final IPAddress _bindToIP, final int _bindToPort, final int _finishConnectionTimeoutMs ) {
+    protected TCPOutboundPipe( final NetworkingEngine _engine, final SocketChannel _channel,
+                               final IPAddress _bindToIP, final int _bindToPort, final int _finishConnectionTimeoutMs ) throws IOException {
+        super( _engine, _channel );
 
-        // sanity checks...
-        if( isNull( _engine, _bindToIP ) )                return forgeTCPConnection.notOk( "_engine or _bindToIP is null" );
-        if( (_bindToPort < 0) || (_bindToPort > 0xFFFF) ) return forgeTCPConnection.notOk( "_port is out of range: " + _bindToPort );
-        if( _finishConnectionTimeoutMs < 1 )              return forgeTCPConnection.notOk( "_finishConnectionTimeoutMs is not valid: " + _finishConnectionTimeoutMs );
-
-        // instantiate a socket channel...
-        SocketChannel channel = null;
-        try {
-            channel = SocketChannel.open();
-            channel.bind( new InetSocketAddress( _bindToIP.toInetAddress(), _bindToPort ) );
-        }
-        catch( IOException _e ) {
-            return forgeTCPConnection.notOk( "Problem instantiating SocketChannel: " + _e.getMessage(), _e );
-        }
-
-        return getTCPPipe( _engine, channel, _finishConnectionTimeoutMs );
-    }
-
-
-    /* package-private */ static Outcome<TCPOutboundPipe> getTCPPipe( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort ) {
-        return getTCPPipe( _engine, _bindToIP, _bindToPort, DEFAULT_FINISH_CONNECTION_TIMEOUT_MS );
-    }
-
-
-    protected TCPOutboundPipe( final NetworkingEngine _engine, final SocketChannel _channel, final int _finishConnectionTimeoutMs,
-                               final Runnable _onReadReadyHandler, final Runnable _onWriteReadyHandler, final BiConsumer<String,Exception> _onErrorHandler ) throws IOException {
-        engine                    = _engine;
         finishConnectionTimeoutMs = _finishConnectionTimeoutMs;
         connectFlag               = new AtomicBoolean( false );
-        channel                   = _channel;
-        onReadReadyHandler        = _onReadReadyHandler;
-        onWriteReadyHandler       = _onWriteReadyHandler;
-        onErrorHandler            = _onErrorHandler;
-        key                       = engine.register( channel, 0, this );
     }
 
 

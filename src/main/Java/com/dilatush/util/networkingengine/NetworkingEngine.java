@@ -212,8 +212,9 @@ public final class NetworkingEngine {
                             scheduledExecutor.execute( listener::onAcceptable );
                             LOGGER.finest( "Acceptable with TCPListener: " + listener );
                         }
-                        else
-                            LOGGER.severe( "Key is acceptable, but attachment is not a TCPListener" );
+                        else {
+                            LOGGER.warning( "Acceptable interest with unknown attachment type: " + key.attachment().getClass().getName() );
+                        }
                     }
 
                     // handle connecting (TCP only)...
@@ -224,6 +225,13 @@ public final class NetworkingEngine {
                     // handle writing to the network...
                     if( key.isValid() && key.isWritable() ) {
                         LOGGER.finest( "Writable" );
+                        if( key.attachment() instanceof TCPPipe pipe ) {
+                            scheduledExecutor.execute( pipe::onWriteable );
+                            key.interestOpsAnd( NO_WRITE_INTEREST );
+                        }
+                        else {
+                            LOGGER.warning( "Writeable interest with unknown attachment type: " + key.attachment().getClass().getName() );
+                        }
                     }
 
                     // handle reading from the network...
@@ -234,6 +242,9 @@ public final class NetworkingEngine {
                             key.interestOpsAnd( NO_READ_INTEREST );
                         }
                     }
+                    else {
+                        LOGGER.warning( "Readable interest with unknown attachment type: " + key.attachment().getClass().getName() );
+                    }
 
                     // get rid the key we just processed...
                     keyIterator.remove();
@@ -243,12 +254,10 @@ public final class NetworkingEngine {
                 LOGGER.log( SEVERE, "Selector closed", _e );
             }
 
-// TODO: uncomment this once I know that all expected exceptions are handled...
-
-//            // getting here means something seriously wrong happened; log and let the loop die...
-//            catch( Exception _e ) {
-//                LOGGER.log( SEVERE, "Unhandled exception in NIO selector loop", _e );
-//            }
+            // getting here means something seriously wrong happened; log and let the loop die...
+            catch( Exception _e ) {
+                LOGGER.log( SEVERE, "Unhandled exception in NIO selector loop", _e );
+            }
             finally {
                 LOGGER.severe( "Fatal NetworkingEngine error; exiting I/O loop" );
 
