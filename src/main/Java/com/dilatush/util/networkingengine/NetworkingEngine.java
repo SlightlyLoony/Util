@@ -10,6 +10,7 @@ import java.util.Iterator;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Logger;
 
@@ -60,6 +61,7 @@ public final class NetworkingEngine {
     private final String               name;              // the name of this engine; the only intent is for human readability...
     private final ReentrantLock        selectorLock;      // a lock to prevent multiple threads changing the selector simultaneously...
     private final ScheduledExecutor    scheduledExecutor; // offloads tasks from the I/O loop, and is the basis for timeouts...
+    private final AtomicBoolean        isShutdown;          // set true if this engine has been shutdown...
 
 
     /**
@@ -135,6 +137,23 @@ public final class NetworkingEngine {
 
         // some setup...
         selectorLock = new ReentrantLock();
+        isShutdown = new AtomicBoolean( false );
+    }
+
+
+    /**
+     * Shutdown the networking engine, ending all related I/O.  If this method is called before any associated channels are closed, those channels may get errors.
+     */
+    public void shutdown() {
+
+        isShutdown.set( true );
+        ioLoopThread.interrupt();
+        try {
+            selector.close();
+        }
+        catch( IOException _e ) {
+            // ignore...
+        }
     }
 
 
@@ -179,17 +198,17 @@ public final class NetworkingEngine {
 
         LOGGER.finest( "I/O Loop starting..." );
 
-        // we're going to loop here basically forever, unless something goes horribly wrong...
-        while( !ioLoopThread.isInterrupted() ) {
+        try {
 
-            // any unhandled exceptions in this code are a serious problem; if we get one, we just log it and make no attempt to recover...
-            try {
+            // we're going to loop here basically forever, unless something goes horribly wrong...
+            while( !ioLoopThread.isInterrupted() ) {
 
                 LOGGER.finest( "Selecting..." );
 
                 // select and get any keys...
                 try {
                     selector.select();
+                    if( !selector.isOpen() ) break;
                 }
                 catch( IOException _e ) {
                     LOGGER.log( SEVERE, "I/O error when selecting", _e );
@@ -241,29 +260,32 @@ public final class NetworkingEngine {
                             scheduledExecutor.execute( pipe::onReadable );
                             key.interestOpsAnd( NO_READ_INTEREST );
                         }
-                    }
-                    else {
-                        LOGGER.warning( "Readable interest with unknown attachment type: " + key.attachment().getClass().getName() );
+                        else {
+                            LOGGER.warning( "Readable interest with unknown attachment type: " + key.attachment().getClass().getName() );
+                        }
                     }
 
                     // get rid the key we just processed...
                     keyIterator.remove();
                 }
             }
-            catch( ClosedSelectorException _e ) {
-                LOGGER.log( SEVERE, "Selector closed", _e );
-            }
+        }
+        catch( ClosedSelectorException _e ) {
+            LOGGER.log( SEVERE, "Selector closed", _e );
+        }
 
-            // getting here means something seriously wrong happened; log and let the loop die...
-            catch( Exception _e ) {
-                LOGGER.log( SEVERE, "Unhandled exception in NIO selector loop", _e );
-            }
-            finally {
+        // getting here means something seriously wrong happened; log and let the loop die...
+        catch( Exception _e ) {
+            LOGGER.log( SEVERE, "Unhandled exception in NIO selector loop", _e );
+        }
+        finally {
+            if( isShutdown.get() )
+                LOGGER.finest( "Network engine shut down" );
+            else
                 LOGGER.severe( "Fatal NetworkingEngine error; exiting I/O loop" );
 
-                // all hope is lost; terminate this thread...
-                ioLoopThread.interrupt();
-            }
+            // all hope is lost; terminate this thread...
+            ioLoopThread.interrupt();
         }
     }
 

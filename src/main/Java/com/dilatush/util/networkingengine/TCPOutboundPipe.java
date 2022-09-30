@@ -17,8 +17,8 @@ import static com.dilatush.util.General.getLogger;
 import static com.dilatush.util.General.isNull;
 
 /**
- * Instances of this class (or its subclasses) are used to communicate over the TCP protocol.  Instances may be created by a listener ({@link TCPListener} to respond to inbound
- * TCP connections, or they may be created by application code to initiate an outbound TCP connection.
+ * Instances of this class (or its subclasses) allow network communications with the TCP protocol when the initial connection is outbound (that is, this computer is initiating the
+ * connection).
  */
 public class TCPOutboundPipe extends TCPPipe {
 
@@ -38,21 +38,36 @@ public class TCPOutboundPipe extends TCPPipe {
     private long finishConnectionStartTime;   // when we started the finish connection process...
 
 
+    /**
+     * Attempts to create a new instance of this class, associated with the given {@link NetworkingEngine} with a new {@link SocketChannel} that is bound to the network
+     * interface(s) with the given IP address and port, and with the given finish connection timeout.  This new instance can then initiate and complete a TCP connection to
+     * a TCP listener (which could be either on another device or on this computer).  Once connected, data can be read from and written to the network.
+     *
+     * @param _engine The {@link NetworkingEngine} to associate with the new instance.
+     * @param _bindToIP The IP address of the local network interface to bind this connection to.  The IP address can be either IPv4 or IPv6.  If it is the wildcard address
+     *                  (0.0.0.0 or ::), then the connection will be bound to <i>all</i> local network interfaces.
+     * @param _bindToPort The local TCP port to bind this connection to.  If the given port is zero (0), then the TCP/IP stack will choose an available ephemeral port.
+     * @param _finishConnectionTimeoutMs The number of milliseconds to wait for a connection to complete before failing.
+     * @return The outcome of the attempt to create a new instance of {@link TCPOutboundPipe}.  If ok, the info contains the new instance.  If not ok, there is an explanatory
+     * message and possibly the exception that caused the problem.
+     */
     public static Outcome<TCPOutboundPipe> getTCPOutboundPipe( final NetworkingEngine _engine,
                                                                final IPAddress _bindToIP, final int _bindToPort, final int _finishConnectionTimeoutMs ) {
         try {
             // sanity checks...
             if( isNull( _engine, _bindToIP ) )   return forgeTCPOutboundPipe.notOk( "_engine or _bindToIP is null" );
             if( _finishConnectionTimeoutMs < 1 ) return forgeTCPOutboundPipe.notOk( "_finishConnectionTimeoutMs is not valid: " + _finishConnectionTimeoutMs );
+            if( (_bindToPort < 0) || (_bindToPort > 65535) ) return forgeTCPOutboundPipe.notOk( "_bindToPort is out of range: " + _bindToPort );
 
-            // open our channel and configure it...
+            // open our channel, bind it, and configure it...
             var channel = SocketChannel.open();
+            channel.bind( new InetSocketAddress( _bindToIP.toInetAddress(), _bindToPort ) );
             channel.configureBlocking( false );
             channel.setOption( StandardSocketOptions.SO_REUSEADDR, true );  // reuse connections in TIME_WAIT (e.g., after close and reconnect)...
             channel.setOption( StandardSocketOptions.SO_KEEPALIVE, true );  // enable keep-alive packets on this connection (mainly to detect broken connections)...
 
             // get our new instance...
-            var pipe = new TCPOutboundPipe( _engine, channel, _bindToIP, _bindToPort, _finishConnectionTimeoutMs );
+            var pipe = new TCPOutboundPipe( _engine, channel, _finishConnectionTimeoutMs );
             return forgeTCPOutboundPipe.ok( pipe );
         }
         catch( Exception _e ) {
@@ -61,13 +76,33 @@ public class TCPOutboundPipe extends TCPPipe {
     }
 
 
+    /**
+     * Attempts to create a new instance of this class, associated with the given {@link NetworkingEngine} with a new {@link SocketChannel} that is bound to the network
+     * interface(s) with the given IP address and port, and a 2000ms (2 seconds) finish connection timeout.  This new instance can then initiate and complete a TCP connection to
+     * a TCP listener (which could be either on another device or on this computer).  Once connected, data can be read from and written to the network.
+     *
+     * @param _engine The {@link NetworkingEngine} to associate with the new instance.
+     * @param _bindToIP The IP address of the local network interface to bind this connection to.  The IP address can be either IPv4 or IPv6.  If it is the wildcard address
+     *                  (0.0.0.0 or ::), then the connection will be bound to <i>all</i> local network interfaces.
+     * @param _bindToPort The local TCP port to bind this connection to.  If the given port is zero (0), then the TCP/IP stack will choose an available ephemeral port.
+     * @return The outcome of the attempt to create a new instance of {@link TCPOutboundPipe}.  If ok, the info contains the new instance.  If not ok, there is an explanatory
+     * message and possibly the exception that caused the problem.
+     */
     public static Outcome<TCPOutboundPipe> getTCPOutboundPipe( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort ) {
         return getTCPOutboundPipe( _engine, _bindToIP, _bindToPort, DEFAULT_FINISH_CONNECTION_TIMEOUT_MS );
     }
 
 
-    protected TCPOutboundPipe( final NetworkingEngine _engine, final SocketChannel _channel,
-                               final IPAddress _bindToIP, final int _bindToPort, final int _finishConnectionTimeoutMs ) throws IOException {
+    /**
+     * Creates a new instance of {@link TCPOutboundPipe} that is associated with the given {@link NetworkingEngine}, uses the given channel (that has been bound to network
+     * interfaces), with the given finish connection timeout.
+     *
+     * @param _engine The {@link NetworkingEngine} to associate with the new instance.
+     * @param _channel The {@link SocketChannel} for the new instance to use.
+     * @param _finishConnectionTimeoutMs The number of milliseconds to wait for a connection to complete before failing.
+     * @throws IOException on any I/O problem.
+     */
+    protected TCPOutboundPipe( final NetworkingEngine _engine, final SocketChannel _channel, final int _finishConnectionTimeoutMs ) throws IOException {
         super( _engine, _channel );
 
         finishConnectionTimeoutMs = _finishConnectionTimeoutMs;
@@ -114,11 +149,6 @@ public class TCPOutboundPipe extends TCPPipe {
     }
 
 
-    public void close() {
-
-    }
-
-
     private void postConnectionCompletion( final Consumer<Outcome<?>> _completionHandler, final Outcome<?> _outcome ) {
         engine.execute( () -> _completionHandler.accept( _outcome ) );
     }
@@ -160,12 +190,7 @@ public class TCPOutboundPipe extends TCPPipe {
     }
 
 
-    /* package-private */ SocketChannel getChannel() {
-        return channel;
-    }
-
-
     public String toString() {
-        return "TCPPipe: " + channel.socket().getInetAddress().getHostAddress() + ":" + channel.socket().getPort();
+        return "TCPOutboundPipe: " + channel.socket().getInetAddress().getHostAddress() + ":" + channel.socket().getPort();
     }
 }

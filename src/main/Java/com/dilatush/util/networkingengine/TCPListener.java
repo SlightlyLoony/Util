@@ -8,6 +8,7 @@ import java.net.InetSocketAddress;
 import java.net.SocketOption;
 import java.net.StandardSocketOptions;
 import java.nio.channels.ServerSocketChannel;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -30,13 +31,13 @@ public class TCPListener {
     protected static final Outcome.Forge<TCPListener>  forgeTCPListener = new Outcome.Forge<>();
     protected static final Outcome.Forge<?>            forge            = new Outcome.Forge<>();
 
-    protected final IPAddress                     ip;                       // the IP address to bind this listener to...
-    protected final int                           port;                     // the TCP port to bind this listener to...
-    protected final ServerSocketChannel           channel;                  // the server socket channel that implements this listener...
-    protected final NetworkingEngine              engine;                   // the networking engine associated with this instance...
-    protected final Consumer<TCPPipe>             onAcceptHandler;          // the handler that will be called when an inbound TCP connection is ready to be accepted...
-    protected final BiConsumer<String, Exception> onErrorHandler;           // the handler that will be called if an error occurs while accepting a TCP connection...
-    protected final Function<TCPPipe,Boolean>     rejectConnectionHandler;  // the handler that returns {@code true} if the connection {@link TCPPipe} should be rejected...
+    protected final IPAddress                        ip;                       // the IP address to bind this listener to...
+    protected final int                              port;                     // the TCP port to bind this listener to...
+    protected final ServerSocketChannel              channel;                  // the server socket channel that implements this listener...
+    protected final NetworkingEngine                 engine;                   // the networking engine associated with this instance...
+    protected final Consumer<TCPInboundPipe>         onAcceptHandler;          // the handler that will be called when an inbound TCP connection is ready to be accepted...
+    protected final BiConsumer<String, Exception>    onErrorHandler;           // the handler that will be called if an error occurs while accepting a TCP connection...
+    protected final Function<TCPInboundPipe,Boolean> rejectConnectionHandler;  // the handler that returns {@code true} if the connection {@link TCPPipe} should be rejected...
 
 
     /**
@@ -45,19 +46,104 @@ public class TCPListener {
      * accepted.
      *
      * @param _engine The {@link NetworkingEngine} instance to register this TCP listener with.
-     * @param _config The configuration for the new instance.
+     * @param _bindToIP The local IP address to bind this TCP listener to.  The IP address may be either IPv4 or IPv6 for a particular local network interface, or it may be the
+     *                  wildcard address for all local network interfaces.
+     * @param _bindToPort The local TCP port to bind this TCP listener to.
+     * @param _onAcceptHandler The handler to be called when an inbound TCP connection is accepted.  The argument is the new {@link TCPInboundPipe} configured for communications
+     *                         on the accepted TCP connection.
+     * @param _onErrorHandler The optional (it may be {@code null} to use the default error handler) handler to be called if an error occurs while accepting a connection.  A
+     *                        message describing the problem, and possibly an exception causing the problem, are both passed to the handler.  The default error handler logs the
+     *                        error (with any exception), but otherwise does nothing.
+     * @param _rejectConnectionHandler The optional (it may be {@code null} to use the default reject connection handler) to be called after a TCP connection has been accepted, but
+     *                                 before the {@link #onAcceptHandler} is called.  If the reject connection handler returns {@code true}, the accepted connection is closed, and
+     *                                 the {@link #onAcceptHandler} is not called; otherwise the {@link #onAcceptHandler} is called with the new {@link TCPInboundPipe}.  The
+     *                                 default reject connection handler always returns {@code false}.
      * @return The outcome of the attempt.  If ok, the info contains the new {@link TCPListener} instance, configured and registered.  If not ok, it contains an explanatory
      * message and possibly an exception that caused the problem.
      */
-    public static Outcome<TCPListener> getInstance( final NetworkingEngine _engine, final TCPListenerConfig _config ) {
+    public static Outcome<TCPListener> getInstance( final NetworkingEngine _engine, IPAddress _bindToIP, int _bindToPort, Consumer<TCPInboundPipe> _onAcceptHandler,
+                                                    BiConsumer<String,Exception> _onErrorHandler, Function<TCPInboundPipe,Boolean> _rejectConnectionHandler ) {
 
         try {
+
+            // sanity checks...
+            if( isNull( _engine, _bindToIP, _onAcceptHandler ) )
+                throw new IllegalArgumentException( "_engine, _bindToIP, or _onAcceptHandler is null" );
+            if( (_bindToPort < 1) || (_bindToPort > 0xFFFF) )
+                throw new IllegalArgumentException( "_bindToPort is out of range (1-65535): " + _bindToPort );
+
             // attempt to get our instance...
-            return forgeTCPListener.ok( new TCPListener( _engine, _config ) );
+            return forgeTCPListener.ok( new TCPListener( _engine, _bindToIP, _bindToPort, _onAcceptHandler, _onErrorHandler, _rejectConnectionHandler ) );
         }
         catch( Exception _e ) {
             return forgeTCPListener.notOk( "Problem instantiating TCPListener: " + _e.getMessage(), _e );
         }
+    }
+
+
+    /**
+     * Attempts to create, configure, and register a new instance of this class.  The socket option {@code SO_REUSEADDR} is set to {@code true}, it's
+     * bound to the given local IP address and port, registered with the selector of the given {@link NetworkingEngine}, and calls the given handler when an inbound connection is
+     * accepted.  Both the on error handler and the reject connection handler will be the default handlers.
+     *
+     * @param _engine The {@link NetworkingEngine} instance to register this TCP listener with.
+     * @param _bindToIP The local IP address to bind this TCP listener to.  The IP address may be either IPv4 or IPv6 for a particular local network interface, or it may be the
+     *                  wildcard address for all local network interfaces.
+     * @param _bindToPort The local TCP port to bind this TCP listener to.
+     * @param _onAcceptHandler The handler to be called when an inbound TCP connection is accepted.  The argument is the new {@link TCPInboundPipe} configured for communications
+     *                         on the accepted TCP connection.
+     * @return The outcome of the attempt.  If ok, the info contains the new {@link TCPListener} instance, configured and registered.  If not ok, it contains an explanatory
+     * message and possibly an exception that caused the problem.
+     */
+    public static Outcome<TCPListener> getInstance( final NetworkingEngine _engine, IPAddress _bindToIP, int _bindToPort, Consumer<TCPInboundPipe> _onAcceptHandler ) {
+        return getInstance( _engine, _bindToIP, _bindToPort, _onAcceptHandler, null, null );
+    }
+
+
+    /**
+     * Attempts to create, configure, and register a new instance of this class.  The socket option {@code SO_REUSEADDR} is set to {@code true}, it's
+     * bound to the given local IP address and port, registered with the selector of the given {@link NetworkingEngine}, and calls the given handler when an inbound connection is
+     * accepted.  The reject connection handler will be the default handler.
+     *
+     * @param _engine The {@link NetworkingEngine} instance to register this TCP listener with.
+     * @param _bindToIP The local IP address to bind this TCP listener to.  The IP address may be either IPv4 or IPv6 for a particular local network interface, or it may be the
+     *                  wildcard address for all local network interfaces.
+     * @param _bindToPort The local TCP port to bind this TCP listener to.
+     * @param _onAcceptHandler The handler to be called when an inbound TCP connection is accepted.  The argument is the new {@link TCPInboundPipe} configured for communications
+     *                         on the accepted TCP connection.
+     * @param _onErrorHandler The optional (it may be {@code null} to use the default error handler) handler to be called if an error occurs while accepting a connection.  A
+     *                        message describing the problem, and possibly an exception causing the problem, are both passed to the handler.  The default error handler logs the
+     *                        error (with any exception), but otherwise does nothing.
+     * @return The outcome of the attempt.  If ok, the info contains the new {@link TCPListener} instance, configured and registered.  If not ok, it contains an explanatory
+     * message and possibly an exception that caused the problem.
+     */
+    public static Outcome<TCPListener> getInstance( final NetworkingEngine _engine, IPAddress _bindToIP, int _bindToPort,
+                                                    Consumer<TCPInboundPipe> _onAcceptHandler, BiConsumer<String,Exception> _onErrorHandler ) {
+        return getInstance( _engine, _bindToIP, _bindToPort, _onAcceptHandler, _onErrorHandler, null );
+    }
+
+
+    /**
+     * Attempts to create, configure, and register a new instance of this class.  The socket option {@code SO_REUSEADDR} is set to {@code true}, it's
+     * bound to the given local IP address and port, registered with the selector of the given {@link NetworkingEngine}, and calls the given handler when an inbound connection is
+     * accepted.  Both the on error handler and the reject connection handler will be the default handlers.
+     *
+     * @param _engine The {@link NetworkingEngine} instance to register this TCP listener with.
+     * @param _bindToIP The local IP address to bind this TCP listener to.  The IP address may be either IPv4 or IPv6 for a particular local network interface, or it may be the
+     *                  wildcard address for all local network interfaces.
+     * @param _bindToPort The local TCP port to bind this TCP listener to.
+     * @param _onAcceptHandler The handler to be called when an inbound TCP connection is accepted.  The argument is the new {@link TCPInboundPipe} configured for communications
+     *                         on the accepted TCP connection.
+     * @param _rejectConnectionHandler The optional (it may be {@code null} to use the default reject connection handler) to be called after a TCP connection has been accepted, but
+     *                                 before the {@link #onAcceptHandler} is called.  If the reject connection handler returns {@code true}, the accepted connection is closed, and
+     *                                 the {@link #onAcceptHandler} is not called; otherwise the {@link #onAcceptHandler} is called with the new {@link TCPInboundPipe}.  The
+     *                                 default reject connection handler always returns {@code false}.
+     * @return The outcome of the attempt.  If ok, the info contains the new {@link TCPListener} instance, configured and registered.  If not ok, it contains an explanatory
+     * message and possibly an exception that caused the problem.
+     */
+    public static Outcome<TCPListener> getInstance( final NetworkingEngine _engine, IPAddress _bindToIP, int _bindToPort,
+                                                    Consumer<TCPInboundPipe> _onAcceptHandler, Function<TCPInboundPipe,Boolean> _rejectConnectionHandler ) {
+        return getInstance( _engine, _bindToIP, _bindToPort, _onAcceptHandler, null, _rejectConnectionHandler );
     }
 
 
@@ -67,24 +153,30 @@ public class TCPListener {
      * accepted.
      *
      * @param _engine The {@link NetworkingEngine} instance to register this TCP listener with.
-     * @param _config The {@link TCPListenerConfig} for this instance.
+     * @param _bindToIP The local IP address to bind this TCP listener to.  The IP address may be either IPv4 or IPv6 for a particular local network interface, or it may be the
+     *                  wildcard address for all local network interfaces.
+     * @param _bindToPort The local TCP port to bind this TCP listener to.
+     * @param _onAcceptHandler The handler to be called when an inbound TCP connection is accepted.  The argument is the new {@link TCPInboundPipe} configured for communications
+     *                         on the accepted TCP connection.
+     * @param _onErrorHandler The optional (it may be {@code null} to use the default error handler) handler to be called if an error occurs while accepting a connection.  A
+     *                        message describing the problem, and possibly an exception causing the problem, are both passed to the handler.  The default error handler logs the
+     *                        error (with any exception), but otherwise does nothing.
+     * @param _rejectConnectionHandler The optional (it may be {@code null} to use the default reject connection handler) to be called after a TCP connection has been accepted, but
+     *                                 before the {@link #onAcceptHandler} is called.  If the reject connection handler returns {@code true}, the accepted connection is closed, and
+     *                                 the {@link #onAcceptHandler} is not called; otherwise the {@link #onAcceptHandler} is called with the new {@link TCPInboundPipe}.  The
+     *                                 default reject connection handler always returns {@code false}.
      * @throws IllegalArgumentException if any arguments are invalid.
      * @throws IOException if there is a problem opening or configuring the {@link ServerSocketChannel} for this instance, or in registering it with the network engine's selector.
      */
-    protected TCPListener( final NetworkingEngine _engine, final TCPListenerConfig _config ) throws IOException {
+    protected TCPListener( final NetworkingEngine _engine, IPAddress _bindToIP, int _bindToPort, Consumer<TCPInboundPipe> _onAcceptHandler,
+                           BiConsumer<String,Exception> _onErrorHandler, Function<TCPInboundPipe,Boolean> _rejectConnectionHandler ) throws IOException {
 
-        // sanity checks...
-        if( isNull( _engine, _config, _config.bindToIP(), _config.onAcceptHandler() ) )
-            throw new IllegalArgumentException( "_engine, _config, _config.bindToIP(), or _config.onAcceptHandler() is null" );
-        if( (_config.bindToPort() < 1) || (_config.bindToPort() > 0xFFFF) )
-            throw new IllegalArgumentException( "_config.bindToPort is out of range (1-65535): " + _config.bindToPort() );
-
-        ip                      = _config.bindToIP();
-        port                    = _config.bindToPort();
+        ip                      = _bindToIP;
+        port                    = _bindToPort;
         engine                  = _engine;
-        onAcceptHandler         = _config.onAcceptHandler();
-        onErrorHandler          = (_config.onErrorHandler() == null) ? this::defaultOnErrorHandler : _config.onErrorHandler();
-        rejectConnectionHandler = (_config.rejectConnectionHandler() == null) ? this::defaultRejectConnectionHandler : _config.rejectConnectionHandler();
+        onAcceptHandler         = _onAcceptHandler;
+        onErrorHandler          = (_onErrorHandler == null) ? this::defaultOnErrorHandler : _onErrorHandler;
+        rejectConnectionHandler = (_rejectConnectionHandler == null) ? this::defaultRejectConnectionHandler : _rejectConnectionHandler;
 
         // open and configure our server socket channel...
         channel = ServerSocketChannel.open();
@@ -215,6 +307,34 @@ public class TCPListener {
         catch( Exception _e ) {
             return forgeT.notOk( "Problem getting socket option: " + _e.getMessage(), _e );
         }
+    }
+
+
+    /**
+     * Returns a set containing all the socket options supported by this instance.
+     *
+     * @return A set containing all the socket options supported by this instance.
+     */
+    public Set<SocketOption<?>> getSupportedOptions() {
+        return channel.supportedOptions();
+    }
+
+
+    /**
+     * Close the channel.  This instance is not usable once it has been closed.
+     */
+    public void close() {
+
+        // do the actual close...
+        try {
+            channel.close();
+        }
+        catch( IOException _e ) {
+            // ignore...
+        }
+
+        // wake up the selector to make sure the close has immediate effect...
+        engine.wakeSelector();
     }
 
 

@@ -10,6 +10,7 @@ import java.net.StandardSocketOptions;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -369,7 +370,7 @@ public abstract class TCPPipe {
      */
     public Outcome<?> write( final ByteBuffer _writeBuffer ) {
         Waiter<Outcome<?>> waiter = new Waiter<>();
-        read( _writeBuffer, waiter::complete );
+        write( _writeBuffer, waiter::complete );
         return waiter.waitForCompletion();
     }
 
@@ -568,8 +569,31 @@ public abstract class TCPPipe {
     }
 
 
+    /**
+     * Returns a set containing all the socket options supported by this instance.
+     *
+     * @return A set containing all the socket options supported by this instance.
+     */
+    public Set<SocketOption<?>> getSupportedOptions() {
+        return channel.supportedOptions();
+    }
+
+
+    /**
+     * Close any active TCP connection associated with this pipe, and close the channel.  This instance is not usable once it has been closed.
+     */
     public void close() {
 
+        // do the actual close...
+        try {
+            channel.close();
+        }
+        catch( IOException _e ) {
+            // ignore...
+        }
+
+        // wake up the selector to make sure the close has immediate effect...
+        engine.wakeSelector();
     }
 
 
