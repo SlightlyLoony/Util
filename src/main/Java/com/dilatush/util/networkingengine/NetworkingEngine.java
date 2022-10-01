@@ -50,9 +50,10 @@ public final class NetworkingEngine {
     private static final Logger       LOGGER                    = getLogger();
     private static final int          DEFAULT_NUMBER_OF_THREADS = 3;   // number of threads in the default ScheduledExecutor...
 
-    private static final int ALL_INTERESTS     = SelectionKey.OP_READ | SelectionKey.OP_ACCEPT | SelectionKey.OP_WRITE | SelectionKey.OP_CONNECT;
-    private static final int NO_READ_INTEREST  = ALL_INTERESTS ^ SelectionKey.OP_READ;
-    private static final int NO_WRITE_INTEREST = ALL_INTERESTS ^ SelectionKey.OP_WRITE;
+    private static final int ALL_INTERESTS          = SelectionKey.OP_READ | SelectionKey.OP_ACCEPT | SelectionKey.OP_WRITE | SelectionKey.OP_CONNECT;
+    private static final int NO_READ_INTEREST       = ALL_INTERESTS ^ SelectionKey.OP_READ;
+    private static final int NO_WRITE_INTEREST      = ALL_INTERESTS ^ SelectionKey.OP_WRITE;
+    private static final int NO_ACCEPTABLE_INTEREST = ALL_INTERESTS ^ SelectionKey.OP_ACCEPT;
 
     private static final Outcome.Forge<NetworkingEngine> forgeNetworkingEngine = new Outcome.Forge<>();
 
@@ -228,8 +229,9 @@ public final class NetworkingEngine {
                     if( key.isValid() && key.isAcceptable() ) {
 
                         if( key.attachment() instanceof TCPListener listener ) {
-                            scheduledExecutor.execute( listener::onAcceptable );
+                            key.interestOpsAnd( NO_ACCEPTABLE_INTEREST );
                             LOGGER.finest( "Acceptable with TCPListener: " + listener );
+                            scheduledExecutor.execute( listener::onAcceptable );
                         }
                         else {
                             LOGGER.warning( "Acceptable interest with unknown attachment type: " + key.attachment().getClass().getName() );
@@ -245,8 +247,8 @@ public final class NetworkingEngine {
                     if( key.isValid() && key.isWritable() ) {
                         LOGGER.finest( "Writable" );
                         if( key.attachment() instanceof TCPPipe pipe ) {
-                            scheduledExecutor.execute( pipe::onWriteable );
                             key.interestOpsAnd( NO_WRITE_INTEREST );
+                            scheduledExecutor.execute( pipe::onWriteable );
                         }
                         else {
                             LOGGER.warning( "Writeable interest with unknown attachment type: " + key.attachment().getClass().getName() );
@@ -257,8 +259,8 @@ public final class NetworkingEngine {
                     if( key.isValid() && key.isReadable() ) {
                         LOGGER.finest( "Readable" );
                         if( key.attachment() instanceof TCPPipe pipe ) {
-                            scheduledExecutor.execute( pipe::onReadable );
                             key.interestOpsAnd( NO_READ_INTEREST );
+                            scheduledExecutor.execute( pipe::onReadable );
                         }
                         else {
                             LOGGER.warning( "Readable interest with unknown attachment type: " + key.attachment().getClass().getName() );

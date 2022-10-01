@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketOption;
 import java.net.StandardSocketOptions;
+import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.util.Set;
 import java.util.function.BiConsumer;
@@ -38,6 +39,7 @@ public class TCPListener {
     protected final Consumer<TCPInboundPipe>         onAcceptHandler;          // the handler that will be called when an inbound TCP connection is ready to be accepted...
     protected final BiConsumer<String, Exception>    onErrorHandler;           // the handler that will be called if an error occurs while accepting a TCP connection...
     protected final Function<TCPInboundPipe,Boolean> rejectConnectionHandler;  // the handler that returns {@code true} if the connection {@link TCPPipe} should be rejected...
+    protected final SelectionKey                     key;                      // the listener's key...
 
 
     /**
@@ -185,7 +187,7 @@ public class TCPListener {
         channel.configureBlocking( false );
 
         // register our channel with the selector, with ourselves as the attachment...
-        engine.register( channel, channel.validOps(), this );
+        key = engine.register( channel, SelectionKey.OP_ACCEPT, this );
     }
 
 
@@ -230,7 +232,9 @@ public class TCPListener {
      * @throws IOException if there was a problem accepting the connection.
      */
     protected Outcome<TCPInboundPipe> getPipe() throws IOException {
-        return TCPInboundPipe.getTCPInboundPipe( engine, channel.accept() );
+        var pipe = TCPInboundPipe.getTCPInboundPipe( engine, channel.accept() );
+        key.interestOpsOr( SelectionKey.OP_ACCEPT );
+        return pipe;
     }
 
 
