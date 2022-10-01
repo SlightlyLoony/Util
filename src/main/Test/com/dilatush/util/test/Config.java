@@ -1,4 +1,4 @@
-package com.dilatush.test;
+package com.dilatush.util.test;
 
 import com.dilatush.util.Outcome;
 import com.dilatush.util.config.AConfig;
