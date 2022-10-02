@@ -46,10 +46,10 @@ class NetworkingEngineTest {
         assertTrue( connectOutcome.msg().contains( "timed out" ) );
         pipe.close();
 
-        // get a new outbound pipe...
-        pipeOutcome = TCPOutboundPipe.getTCPOutboundPipe( engine, IPv4Address.WILDCARD, 0 );
-        assertTrue( pipeOutcome.ok(), "Problem creating TCPOutboundPipe: " + engineOutcome.msg() );
-        pipe = pipeOutcome.info();
+//        // get a new outbound pipe...
+//        pipeOutcome = TCPOutboundPipe.getTCPOutboundPipe( engine, IPv4Address.WILDCARD, 0 );
+//        assertTrue( pipeOutcome.ok(), "Problem creating TCPOutboundPipe: " + engineOutcome.msg() );
+//        pipe = pipeOutcome.info();
 
         // now try connecting it to a port that exists...
         connectOutcome = pipe.connect( IPv4Address.fromString( "13.52.82.44" ).info(), 80 );

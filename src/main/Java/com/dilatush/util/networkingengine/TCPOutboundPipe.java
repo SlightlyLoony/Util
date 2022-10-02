@@ -1,5 +1,6 @@
 package com.dilatush.util.networkingengine;
 
+import com.dilatush.util.General;
 import com.dilatush.util.Outcome;
 import com.dilatush.util.Waiter;
 import com.dilatush.util.ip.IPAddress;
@@ -72,7 +73,7 @@ public class TCPOutboundPipe extends TCPPipe {
             return forgeTCPOutboundPipe.ok( pipe );
         }
         catch( Exception _e ) {
-            return forgeTCPOutboundPipe.notOk( "Problem creating or configuring TCP outbound pipe: " + _e.getMessage(), _e );
+            return forgeTCPOutboundPipe.notOk( "Problem creating or configuring TCP outbound pipe: " + General.toString( _e ), _e );
         }
     }
 
@@ -145,7 +146,7 @@ public class TCPOutboundPipe extends TCPPipe {
             engine.schedule( this::checkConnection, Duration.ofMillis( finishConnectionIntervalMs ) );
         }
         catch( Exception _e ) {
-            postConnectionCompletion( completionHandler, forge.notOk( "Problem connecting: " + _e.getMessage(), _e ) );
+            postConnectionCompletion( completionHandler, forge.notOk( "Problem connecting: " + General.toString( _e ), _e ) );
         }
     }
 
@@ -193,7 +194,7 @@ public class TCPOutboundPipe extends TCPPipe {
 
         }
         catch( Exception _e ) {
-            postConnectionCompletion( completionHandler, forge.notOk( "Problem connecting: " + _e.getMessage(), _e ) );
+            postConnectionCompletion( completionHandler, forge.notOk( "Problem connecting: " + General.toString( _e ), _e ) );
         }
     }
 

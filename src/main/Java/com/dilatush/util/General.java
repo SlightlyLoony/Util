@@ -15,6 +15,7 @@ public class General {
      *
      * @param _path The path to the logging properties file.
      */
+    @SuppressWarnings( "unused" )
     public static void initLogging( final String _path ) {
         Checks.notEmpty( _path );
         System.getProperties().setProperty( "java.util.logging.config.file", _path );
@@ -42,6 +43,20 @@ public class General {
             result = Logger.getLogger( "DEFAULT" );
 
         return result;
+    }
+
+
+    /**
+     * Returns a string representing the given exception, using the exception's class name.  If the exception contains a message, it is appended.   This method is intended as
+     * a convenience during logging.  If the given exception is {@code null}, an empty string is returned.
+     *
+     * @param _e The exception to return a string for.
+     * @return A string representing the given exception.
+     */
+    public static String toString( final Exception _e ) {
+        if( _e == null ) return "";
+        if( _e.getMessage() == null ) return _e.getClass().getSimpleName();
+        return _e.getClass().getSimpleName() + " " +  _e.getMessage();
     }
 
 
