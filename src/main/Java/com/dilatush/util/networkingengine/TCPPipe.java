@@ -601,6 +601,9 @@ public abstract class TCPPipe {
     }
 
 
+    /**
+     * An internal exception type that is used for code convenience and is never thrown outside this class or its subclasses).
+     */
     protected static class TCPPipeException extends Exception {
         public TCPPipeException( final String message ) {
             super( message );
@@ -620,7 +623,6 @@ public abstract class TCPPipe {
 
     @Override
     public int hashCode() {
-
         return Objects.hash( channel, engine );
     }
 }

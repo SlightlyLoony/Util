@@ -6,7 +6,8 @@ import java.io.IOException;
 import java.nio.channels.SocketChannel;
 
 /**
- * Instances of this class (or its subclasses) allow network communications with the TCP protocol, for connections made through an instance of {@link TCPListener}.
+ * Instances of this class (or its subclasses) allow network communications with the TCP protocol, for connections made through an instance of {@link TCPListener}.  Instances
+ * of this class <i>can</i> directly instantiated, though it's not obvious why this would ever be done.
  */
 public class TCPInboundPipe extends TCPPipe {
 
@@ -23,7 +24,7 @@ public class TCPInboundPipe extends TCPPipe {
      * @return The outcome of attempting to create a new instance of this class.  If ok, the info contains the new instance.  If not ok, there is an explanatory message and
      * possibly the exception that caused the problem.
      */
-    /* package-private */ static Outcome<TCPInboundPipe> getTCPInboundPipe( final NetworkingEngine _engine, final SocketChannel _channel ) {
+    public static Outcome<TCPInboundPipe> getTCPInboundPipe( final NetworkingEngine _engine, final SocketChannel _channel ) {
 
         try {
 

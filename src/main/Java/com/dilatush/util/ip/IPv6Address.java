@@ -114,6 +114,17 @@ final public class IPv6Address extends IPAddress {
 
 
     /**
+     * Returns {@code true} if this address is the wildcard address.
+     *
+     * @return {@code true} if this address is the wildcard address.
+     */
+    @Override
+    public boolean isWildcard() {
+        return equals( WILDCARD );
+    }
+
+
+    /**
      * Returns {@code true} if this address is reserved for some purpose not otherwise detected.
      *
      * @return {@code true} if this address is reserved for some purpose not otherwise detected.

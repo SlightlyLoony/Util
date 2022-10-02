@@ -32,7 +32,7 @@ final public class IPv4Address extends IPAddress {
 
 
     /**
-     * Creates a new instance of this lass with the given 4 address bytes.  Note that this constructor is private, and that the argument is not validated.
+     * Creates a new instance of this class with the given 4 address bytes.  Note that this constructor is private, and that the argument is not validated.
      *
      * @param _address The 4 address bytes for this instance.
      */
@@ -90,6 +90,16 @@ final public class IPv4Address extends IPAddress {
     }
     private static final IPNetwork LINK_LOCAL  = new IPNetwork( IPv4Address.fromString( "169.254.0.0" ).info(),  16 );
 
+
+    /**
+     * Returns {@code true} if this address is the wildcard address.
+     *
+     * @return {@code true} if this address is the wildcard address.
+     */
+    @Override
+    public boolean isWildcard() {
+        return equals( WILDCARD );
+    }
 
     /**
      * Return {@code true} if this address has been reserved for documentation.

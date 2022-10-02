@@ -36,7 +36,7 @@ class NetworkingEngineTest {
         var engine = engineOutcome.info();
 
         // get an outbound pipe...
-        var pipeOutcome = TCPOutboundPipe.getTCPOutboundPipe( engine, IPv4Address.WILDCARD, 0 );
+        var pipeOutcome = TCPOutboundPipe.getTCPOutboundPipe( engine, IPv4Address.WILDCARD );
         assertTrue( pipeOutcome.ok(), "Problem creating TCPOutboundPipe: " + engineOutcome.msg() );
         var pipe = pipeOutcome.info();
 
@@ -46,10 +46,10 @@ class NetworkingEngineTest {
         assertTrue( connectOutcome.msg().contains( "timed out" ) );
         pipe.close();
 
-//        // get a new outbound pipe...
-//        pipeOutcome = TCPOutboundPipe.getTCPOutboundPipe( engine, IPv4Address.WILDCARD, 0 );
-//        assertTrue( pipeOutcome.ok(), "Problem creating TCPOutboundPipe: " + engineOutcome.msg() );
-//        pipe = pipeOutcome.info();
+        // get a new outbound pipe...
+        pipeOutcome = TCPOutboundPipe.getTCPOutboundPipe( engine, IPv4Address.WILDCARD );
+        assertTrue( pipeOutcome.ok(), "Problem creating TCPOutboundPipe: " + engineOutcome.msg() );
+        pipe = pipeOutcome.info();
 
         // now try connecting it to a port that exists...
         connectOutcome = pipe.connect( IPv4Address.fromString( "13.52.82.44" ).info(), 80 );
@@ -75,7 +75,7 @@ class NetworkingEngineTest {
         var listener = listenerOutcome.info();
 
         // get an outbound pipe and connect it...
-        var pipeOutcome = TCPOutboundPipe.getTCPOutboundPipe( engine, IPv4Address.LOOPBACK, 0 );
+        var pipeOutcome = TCPOutboundPipe.getTCPOutboundPipe( engine, IPv4Address.LOOPBACK );
         assertTrue( pipeOutcome.ok(), "Problem creating TCPOutboundPipe: " + engineOutcome.msg() );
         var pipe = pipeOutcome.info();
         var connectOutcome = pipe.connect( IPv4Address.LOOPBACK, 5555 );
@@ -140,7 +140,7 @@ class NetworkingEngineTest {
         var listener = listenerOutcome.info();
 
         // get an outbound pipe and connect it...
-        var pipeOutcome = TCPOutboundPipe.getTCPOutboundPipe( engine, IPv4Address.LOOPBACK, 0 );
+        var pipeOutcome = TCPOutboundPipe.getTCPOutboundPipe( engine, IPv4Address.LOOPBACK );
         assertTrue( pipeOutcome.ok(), "Problem creating TCPOutboundPipe: " + engineOutcome.msg() );
         var pipe = pipeOutcome.info();
         var connectOutcome = pipe.connect( IPv4Address.LOOPBACK, 5555 );
@@ -230,7 +230,7 @@ class NetworkingEngineTest {
         // get some outbound pipes and connect them...
         Set<TCPOutboundPipe> pipes = new HashSet<>();
         for( int i = 0; i < NUM_PIPES; i++ ) {
-            var pipeOutcome = TCPOutboundPipe.getTCPOutboundPipe( engine, IPv4Address.LOOPBACK, 0 );
+            var pipeOutcome = TCPOutboundPipe.getTCPOutboundPipe( engine, IPv4Address.LOOPBACK );
             assertTrue( pipeOutcome.ok(), "Problem creating TCPOutboundPipe: " + engineOutcome.msg() );
             var pipe = pipeOutcome.info();
             var connectOutcome = pipe.connect( IPv4Address.LOOPBACK, 5555 );

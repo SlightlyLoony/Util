@@ -170,6 +170,14 @@ abstract public class IPAddress implements Comparable<IPAddress> {
 
 
     /**
+     * Returns {@code true} if this address is the wildcard address.
+     *
+     * @return {@code true} if this address is the wildcard address.
+     */
+    public abstract boolean isWildcard();
+
+
+    /**
      * Return a new instance of {@link InetAddress} that contains the IP address in this instance, and no host name.
      *
      * @return A new instance of {@link InetAddress} that contains the IP address in this instance, and no host name.
