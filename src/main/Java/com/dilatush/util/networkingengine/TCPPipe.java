@@ -10,6 +10,7 @@ import java.net.StandardSocketOptions;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -266,7 +267,9 @@ public abstract class TCPPipe {
 
         try {
             // read what data we can...
-            bytesRead.addAndGet( channel.read( readBuffer ) );  // this can throw an IOException...
+            var bc = channel.read( readBuffer );  // this can throw an IOException...
+            bytesRead.addAndGet( bc );
+            LOGGER.finest( "Read " + bc + " bytes from " + this );
 
             // if the total bytes read is at least the minimum number of bytes, then we're done...
             if( bytesRead.get() >= minBytes ) {
@@ -402,6 +405,7 @@ public abstract class TCPPipe {
             // write what data we can, and set the mark...
             bytesWritten.set( channel.write( writeBuffer ) );  // this can throw an IOException...
             writeBuffer.mark();
+            LOGGER.finest( "Wrote " + bytesWritten.get() + " bytes to " + this );
 
             // if there are no bytes remaining, then we're done...
             if( !writeBuffer.hasRemaining() ) {
@@ -601,5 +605,22 @@ public abstract class TCPPipe {
         public TCPPipeException( final String message ) {
             super( message );
         }
+    }
+
+
+    @Override
+    public boolean equals( final Object _o ) {
+
+        if( this == _o ) return true;
+        if( _o == null || getClass() != _o.getClass() ) return false;
+        TCPPipe tcpPipe = (TCPPipe) _o;
+        return channel.equals( tcpPipe.channel ) && engine.equals( tcpPipe.engine );
+    }
+
+
+    @Override
+    public int hashCode() {
+
+        return Objects.hash( channel, engine );
     }
 }

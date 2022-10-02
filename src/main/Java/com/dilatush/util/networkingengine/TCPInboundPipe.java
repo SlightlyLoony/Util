@@ -59,6 +59,6 @@ public class TCPInboundPipe extends TCPPipe {
      * @return A string representing this instance.
      */
     public String toString() {
-        return "TCPInboundPipe: " + channel.socket().getInetAddress().getHostAddress() + ":" + channel.socket().getPort();
+        return "TCPInboundPipe: (" + channel.socket().getInetAddress().getHostAddress() + " port " + channel.socket().getPort() + ")";
     }
 }

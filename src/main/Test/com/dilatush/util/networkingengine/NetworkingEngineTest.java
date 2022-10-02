@@ -35,13 +35,26 @@ class NetworkingEngineTest {
         assertTrue( engineOutcome.ok(), "Problem creating NetworkingEngine: " + engineOutcome.msg() );
         var engine = engineOutcome.info();
 
-        // get an outbound pipe and connect it...
+        // get an outbound pipe...
         var pipeOutcome = TCPOutboundPipe.getTCPOutboundPipe( engine, IPv4Address.WILDCARD, 0 );
         assertTrue( pipeOutcome.ok(), "Problem creating TCPOutboundPipe: " + engineOutcome.msg() );
         var pipe = pipeOutcome.info();
+
+        // try connecting it to a non-existent port...
         var connectOutcome = pipe.connect( IPv4Address.fromString( "13.52.82.44" ).info(), 81 );
         assertTrue( connectOutcome.notOk(), "TCP connect did not report timeout " );
         assertTrue( connectOutcome.msg().contains( "timed out" ) );
+        pipe.close();
+
+        // get a new outbound pipe...
+        pipeOutcome = TCPOutboundPipe.getTCPOutboundPipe( engine, IPv4Address.WILDCARD, 0 );
+        assertTrue( pipeOutcome.ok(), "Problem creating TCPOutboundPipe: " + engineOutcome.msg() );
+        pipe = pipeOutcome.info();
+
+        // now try connecting it to a port that exists...
+        connectOutcome = pipe.connect( IPv4Address.fromString( "13.52.82.44" ).info(), 80 );
+        assertTrue( connectOutcome.ok(), "TCP connect did not connect: " + connectOutcome.msg() );
+
 
         pipe.close();
         engine.shutdown();

@@ -34,8 +34,9 @@ public class TCPOutboundPipe extends TCPPipe {
     private final AtomicBoolean connectFlag;
     private final int           finishConnectionTimeoutMs;
 
-    private int  finishConnectionIntervalMs;  // delay (in milliseconds) until the next finish connection check...
-    private long finishConnectionStartTime;   // when we started the finish connection process...
+    private int                  finishConnectionIntervalMs;  // delay (in milliseconds) until the next finish connection check...
+    private long                 finishConnectionStartTime;   // when we started the finish connection process...
+    private Consumer<Outcome<?>> completionHandler;           // the connection completion handler...
 
 
     /**
@@ -111,6 +112,7 @@ public class TCPOutboundPipe extends TCPPipe {
 
 
     // ip address may NOT be wildcard
+    // once this method is called, it can NOT be called ever again - make a new pipe to try another address or port...
     public void connect( final IPAddress _ip, final int _port, final Consumer<Outcome<?>> _completionHandler ) {
 
         // if there's no completion handler, then we really can't do anything at all...
@@ -122,11 +124,17 @@ public class TCPOutboundPipe extends TCPPipe {
             if( (_port < 1) || (_port > 0xFFFF) ) { postConnectionCompletion( _completionHandler, forge.notOk( "_port is out of range: " + _port ) ); return; }
 
             // make sure we're not trying to connect more than once...
-            if( connectFlag.getAndSet( true ) )   { postConnectionCompletion( _completionHandler, forge.notOk( "Connect has already been called" ) ); return; }
+            if( connectFlag.getAndSet( true ) ) {
+                postConnectionCompletion( _completionHandler, forge.notOk( "Connect has already been called" ) );  // using the given handler, as the stored one must be saved...
+                return;
+            }
+
+            // save our handler, 'cause we're going to be needing it later...
+            completionHandler = _completionHandler;
 
             // initiate the connection attempt, which may complete immediately...
             if( channel.connect( new InetSocketAddress( _ip.toInetAddress(), _port ) ) || channel.finishConnect() ) {
-                postConnectionCompletion( _completionHandler, forge.ok() );
+                postConnectionCompletion( completionHandler, forge.ok() );
                 LOGGER.finest( "Connected immediately to " + channel.socket().getInetAddress().getHostAddress() + ":" + channel.socket().getPort() );
                 return;
             }
@@ -134,10 +142,10 @@ public class TCPOutboundPipe extends TCPPipe {
             // we get here if the connection did not complete immediately, and so must be finished, which could take some time...
             finishConnectionStartTime = System.currentTimeMillis();     // record when we started the process of finishing the completion...
             finishConnectionIntervalMs = 1;  // we're going to check for connection completion in about a millisecond...
-            engine.schedule( () -> checkConnection( _completionHandler ), Duration.ofMillis( finishConnectionIntervalMs ) );
+            engine.schedule( this::checkConnection, Duration.ofMillis( finishConnectionIntervalMs ) );
         }
         catch( Exception _e ) {
-            _completionHandler.accept( forge.notOk( "Problem connecting: " + _e.getMessage(), _e ) );
+            postConnectionCompletion( completionHandler, forge.notOk( "Problem connecting: " + _e.getMessage(), _e ) );
         }
     }
 
@@ -154,7 +162,7 @@ public class TCPOutboundPipe extends TCPPipe {
     }
 
 
-    private void checkConnection( final Consumer<Outcome<?>> _completionHandler ) {
+    private void checkConnection() {
 
         try {
 
@@ -169,28 +177,28 @@ public class TCPOutboundPipe extends TCPPipe {
             // if we've finished connecting, send the notice...
             if( channel.finishConnect() ) {
                 LOGGER.finest( "Connected to " + channel.socket().getInetAddress().getHostAddress() + ":" + channel.socket().getPort() + " in " + finishConnectionTimeMs + "ms" );
-                _completionHandler.accept( forge.ok() );
+                postConnectionCompletion( completionHandler, forge.ok() );
             }
 
             // then see if we've run out of time...
             else if( finishConnectionTimeMs >= finishConnectionTimeoutMs ) {
                 LOGGER.finest( "Connection attempt timed out" );
-                _completionHandler.accept( forge.notOk( "Connection timed out: " + finishConnectionTimeMs + "ms" ) );
+                postConnectionCompletion( completionHandler, forge.notOk( "Connection timed out: " + finishConnectionTimeMs + "ms" ) );
             }
 
             // otherwise, schedule another check...
             else {
-                engine.schedule( () -> checkConnection( _completionHandler ), Duration.ofMillis( finishConnectionIntervalMs ) );
+                engine.schedule( this::checkConnection, Duration.ofMillis( finishConnectionIntervalMs ) );
             }
 
         }
         catch( Exception _e ) {
-            _completionHandler.accept( forge.notOk( "Problem connecting: " + _e.getMessage(), _e ) );
+            postConnectionCompletion( completionHandler, forge.notOk( "Problem connecting: " + _e.getMessage(), _e ) );
         }
     }
 
 
     public String toString() {
-        return "TCPOutboundPipe: " + channel.socket().getInetAddress().getHostAddress() + ":" + channel.socket().getPort();
+        return "TCPOutboundPipe: (" + channel.socket().getInetAddress().getHostAddress() + " port " + channel.socket().getPort() + ")";
     }
 }
