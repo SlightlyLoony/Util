@@ -262,6 +262,10 @@ public final class NetworkingEngine {
                             key.interestOpsAnd( NO_READ_INTEREST );
                             scheduledExecutor.execute( pipe::onReadable );
                         }
+                        else if( key.attachment() instanceof UDPServer server ) {
+                            key.interestOpsAnd( NO_READ_INTEREST );
+                            scheduledExecutor.execute( server::onReadable );
+                        }
                         else {
                             LOGGER.warning( "Readable interest with unknown attachment type: " + key.attachment().getClass().getName() );
                         }

@@ -170,8 +170,8 @@ public class TCPListener {
      * @throws IllegalArgumentException if any arguments are invalid.
      * @throws IOException if there is a problem opening or configuring the {@link ServerSocketChannel} for this instance, or in registering it with the network engine's selector.
      */
-    protected TCPListener( final NetworkingEngine _engine, IPAddress _bindToIP, int _bindToPort, Consumer<TCPInboundPipe> _onAcceptHandler,
-                           BiConsumer<String,Exception> _onErrorHandler, Function<TCPInboundPipe,Boolean> _rejectConnectionHandler ) throws IOException {
+    protected TCPListener( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort, final Consumer<TCPInboundPipe> _onAcceptHandler,
+                           final BiConsumer<String,Exception> _onErrorHandler, final Function<TCPInboundPipe,Boolean> _rejectConnectionHandler ) throws IOException {
 
         ip                      = _bindToIP;
         port                    = _bindToPort;

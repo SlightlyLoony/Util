@@ -101,13 +101,11 @@ public abstract class TCPPipe {
      * copied into the given read buffer.  The {@code _onReadCompleteHandler} is called when the read operation completes, whether that operation completed normally, was
      * terminated because of an error, or was canceled.  Note that the {@code _onReadCompleteHandler} will always be called in one of the threads from the associated
      * {@link NetworkingEngine}'s {@link ScheduledExecutor}, never in the thread that calls this method.</p>
-     * <p>If the given read buffer's position is zero and its limit is equal to its capacity (in other words, the buffer appears to be cleared), then the read buffer is used as is.
-     * However, if the position is not zero, or the limit is less than the capacity, then the buffer is assumed to have valid (but not processed) data between its position and its
-     * limit.  In that case, the buffer will be compacted (i.e., {@link ByteBuffer#compact()} will be called) before reading, so those unprocessed bytes will be the first bytes in
-     * the buffer after the read.  When the read operation is complete, the buffer is flipped (i.e., {@link ByteBuffer#flip()} is called), so the buffer's position upon completion
-     * will always be zero, and its limit will indicate the end of the data previously unprocessed along with the network data just read.  Because the read buffer may have already
-     * contained data when this method is called, the number of bytes in the read buffer upon completion may be greater than the number of bytes actually read.  If the number of
-     * bytes actually read is needed, the {@link #getBytesRead()} method can be used (upon the read operation completing) to obtain that value.</p>
+     * <p>Data is read into the read buffer starting at the buffer's current position.  When the read operation is complete, the buffer is flipped (i.e., {@link ByteBuffer#flip()}
+     * is called), so the buffer's position upon completion will always be zero, and its limit will indicate the end of the data previously unprocessed along with the network data
+     * just read.  Because the read buffer may have already contained data when this method is called, the number of bytes in the read buffer upon completion may be greater than
+     * the number of bytes actually read.  If the number of bytes actually read is needed, the {@link #getBytesRead()} method can be used (upon the read operation completing) to
+     * obtain that value.</p>
      * <p>The number of bytes that will actually be read into the read buffer depends on a number of factors, not all of which are predictable or controllable.  In general, the
      * read operation will complete after reading the contents of a received TCP packet <i>and</i> the total number of bytes read is at least equal to the minimum number of bytes
      * specified in {@code _minBytes}.  If {@code _minBytes} is 1, that means the read operation will complete after the first successful read operation - which could be part of
@@ -138,9 +136,7 @@ public abstract class TCPPipe {
             // make sure we haven't already got a read operation in progress...
             if( readInProgress.getAndSet( true ) ) throw new TCPPipeException( "Read operation already in progress" );
 
-            // ready the read buffer and squirrel away our read state...
-            if( (_readBuffer.position() > 0) || (_readBuffer.limit() < _readBuffer.capacity()) )
-                _readBuffer.compact();
+            // squirrel away our read state...
             minBytes              = _minBytes;
             readBuffer            = _readBuffer;
             onReadCompleteHandler = _onReadCompleteHandler;
@@ -160,13 +156,11 @@ public abstract class TCPPipe {
      * copied into the given read buffer.  The {@code _onReadCompleteHandler} is called when the read operation completes, whether that operation completed normally, was
      * terminated because of an error, or was canceled.  Note that the {@code _onReadCompleteHandler} will always be called in one of the threads from the associated
      * {@link NetworkingEngine}'s {@link ScheduledExecutor}, never in the thread that calls this method.</p>
-     * <p>If the given read buffer's position is zero and its limit is equal to its capacity (in other words, the buffer appears to be cleared), then the read buffer is used as is.
-     * However, if the position is not zero, or the limit is less than the capacity, then the buffer is assumed to have valid (but not processed) data between its position and its
-     * limit.  In that case, the buffer will be compacted (i.e., {@link ByteBuffer#compact()} will be called) before reading, so those unprocessed bytes will be the first bytes in
-     * the buffer after the read.  When the read operation is complete, the buffer is flipped (i.e., {@link ByteBuffer#flip()} is called), so the buffer's position upon completion
-     * will always be zero, and its limit will indicate the end of the data previously unprocessed along with the network data just read.  Because the read buffer may have already
-     * contained data when this method is called, the number of bytes in the read buffer upon completion may be greater than the number of bytes actually read.  If the number of
-     * bytes actually read is needed, the {@link #getBytesRead()} method can be used (upon the read operation completing) to obtain that value.</p>
+     * <p>Data is read into the read buffer starting at the buffer's current position.  When the read operation is complete, the buffer is flipped (i.e., {@link ByteBuffer#flip()}
+     * is called), so the buffer's position upon completion will always be zero, and its limit will indicate the end of the data previously unprocessed along with the network data
+     * just read.  Because the read buffer may have already contained data when this method is called, the number of bytes in the read buffer upon completion may be greater than
+     * the number of bytes actually read.  If the number of bytes actually read is needed, the {@link #getBytesRead()} method can be used (upon the read operation completing) to
+     * obtain that value.</p>
      * <p>The number of bytes that will actually be read into the read buffer depends on a number of factors, not all of which are predictable or controllable.  In general, the
      * read operation will complete after reading the contents of a received TCP packet <i>and</i> the at least one byte has been read from the network.  That means the read
      * operation will complete after the first successful read operation - which could be part of a packet, exactly one packet, or multiple packets with the last one possibly not
@@ -187,13 +181,11 @@ public abstract class TCPPipe {
     /**
      * <p>Initiates a synchronous (blocking) operation to read network data from the TCP connection represented by this instance.  The data is received from the network and
      * copied into the given read buffer.  This method will return when the operation is complete, whether it completed normally, with an error, or was canceled</p>
-     * <p>If the given read buffer's position is zero and its limit is equal to its capacity (in other words, the buffer appears to be cleared), then the read buffer is used as is.
-     * However, if the position is not zero, or the limit is less than the capacity, then the buffer is assumed to have valid (but not processed) data between its position and its
-     * limit.  In that case, the buffer will be compacted (i.e., {@link ByteBuffer#compact()} will be called) before reading, so those unprocessed bytes will be the first bytes in
-     * the buffer after the read.  When the read operation is complete, the buffer is flipped (i.e., {@link ByteBuffer#flip()} is called), so the buffer's position upon completion
-     * will always be zero, and its limit will indicate the end of the data previously unprocessed along with the network data just read.  Because the read buffer may have already
-     * contained data when this method is called, the number of bytes in the read buffer upon completion may be greater than the number of bytes actually read.  If the number of
-     * bytes actually read is needed, the {@link #getBytesRead()} method can be used (upon the read operation completing) to obtain that value.</p>
+     * <p>Data is read into the read buffer starting at the buffer's current position.  When the read operation is complete, the buffer is flipped (i.e., {@link ByteBuffer#flip()}
+     * is called), so the buffer's position upon completion will always be zero, and its limit will indicate the end of the data previously unprocessed along with the network data
+     * just read.  Because the read buffer may have already contained data when this method is called, the number of bytes in the read buffer upon completion may be greater than
+     * the number of bytes actually read.  If the number of bytes actually read is needed, the {@link #getBytesRead()} method can be used (upon the read operation completing) to
+     * obtain that value.</p>
      * <p>The number of bytes that will actually be read into the read buffer depends on a number of factors, not all of which are predictable or controllable.  In general, the
      * read operation will complete after reading the contents of a received TCP packet <i>and</i> the total number of bytes read is at least equal to the minimum number of bytes
      * specified in {@code _minBytes}.  If {@code _minBytes} is 1, that means the read operation will complete after the first successful read operation - which could be part of
@@ -219,13 +211,11 @@ public abstract class TCPPipe {
     /**
      * <p>Initiates a synchronous (blocking) operation to read network data from the TCP connection represented by this instance.  The data is received from the network and
      * copied into the given read buffer.  This method will return when the operation is complete, whether it completed normally, with an error, or was canceled</p>
-     * <p>If the given read buffer's position is zero and its limit is equal to its capacity (in other words, the buffer appears to be cleared), then the read buffer is used as is.
-     * However, if the position is not zero, or the limit is less than the capacity, then the buffer is assumed to have valid (but not processed) data between its position and its
-     * limit.  In that case, the buffer will be compacted (i.e., {@link ByteBuffer#compact()} will be called) before reading, so those unprocessed bytes will be the first bytes in
-     * the buffer after the read.  When the read operation is complete, the buffer is flipped (i.e., {@link ByteBuffer#flip()} is called), so the buffer's position upon completion
-     * will always be zero, and its limit will indicate the end of the data previously unprocessed along with the network data just read.  Because the read buffer may have already
-     * contained data when this method is called, the number of bytes in the read buffer upon completion may be greater than the number of bytes actually read.  If the number of
-     * bytes actually read is needed, the {@link #getBytesRead()} method can be used (upon the read operation completing) to obtain that value.</p>
+     * <p>Data is read into the read buffer starting at the buffer's current position.  When the read operation is complete, the buffer is flipped (i.e., {@link ByteBuffer#flip()}
+     * is called), so the buffer's position upon completion will always be zero, and its limit will indicate the end of the data previously unprocessed along with the network data
+     * just read.  Because the read buffer may have already contained data when this method is called, the number of bytes in the read buffer upon completion may be greater than
+     * the number of bytes actually read.  If the number of bytes actually read is needed, the {@link #getBytesRead()} method can be used (upon the read operation completing) to
+     * obtain that value.</p>
      * <p>The number of bytes that will actually be read into the read buffer depends on a number of factors, not all of which are predictable or controllable.  In general, the
      * read operation will complete after reading the contents of a received TCP packet <i>and</i> the at least one byte has been read from the network.  That means the read
      * operation will complete after the first successful read operation - which could be part of a packet, exactly one packet, or multiple packets with the last one possibly not
