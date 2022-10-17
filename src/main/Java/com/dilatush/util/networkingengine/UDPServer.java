@@ -32,7 +32,7 @@ public class UDPServer {
 
     protected final NetworkingEngine             engine;
     protected final DatagramChannel              channel;
-    protected final Consumer<Datagram>           onReceiptHandler;
+    protected final Consumer<ReceivedDatagram>           onReceiptHandler;
     protected final int                          maxDatagramBytes;
     protected final BiConsumer<String,Exception> onErrorHandler;
     protected final SelectionKey                 key;
@@ -58,7 +58,7 @@ public class UDPServer {
      * @return The outcome of the attempt.  If ok, the info contains the new {@link UDPServer} instance, configured and registered.  If not ok, it contains an explanatory
      * message and possibly an exception that caused the problem.
      */
-    public static Outcome<UDPServer> getInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort, final Consumer<Datagram> _onReceiptHandler,
+    public static Outcome<UDPServer> getInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort, final Consumer<ReceivedDatagram> _onReceiptHandler,
                                                   final int _maxDatagramBytes, BiConsumer<String,Exception> _onErrorHandler) {
 
         try {
@@ -106,7 +106,7 @@ public class UDPServer {
      * @param _onErrorHandler The handler to call when an error occurs.
      * @throws IOException on any I/O error.
      */
-    protected UDPServer( final NetworkingEngine _engine, final DatagramChannel _channel, final Consumer<Datagram> _onReceiptHandler,
+    protected UDPServer( final NetworkingEngine _engine, final DatagramChannel _channel, final Consumer<ReceivedDatagram> _onReceiptHandler,
                          final int _maxDatagramBytes, BiConsumer<String,Exception> _onErrorHandler ) throws IOException {
 
         // sanity checks...
@@ -150,7 +150,7 @@ public class UDPServer {
 
                 // make our datagram...
                 readBuffer.flip();
-                var datagram = new Datagram( readBuffer, socket, truncated );
+                var datagram = new ReceivedDatagram( readBuffer, socket, truncated );
 
                 // call the on receipt handler in another thread...
                 engine.execute( () -> onReceiptHandler.accept( datagram ) );
@@ -168,14 +168,14 @@ public class UDPServer {
 
 
     /**
-     * Initiate sending the given {@link Datagram}.  The remaining bytes in the datagram's data (that is, the bytes between the data {@link ByteBuffer}'s position and its limit)
+     * Initiate sending the given {@link ReceivedDatagram}.  The remaining bytes in the datagram's data (that is, the bytes between the data {@link ByteBuffer}'s position and its limit)
      * will be written to the network and sent to the remote socket address in the datagram.  When the write is complete, the datagram's data buffer will be cleared and the
      * on send completion handler will be called with the outcome.
      *
-     * @param _datagram The {@link Datagram} to send.
+     * @param _datagram The {@link ReceivedDatagram} to send.
      * @param _onSendCompletionHandler The handler to call upon write completion.
      */
-    public void send( final Datagram _datagram, final Consumer<Outcome<?>> _onSendCompletionHandler ) {
+    public void send( final ReceivedDatagram _datagram, final Consumer<Outcome<?>> _onSendCompletionHandler ) {
 
     }
 
