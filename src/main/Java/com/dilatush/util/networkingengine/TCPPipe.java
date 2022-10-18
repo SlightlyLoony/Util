@@ -3,8 +3,10 @@ package com.dilatush.util.networkingengine;
 import com.dilatush.util.Outcome;
 import com.dilatush.util.ScheduledExecutor;
 import com.dilatush.util.Waiter;
+import com.dilatush.util.ip.IPAddress;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.SocketOption;
 import java.net.StandardSocketOptions;
 import java.nio.ByteBuffer;
@@ -41,6 +43,8 @@ public abstract class TCPPipe {
     protected final SocketChannel    channel;                 // the channel for the TCP connection this instance abstracts...
     protected final NetworkingEngine engine;                  // the networking engine whose Selector our channel's SelectionKey is registered with...
     protected final SelectionKey     key;                     // the SelectionKey for our channel...
+    protected final IPAddress        remoteIP;                // the IP address of the remote side of this connection...
+    protected final int              remotePort;              // the TCP port of the remote side of this connection...
 
     private final AtomicBoolean    readInProgress;          // true when a read operation is in progress...
     private final AtomicBoolean    writeInProgress;         // true when a write operation is in progress...
@@ -80,6 +84,10 @@ public abstract class TCPPipe {
         channel.configureBlocking( false );
         channel.setOption( StandardSocketOptions.SO_REUSEADDR, true );  // reuse connections in TIME_WAIT (e.g., after close and reconnect)...
         channel.setOption( StandardSocketOptions.SO_KEEPALIVE, true );  // enable keep-alive packets on this connection (mainly to detect broken connections)...
+
+        // save the remote IP and port...
+        remoteIP   = IPAddress.fromInetAddress( ((InetSocketAddress)channel.getRemoteAddress()).getAddress() );
+        remotePort = ((InetSocketAddress)channel.getRemoteAddress()).getPort();
 
         // attempt to register a key for this instance with our engine, with (for now) no interest in any notifications...
         key                       = engine.register( channel, NO_INTEREST, this );
@@ -351,7 +359,7 @@ public abstract class TCPPipe {
 
 
     /**
-     * <p>Initiates a synchronous (blocking) operation to write network data to the TCP connection represented by this instance, from the given write buffer.  This method returns
+     * <p>Attempts a synchronous (blocking) operation to write network data to the TCP connection represented by this instance, from the given write buffer.  This method returns
      * when the write operation completes, whether that operation completed normally, was terminated because of an error, or was canceled.</p>
      * <p>The data remaining in the given write buffer (i.e., the bytes between the position and the limit) will be written to the network.  When the write operation completes
      * normally, the write buffer will be cleared.  Otherwise, the buffer's position is set to the first byte that was <i>not</i> successfully written.  Note that this is not
@@ -360,6 +368,8 @@ public abstract class TCPPipe {
      *
      * @param _writeBuffer The write buffer to write network data from.  While the write operation is in  progress (i.e, before the {@code _onWriteCompleteHandler} is called),
      *                     the write buffer must not be manipulated other than by this instance - hands off the write buffer!
+     * @return The outcome of the attempt.  If ok, the datagram was successfully sent.  If not ok, then there is an explanatory message and possibly the exception that caused
+     * the problem.
      */
     public Outcome<?> write( final ByteBuffer _writeBuffer ) {
         Waiter<Outcome<?>> waiter = new Waiter<>();
@@ -588,6 +598,16 @@ public abstract class TCPPipe {
 
         // wake up the selector to make sure the close has immediate effect...
         engine.wakeSelector();
+    }
+
+
+    public IPAddress getRemoteIP() {
+        return remoteIP;
+    }
+
+
+    public int getRemotePort() {
+        return remotePort;
     }
 
 

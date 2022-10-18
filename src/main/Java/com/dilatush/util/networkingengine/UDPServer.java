@@ -13,7 +13,6 @@ import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static com.dilatush.util.General.getLogger;
@@ -24,24 +23,21 @@ import static com.dilatush.util.General.isNull;
  * each datagram is received.
  */
 @SuppressWarnings( "unused" )
-public class UDPServer {
+public class UDPServer extends UDPBase {
 
     private static final Outcome.Forge<UDPServer> forgeUDPServer = new Outcome.Forge<>();
+
     private static final Logger LOGGER = getLogger();
 
 
-    protected final NetworkingEngine             engine;
-    protected final DatagramChannel              channel;
-    protected final Consumer<ReceivedDatagram>           onReceiptHandler;
-    protected final int                          maxDatagramBytes;
-    protected final BiConsumer<String,Exception> onErrorHandler;
-    protected final SelectionKey                 key;
+    protected final Consumer<InboundDatagram>    onReceiptHandler;
+    protected final SourceFilter                 sourceFilter;
 
 
     /**
      * Attempts to create a new instance of {@link UDPServer}, registered to the given networking engine, bound to the network interface with the given IP address and the given
-     * UDP port, using the given handler upon the receipt of a datagram, and (optionally) the given handler upon an error.  The datagrams received may be any size at all, but any
-     * bytes greater than the given max datagram bytes will be discarded, and the received datagram marked as truncated.
+     * UDP port, using the given handler upon the receipt of a datagram that is accepted by the (optional) source filter, and (optionally) the given handler upon an error.  The
+     * datagrams received may be any size at all, but any bytes greater than the given max datagram bytes will be discarded, and the received datagram marked as truncated.
      *
      * @param _engine The {@link NetworkingEngine} instance to register this UDP server with.
      * @param _bindToIP The local IP address to bind this UDP server to.  The IP address may be either IPv4 or IPv6 for a particular local network interface, or it may be the
@@ -55,11 +51,13 @@ public class UDPServer {
      * @param _onErrorHandler The optional (it may be {@code null} to use the default error handler) handler to be called if an error occurs while accepting a datagram.  A
      *                        message describing the problem, and possibly an exception causing the problem, are both passed to the handler.  The default error handler logs the
      *                        error (with any exception), but otherwise does nothing.
+     * @param _sourceFilter The {@link SourceFilter} to use for filtering incoming UDP datagrams, or {@code null} to use the default source filter (accepts all).
      * @return The outcome of the attempt.  If ok, the info contains the new {@link UDPServer} instance, configured and registered.  If not ok, it contains an explanatory
      * message and possibly an exception that caused the problem.
      */
-    public static Outcome<UDPServer> getInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort, final Consumer<ReceivedDatagram> _onReceiptHandler,
-                                                  final int _maxDatagramBytes, BiConsumer<String,Exception> _onErrorHandler) {
+    public static Outcome<UDPServer> getInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort,
+                                                  final Consumer<InboundDatagram> _onReceiptHandler, final int _maxDatagramBytes, BiConsumer<String,Exception> _onErrorHandler,
+                                                  final SourceFilter _sourceFilter ) {
 
         try {
             // sanity checks...
@@ -73,7 +71,7 @@ public class UDPServer {
             channel.bind( socketAddress );
 
             // time to actually create the UDP server...
-            return forgeUDPServer.ok( new UDPServer( _engine, channel, _onReceiptHandler, _maxDatagramBytes, _onErrorHandler ) );
+            return forgeUDPServer.ok( new UDPServer( _engine, channel, _onReceiptHandler, _maxDatagramBytes, _onErrorHandler, _sourceFilter ) );
         }
         catch( IOException _e ) {
             return forgeUDPServer.notOk( "I/O problem: " + _e.getMessage(), _e );
@@ -93,10 +91,10 @@ public class UDPServer {
 
     /**
      * <p>Creates a new instance of this class that will be associated with the given networking engine, and will use the given {@link DatagramChannel}, which must be bound to
-     * the interface(s) and port that this instance will listen for datagrams on.  The new instance will be able to receive datagrams from any source, and these datagrams may be
-     * any length from one byte to the given maximum number of datagram bytes.  If the received datagram is longer than the given maximum number of bytes, then the truncated flag
-     * is set in the datagram.  The on receipt handler is called with each datagram received, including any truncated datagrams.  The on error handler is called if any errors
-     * occur.  The server is started and ready to receive datagrams as soon as it is instantiated.</p>
+     * the interface(s) and port that this instance will listen for datagrams on.  The new instance will be able to receive datagrams from any source accepted by the (optional)
+     * source filter, and these datagrams may be any length from one byte to the given maximum number of datagram bytes.  If the received datagram is longer than the given maximum
+     * number of bytes, then the truncated flag is set in the datagram.  The on receipt handler is called with each datagram received, including any truncated datagrams.  The on
+     * error handler is called if any errors occur.  The server is started and ready to receive datagrams as soon as it is instantiated.</p>
      *<p>Note that this constructor should not be invoked directly.  Instead, get a new instance of this class through one of the factory methods in this class.</p>
      *
      * @param _engine The {@link NetworkingEngine} to associate the new instance with.
@@ -104,28 +102,24 @@ public class UDPServer {
      * @param _onReceiptHandler The handler to call when a datagram is received.
      * @param _maxDatagramBytes The maximum number of bytes to receive in a datagram (bytes more than this are truncated).
      * @param _onErrorHandler The handler to call when an error occurs.
+     * @param _sourceFilter The {@link SourceFilter} to use for filtering incoming UDP datagrams, or {@code null} to use the default source filter (accepts all).
      * @throws IOException on any I/O error.
      */
-    protected UDPServer( final NetworkingEngine _engine, final DatagramChannel _channel, final Consumer<ReceivedDatagram> _onReceiptHandler,
-                         final int _maxDatagramBytes, BiConsumer<String,Exception> _onErrorHandler ) throws IOException {
+    protected UDPServer( final NetworkingEngine _engine, final DatagramChannel _channel, final Consumer<InboundDatagram> _onReceiptHandler,
+                         final int _maxDatagramBytes, final BiConsumer<String,Exception> _onErrorHandler, final SourceFilter _sourceFilter ) throws IOException {
+        super( _engine, _channel, _maxDatagramBytes, _onErrorHandler );
 
         // sanity checks...
-        if( isNull( _engine, _channel, _onReceiptHandler ) )
-            throw new IllegalArgumentException( "_engine, _channel, or _onReceiptHandler is null" );
-        if( (_maxDatagramBytes < 1) || (_maxDatagramBytes > 65535) )
-            throw new IllegalArgumentException( "_maxDatagramBytes is out of range (1..65535): " + _maxDatagramBytes );
+        if( isNull( _onReceiptHandler ) )
+            throw new IllegalArgumentException( "_onReceiptHandler is null" );
         if( _channel.isConnected() )
             throw new IllegalArgumentException( "_channel is connected; UDP servers may not be connected" );
         if( _channel.getLocalAddress() == null )
             throw new IllegalArgumentException( "_channel is not bound; UDP servers must be bound" );
 
         // squirrel it all away...
-        engine           = _engine;
-        channel          = _channel;
         onReceiptHandler = _onReceiptHandler;
-        maxDatagramBytes = _maxDatagramBytes;
-        onErrorHandler   = (_onErrorHandler == null) ? this::defaultOnErrorHandler : _onErrorHandler;
-        key              = _engine.register( channel, SelectionKey.OP_READ, this );
+        sourceFilter     = (_sourceFilter != null) ? _sourceFilter : (ip, port) -> true;
     }
 
 
@@ -141,19 +135,23 @@ public class UDPServer {
             // if we get a non-null for the socket address, we got a datagram...
             if( socket != null ) {
 
-                // handle the case of the datagram being truncated...
-                var truncated = false;
-                if( readBuffer.limit() == readBuffer.capacity() ) {
-                    truncated = true;
-                    readBuffer.limit( readBuffer.limit() - 1 );   // getting rid of the extra truncation-detection byte...
+                // if this datagram is accepted by the source filter, call our on receipt handler...
+                if( sourceFilter.accept( IPAddress.fromInetAddress( socket.getAddress() ), socket.getPort() ) ) {
+
+                    // handle the case of the datagram being truncated...
+                    var truncated = false;
+                    if( readBuffer.limit() == readBuffer.capacity() ) {
+                        truncated = true;
+                        readBuffer.limit( readBuffer.limit() - 1 );   // getting rid of the extra truncation-detection byte...
+                    }
+
+                    // make our datagram...
+                    readBuffer.flip();
+                    var datagram = new InboundDatagram( readBuffer, socket, truncated );
+
+                    // call the on receipt handler in another thread...
+                    engine.execute( () -> onReceiptHandler.accept( datagram ) );
                 }
-
-                // make our datagram...
-                readBuffer.flip();
-                var datagram = new ReceivedDatagram( readBuffer, socket, truncated );
-
-                // call the on receipt handler in another thread...
-                engine.execute( () -> onReceiptHandler.accept( datagram ) );
             }
         }
         catch( Exception _e ) {
@@ -164,29 +162,5 @@ public class UDPServer {
             // re-enable read interest on our selection key...
             key.interestOpsOr( SelectionKey.OP_READ );
         }
-    }
-
-
-    /**
-     * Initiate sending the given {@link ReceivedDatagram}.  The remaining bytes in the datagram's data (that is, the bytes between the data {@link ByteBuffer}'s position and its limit)
-     * will be written to the network and sent to the remote socket address in the datagram.  When the write is complete, the datagram's data buffer will be cleared and the
-     * on send completion handler will be called with the outcome.
-     *
-     * @param _datagram The {@link ReceivedDatagram} to send.
-     * @param _onSendCompletionHandler The handler to call upon write completion.
-     */
-    public void send( final ReceivedDatagram _datagram, final Consumer<Outcome<?>> _onSendCompletionHandler ) {
-
-    }
-
-
-    /**
-     * The default {@code onErrorHandler}, which just logs the error as a warning.
-     *
-     * @param _message A message explaining the error.
-     * @param _e The (optional) exception that caused the error.
-     */
-    private void defaultOnErrorHandler( final String _message, final Exception _e ) {
-        LOGGER.log( Level.WARNING, _message, _e );
     }
 }

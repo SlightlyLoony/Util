@@ -15,7 +15,7 @@ import static com.dilatush.util.General.isNull;
  * (meaning that some bytes were discarded because the received datagram was larger than the maximum size), and the IP address and UDP port of the source of the datagram.
  */
 @SuppressWarnings( "unused" )
-public class ReceivedDatagram {
+public class InboundDatagram {
 
     private final ByteBuffer data;          // the bytes contained in the received datagram...
     private final IPAddress  ipAddress;     // the IP address of the datagram's source...
@@ -32,7 +32,7 @@ public class ReceivedDatagram {
      * @param _remoteAddress The socket address of the source of this datagram.
      * @param _truncated A flag that is {@code true} if the data in this datagram has been truncated.
      */
-    public ReceivedDatagram( ByteBuffer _data, InetSocketAddress _remoteAddress, boolean _truncated ) {
+    public InboundDatagram( ByteBuffer _data, InetSocketAddress _remoteAddress, boolean _truncated ) {
 
         // sanity checks...
         if( isNull( _data, _remoteAddress ) )
@@ -117,7 +117,7 @@ public class ReceivedDatagram {
 
         if( this == _o ) return true;
         if( _o == null || getClass() != _o.getClass() ) return false;
-        ReceivedDatagram that = (ReceivedDatagram) _o;
+        InboundDatagram that = (InboundDatagram) _o;
         return port == that.port && truncated == that.truncated && data.equals( that.data ) && ipAddress.equals( that.ipAddress ) && whenReceived.equals( that.whenReceived );
     }
 

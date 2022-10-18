@@ -250,6 +250,10 @@ public final class NetworkingEngine {
                             key.interestOpsAnd( NO_WRITE_INTEREST );
                             scheduledExecutor.execute( pipe::onWriteable );
                         }
+                        else if( key.attachment() instanceof UDPBase udpBase ) {
+                            key.interestOpsAnd( NO_WRITE_INTEREST );
+                            scheduledExecutor.execute( udpBase::onWriteable );
+                        }
                         else {
                             LOGGER.warning( "Writeable interest with unknown attachment type: " + key.attachment().getClass().getName() );
                         }
@@ -262,9 +266,9 @@ public final class NetworkingEngine {
                             key.interestOpsAnd( NO_READ_INTEREST );
                             scheduledExecutor.execute( pipe::onReadable );
                         }
-                        else if( key.attachment() instanceof UDPServer server ) {
+                        else if( key.attachment() instanceof UDPBase udpBase ) {
                             key.interestOpsAnd( NO_READ_INTEREST );
-                            scheduledExecutor.execute( server::onReadable );
+                            scheduledExecutor.execute( udpBase::onReadable );
                         }
                         else {
                             LOGGER.warning( "Readable interest with unknown attachment type: " + key.attachment().getClass().getName() );
