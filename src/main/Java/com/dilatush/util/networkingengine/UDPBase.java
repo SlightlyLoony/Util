@@ -3,14 +3,14 @@ package com.dilatush.util.networkingengine;
 import com.dilatush.util.Outcome;
 import com.dilatush.util.ScheduledExecutor;
 import com.dilatush.util.Waiter;
+import com.dilatush.util.networkingengine.interfaces.OnErrorHandler;
+import com.dilatush.util.networkingengine.interfaces.OnSendCompleteHandler;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -33,15 +33,15 @@ import static com.dilatush.util.General.isNull;
     protected static final int WRITE_INTEREST = SelectionKey.OP_WRITE;
 
 
-    protected final NetworkingEngine             engine;
-    protected final DatagramChannel              channel;
-    protected final int                          maxDatagramBytes;
-    protected final BiConsumer<String,Exception> onErrorHandler;
-    protected final AtomicBoolean                sendInProgress;
-    protected final SelectionKey                 key;
+    protected final NetworkingEngine engine;
+    protected final DatagramChannel  channel;
+    protected final int              maxDatagramBytes;
+    protected final OnErrorHandler onErrorHandler;
+    protected final AtomicBoolean    sendInProgress;
+    protected final SelectionKey     key;
 
-    protected Consumer<Outcome<?>> onSendCompleteHandler;
-    protected OutboundDatagram     outboundDatagram;
+    protected OnSendCompleteHandler onSendCompleteHandler;
+    protected OutboundDatagram      outboundDatagram;
 
     /**
      * <p>Creates a new instance of this class that will be associated with the given networking engine, and will use the given {@link DatagramChannel}, which must be bound to
@@ -58,7 +58,7 @@ import static com.dilatush.util.General.isNull;
      * @throws IOException on any I/O error.
      */
     protected UDPBase( final NetworkingEngine _engine, final DatagramChannel _channel,
-                       final int _maxDatagramBytes, BiConsumer<String,Exception> _onErrorHandler ) throws IOException {
+                       final int _maxDatagramBytes, final OnErrorHandler _onErrorHandler ) throws IOException {
 
         // sanity checks...
         if( isNull( _engine, _channel ) )
@@ -74,7 +74,7 @@ import static com.dilatush.util.General.isNull;
         channel          = _channel;
         maxDatagramBytes = _maxDatagramBytes;
         onErrorHandler   = (_onErrorHandler == null) ? this::defaultOnErrorHandler : _onErrorHandler;
-        key              = _engine.register( channel, READ_INTEREST, this );
+        key              = _engine.register( channel, NO_INTEREST, this );
     }
 
 
@@ -90,7 +90,7 @@ import static com.dilatush.util.General.isNull;
      * @param _datagram The {@link OutboundDatagram} to send.
      * @param _onSendCompleteHandler The handler to call upon the completion of sending the datagram.
      */
-    public void send( final OutboundDatagram _datagram, final Consumer<Outcome<?>> _onSendCompleteHandler ) {
+    public void send( final OutboundDatagram _datagram, final OnSendCompleteHandler _onSendCompleteHandler ) {
 
         // if we didn't get a send complete handler, then we really don't have any choice but to throw an exception...
         if( isNull( _onSendCompleteHandler ) ) throw new IllegalArgumentException( "_onSendCompleteHandler is null" );
@@ -190,7 +190,7 @@ import static com.dilatush.util.General.isNull;
 
         // if there was a send in progress, send the completion...
        if( sendInProgress.getAndSet( false ) ) {
-           engine.execute( () -> onSendCompleteHandler.accept( _outcome ) );
+           engine.execute( () -> onSendCompleteHandler.handle( _outcome ) );
        }
     }
 

@@ -1,7 +1,11 @@
-package com.dilatush.util.networkingengine;
+package com.dilatush.util.networkingengine.interfaces;
 
 import com.dilatush.util.ip.IPAddress;
 
+/**
+ * Implemented by functions accept the IP address and UDP port for the source of a connection or datagram, and return {@code true} if that connection or datagram should be
+ * accepted for processing.
+ */
 @FunctionalInterface
 public interface SourceFilter {
 

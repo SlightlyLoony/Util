@@ -4,6 +4,8 @@ import com.dilatush.util.Outcome;
 import com.dilatush.util.ScheduledExecutor;
 import com.dilatush.util.Waiter;
 import com.dilatush.util.ip.IPAddress;
+import com.dilatush.util.networkingengine.interfaces.OnTCPReadCompleteHandler;
+import com.dilatush.util.networkingengine.interfaces.OnTCPWriteCompleteHandler;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -17,7 +19,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -56,8 +57,8 @@ public abstract class TCPPipe {
     private ByteBuffer                    readBuffer;
     private ByteBuffer                    writeBuffer;
     private int                           minBytes;
-    private Consumer<Outcome<ByteBuffer>> onReadCompleteHandler;
-    private Consumer<Outcome<?>>          onWriteCompleteHandler;
+    private OnTCPReadCompleteHandler      onReadCompleteHandler;
+    private OnTCPWriteCompleteHandler     onWriteCompleteHandler;
 
 
     /**
@@ -129,7 +130,7 @@ public abstract class TCPPipe {
      *                            canceled.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the network data read.  If not
      *                            ok, then there is an explanatory message and possibly the exception that caused the problem.
      */
-    public void read( final ByteBuffer _readBuffer, final int _minBytes, final Consumer<Outcome<ByteBuffer>> _onReadCompleteHandler ) {
+    public void read( final ByteBuffer _readBuffer, final int _minBytes, final OnTCPReadCompleteHandler _onReadCompleteHandler ) {
 
         // if we didn't get a read complete handler, then we really don't have any choice but to throw an exception...
         if( isNull( _onReadCompleteHandler ) ) throw new IllegalArgumentException( "_onReadCompleteHandler is null" );
@@ -181,7 +182,7 @@ public abstract class TCPPipe {
      *                            canceled.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the network data read.  If not
      *                            ok, then there is an explanatory message and possibly the exception that caused the problem.
      */
-    public void read( final ByteBuffer _readBuffer, final Consumer<Outcome<ByteBuffer>> _onReadCompleteHandler ) {
+    public void read( final ByteBuffer _readBuffer, final OnTCPReadCompleteHandler _onReadCompleteHandler ) {
         read( _readBuffer, 1, _onReadCompleteHandler );
     }
 
@@ -304,7 +305,7 @@ public abstract class TCPPipe {
         if( !readInProgress.getAndSet( false ) ) return;
 
         // otherwise, send the completion...
-        engine.execute( () -> onReadCompleteHandler.accept( _outcome ) );
+        engine.execute( () -> onReadCompleteHandler.handle( _outcome ) );
     }
 
 
@@ -324,7 +325,7 @@ public abstract class TCPPipe {
      *                            canceled.  If the outcome is ok, then the operation completed normally.  If not ok, then there is an explanatory message and possibly the
      *                                exception that caused the problem.
      */
-    public void write( final ByteBuffer _writeBuffer, final Consumer<Outcome<?>> _onWriteCompleteHandler ) {
+    public void write( final ByteBuffer _writeBuffer, final OnTCPWriteCompleteHandler _onWriteCompleteHandler ) {
 
         // set our write buffer to null, so in the postWriteCompletion we can tell if the mark has been set...
         writeBuffer = null;
@@ -450,7 +451,7 @@ public abstract class TCPPipe {
         }
 
         // otherwise, send the completion...
-        engine.execute( () -> onWriteCompleteHandler.accept( _outcome ) );
+        engine.execute( () -> onWriteCompleteHandler.handle( _outcome ) );
     }
 
 

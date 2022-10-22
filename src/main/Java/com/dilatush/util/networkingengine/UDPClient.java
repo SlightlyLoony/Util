@@ -1,15 +1,15 @@
 package com.dilatush.util.networkingengine;
 
+import com.dilatush.util.networkingengine.interfaces.OnErrorHandler;
+
 import java.io.IOException;
 import java.nio.channels.DatagramChannel;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 
 public class UDPClient extends UDPBase {
 
 
-    protected UDPClient( final NetworkingEngine _engine, final DatagramChannel _channel, final Consumer<InboundDatagram> _onReceiptHandler,
-                         final int _maxDatagramBytes, BiConsumer<String,Exception> _onErrorHandler ) throws IOException {
+    protected UDPClient( final NetworkingEngine _engine, final DatagramChannel _channel,
+                         final int _maxDatagramBytes, final OnErrorHandler _onErrorHandler ) throws IOException {
 
         super( _engine, _channel, _maxDatagramBytes, _onErrorHandler );
     }

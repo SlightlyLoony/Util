@@ -4,6 +4,9 @@ import com.dilatush.util.General;
 import com.dilatush.util.Outcome;
 import com.dilatush.util.ip.IPAddress;
 import com.dilatush.util.ip.IPv4Address;
+import com.dilatush.util.networkingengine.interfaces.OnDatagramReceipt;
+import com.dilatush.util.networkingengine.interfaces.OnErrorHandler;
+import com.dilatush.util.networkingengine.interfaces.SourceFilter;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -11,8 +14,6 @@ import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.logging.Logger;
 
 import static com.dilatush.util.General.getLogger;
@@ -30,8 +31,8 @@ public class UDPServer extends UDPBase {
     private static final Logger LOGGER = getLogger();
 
 
-    protected final Consumer<InboundDatagram>    onReceiptHandler;
-    protected final SourceFilter                 sourceFilter;
+    protected final OnDatagramReceipt onReceiptHandler;
+    protected final SourceFilter sourceFilter;
 
 
     /**
@@ -56,7 +57,7 @@ public class UDPServer extends UDPBase {
      * message and possibly an exception that caused the problem.
      */
     public static Outcome<UDPServer> getInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort,
-                                                  final Consumer<InboundDatagram> _onReceiptHandler, final int _maxDatagramBytes, BiConsumer<String,Exception> _onErrorHandler,
+                                                  final OnDatagramReceipt _onReceiptHandler, final int _maxDatagramBytes, final OnErrorHandler _onErrorHandler,
                                                   final SourceFilter _sourceFilter ) {
 
         try {
@@ -105,8 +106,8 @@ public class UDPServer extends UDPBase {
      * @param _sourceFilter The {@link SourceFilter} to use for filtering incoming UDP datagrams, or {@code null} to use the default source filter (accepts all).
      * @throws IOException on any I/O error.
      */
-    protected UDPServer( final NetworkingEngine _engine, final DatagramChannel _channel, final Consumer<InboundDatagram> _onReceiptHandler,
-                         final int _maxDatagramBytes, final BiConsumer<String,Exception> _onErrorHandler, final SourceFilter _sourceFilter ) throws IOException {
+    protected UDPServer( final NetworkingEngine _engine, final DatagramChannel _channel, final OnDatagramReceipt _onReceiptHandler,
+                         final int _maxDatagramBytes, final OnErrorHandler _onErrorHandler, final SourceFilter _sourceFilter ) throws IOException {
         super( _engine, _channel, _maxDatagramBytes, _onErrorHandler );
 
         // sanity checks...
@@ -120,6 +121,9 @@ public class UDPServer extends UDPBase {
         // squirrel it all away...
         onReceiptHandler = _onReceiptHandler;
         sourceFilter     = (_sourceFilter != null) ? _sourceFilter : (ip, port) -> true;
+
+        // turn read interest, as we always want to read received datagrams...
+        key.interestOpsOr( READ_INTEREST );
     }
 
 
@@ -150,12 +154,12 @@ public class UDPServer extends UDPBase {
                     var datagram = new InboundDatagram( readBuffer, socket, truncated );
 
                     // call the on receipt handler in another thread...
-                    engine.execute( () -> onReceiptHandler.accept( datagram ) );
+                    engine.execute( () -> onReceiptHandler.get( datagram ) );
                 }
             }
         }
         catch( Exception _e ) {
-            engine.execute( () -> onErrorHandler.accept( "Problem in onReadable: " + General.toString( _e ), _e ) );
+            engine.execute( () -> onErrorHandler.handle( "Problem in onReadable: " + General.toString( _e ), _e ) );
         }
         finally {
 

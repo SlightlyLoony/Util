@@ -2,6 +2,9 @@ package com.dilatush.util.networkingengine;
 
 import com.dilatush.util.Outcome;
 import com.dilatush.util.ip.IPAddress;
+import com.dilatush.util.networkingengine.interfaces.OnAcceptHandler;
+import com.dilatush.util.networkingengine.interfaces.OnErrorHandler;
+import com.dilatush.util.networkingengine.interfaces.SourceFilter;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -10,8 +13,6 @@ import java.net.StandardSocketOptions;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.util.Set;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -31,14 +32,14 @@ public class TCPListener {
     protected static final Outcome.Forge<TCPListener>  forgeTCPListener = new Outcome.Forge<>();
     protected static final Outcome.Forge<?>            forge            = new Outcome.Forge<>();
 
-    protected final IPAddress                        ip;                       // the IP address to bind this listener to...
-    protected final int                              port;                     // the TCP port to bind this listener to...
-    protected final ServerSocketChannel              channel;                  // the server socket channel that implements this listener...
-    protected final NetworkingEngine                 engine;                   // the networking engine associated with this instance...
-    protected final Consumer<TCPInboundPipe>         onAcceptHandler;          // the handler that will be called when an inbound TCP connection is ready to be accepted...
-    protected final BiConsumer<String, Exception>    onErrorHandler;           // the handler that will be called if an error occurs while accepting a TCP connection...
-    protected final SelectionKey                     key;                      // the listener's key...
-    protected final SourceFilter                     sourceFilter;             // the source filter that decides whether to accept an incoming TCP request...
+    protected final IPAddress            ip;                       // the IP address to bind this listener to...
+    protected final int                  port;                     // the TCP port to bind this listener to...
+    protected final ServerSocketChannel  channel;                  // the server socket channel that implements this listener...
+    protected final NetworkingEngine     engine;                   // the networking engine associated with this instance...
+    protected final OnAcceptHandler onAcceptHandler;          // the handler that will be called when an inbound TCP connection is ready to be accepted...
+    protected final OnErrorHandler onErrorHandler;           // the handler that will be called if an error occurs while accepting a TCP connection...
+    protected final SelectionKey         key;                      // the listener's key...
+    protected final SourceFilter sourceFilter;             // the source filter that decides whether to accept an incoming TCP request...
 
 
     /**
@@ -60,7 +61,7 @@ public class TCPListener {
      * message and possibly an exception that caused the problem.
      */
     public static Outcome<TCPListener> getInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort,
-                                                    final Consumer<TCPInboundPipe> _onAcceptHandler, final BiConsumer<String,Exception> _onErrorHandler,
+                                                    final OnAcceptHandler _onAcceptHandler, final OnErrorHandler _onErrorHandler,
                                                     final SourceFilter _sourceFilter ) {
 
         try {
@@ -94,7 +95,7 @@ public class TCPListener {
      * @return The outcome of the attempt.  If ok, the info contains the new {@link TCPListener} instance, configured and registered.  If not ok, it contains an explanatory
      * message and possibly an exception that caused the problem.
      */
-    public static Outcome<TCPListener> getInstance( final NetworkingEngine _engine, IPAddress _bindToIP, int _bindToPort, Consumer<TCPInboundPipe> _onAcceptHandler ) {
+    public static Outcome<TCPListener> getInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort, final OnAcceptHandler _onAcceptHandler ) {
         return getInstance( _engine, _bindToIP, _bindToPort, _onAcceptHandler, null, null );
     }
 
@@ -116,8 +117,8 @@ public class TCPListener {
      * @return The outcome of the attempt.  If ok, the info contains the new {@link TCPListener} instance, configured and registered.  If not ok, it contains an explanatory
      * message and possibly an exception that caused the problem.
      */
-    public static Outcome<TCPListener> getInstance( final NetworkingEngine _engine, IPAddress _bindToIP, int _bindToPort,
-                                                    Consumer<TCPInboundPipe> _onAcceptHandler, BiConsumer<String,Exception> _onErrorHandler ) {
+    public static Outcome<TCPListener> getInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort,
+                                                    final OnAcceptHandler _onAcceptHandler, final OnErrorHandler _onErrorHandler ) {
         return getInstance( _engine, _bindToIP, _bindToPort, _onAcceptHandler, _onErrorHandler, null );
     }
 
@@ -138,7 +139,7 @@ public class TCPListener {
      * message and possibly an exception that caused the problem.
      */
     public static Outcome<TCPListener> getInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort,
-                                                    final Consumer<TCPInboundPipe> _onAcceptHandler, final SourceFilter _sourceFilter ) {
+                                                    final OnAcceptHandler _onAcceptHandler, final SourceFilter _sourceFilter ) {
         return getInstance( _engine, _bindToIP, _bindToPort, _onAcceptHandler, null, _sourceFilter );
     }
 
@@ -161,8 +162,8 @@ public class TCPListener {
      * @throws IllegalArgumentException if any arguments are invalid.
      * @throws IOException if there is a problem opening or configuring the {@link ServerSocketChannel} for this instance, or in registering it with the network engine's selector.
      */
-    protected TCPListener( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort, final Consumer<TCPInboundPipe> _onAcceptHandler,
-                           final BiConsumer<String,Exception> _onErrorHandler, final SourceFilter _sourceFilter )
+    protected TCPListener( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort, final OnAcceptHandler _onAcceptHandler,
+                           final OnErrorHandler _onErrorHandler, final SourceFilter _sourceFilter )
             throws IOException {
 
         ip                      = _bindToIP;
@@ -201,14 +202,14 @@ public class TCPListener {
                     pipe.close();
                     return;
                 }
-                onAcceptHandler.accept( pipe );
+                onAcceptHandler.handle( pipe );
                 LOGGER.finest( "Accepted TCP connection from " + pipe );
             }
             else
-                onErrorHandler.accept( "Problem getting TCPPipe: " + getPipeOutcome.msg(), (Exception) getPipeOutcome.cause() );
+                onErrorHandler.handle( "Problem getting TCPPipe: " + getPipeOutcome.msg(), (Exception) getPipeOutcome.cause() );
         }
         catch( IOException _e ) {
-            onErrorHandler.accept( "Problem accepting inbound TCP connection: " + _e.getMessage(), _e );
+            onErrorHandler.handle( "Problem accepting inbound TCP connection: " + _e.getMessage(), _e );
         }
     }
 

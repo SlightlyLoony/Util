@@ -4,6 +4,7 @@ import com.dilatush.util.General;
 import com.dilatush.util.Outcome;
 import com.dilatush.util.Waiter;
 import com.dilatush.util.ip.IPAddress;
+import com.dilatush.util.networkingengine.interfaces.OnConnectionCompletionHandler;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -11,7 +12,6 @@ import java.net.StandardSocketOptions;
 import java.nio.channels.SocketChannel;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
 import java.util.logging.Logger;
 
 import static com.dilatush.util.General.getLogger;
@@ -37,10 +37,10 @@ public class TCPOutboundPipe extends TCPPipe {
 
     private final AtomicBoolean connectFlag;
 
-    private int                  finishConnectionTimeoutMs;   // the maximum time a connection is allowed to take before giving up...
-    private int                  finishConnectionIntervalMs;  // delay (in milliseconds) until the next finish connection check...
-    private long                 finishConnectionStartTime;   // when we started the finish connection process...
-    private Consumer<Outcome<?>> completionHandler;           // the connection completion handler...
+    private int                           finishConnectionTimeoutMs;   // the maximum time a connection is allowed to take before giving up...
+    private int                           finishConnectionIntervalMs;  // delay (in milliseconds) until the next finish connection check...
+    private long                          finishConnectionStartTime;   // when we started the finish connection process...
+    private OnConnectionCompletionHandler completionHandler;           // the connection completion handler...
 
 
     /**
@@ -119,7 +119,7 @@ public class TCPOutboundPipe extends TCPPipe {
      * @param _finishConnectionTimeoutMs The number of milliseconds to wait for a connection to complete before failing.
      * @param _completionHandler The handler to call when the connection attempt has completed (whether that attempt completed normally, failed, or timed out).
      */
-    public void connect( final IPAddress _remoteIP, final int _remotePort, final int _finishConnectionTimeoutMs, final Consumer<Outcome<?>> _completionHandler ) {
+    public void connect( final IPAddress _remoteIP, final int _remotePort, final int _finishConnectionTimeoutMs, final OnConnectionCompletionHandler _completionHandler ) {
 
         // if there's no completion handler, then we really can't do anything at all...
         if( isNull( _completionHandler ) ) throw new IllegalArgumentException( "_completionHandler is null" );
@@ -177,7 +177,8 @@ public class TCPOutboundPipe extends TCPPipe {
      * @param _remotePort The remote TCP port to connect to, which must be in the range [1..65535].
      * @param _completionHandler The handler to call when the connection attempt has completed (whether that attempt completed normally, failed, or timed out).
      */
-    public void connect( final IPAddress _remoteIP, final int _remotePort, final Consumer<Outcome<?>> _completionHandler ) {
+    @SuppressWarnings( "unused" )
+    public void connect( final IPAddress _remoteIP, final int _remotePort, final OnConnectionCompletionHandler _completionHandler ) {
         connect( _remoteIP, _remotePort, DEFAULT_FINISH_CONNECTION_TIMEOUT_MS, _completionHandler );
     }
 
@@ -217,8 +218,8 @@ public class TCPOutboundPipe extends TCPPipe {
     }
 
 
-    private void postConnectionCompletion( final Consumer<Outcome<?>> _completionHandler, final Outcome<?> _outcome ) {
-        engine.execute( () -> _completionHandler.accept( _outcome ) );
+    private void postConnectionCompletion( final OnConnectionCompletionHandler _completionHandler, final Outcome<?> _outcome ) {
+        engine.execute( () -> _completionHandler.handle( _outcome ) );
     }
 
 
