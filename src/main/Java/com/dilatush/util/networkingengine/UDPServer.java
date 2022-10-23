@@ -4,7 +4,7 @@ import com.dilatush.util.General;
 import com.dilatush.util.Outcome;
 import com.dilatush.util.ip.IPAddress;
 import com.dilatush.util.ip.IPv4Address;
-import com.dilatush.util.networkingengine.interfaces.OnDatagramReceipt;
+import com.dilatush.util.networkingengine.interfaces.OnDatagramReceiptHandler;
 import com.dilatush.util.networkingengine.interfaces.OnErrorHandler;
 import com.dilatush.util.networkingengine.interfaces.SourceFilter;
 
@@ -31,7 +31,7 @@ public class UDPServer extends UDPBase {
     private static final Logger LOGGER = getLogger();
 
 
-    protected final OnDatagramReceipt onReceiptHandler;
+    protected final OnDatagramReceiptHandler onReceiptHandler;
     protected final SourceFilter sourceFilter;
 
 
@@ -57,7 +57,7 @@ public class UDPServer extends UDPBase {
      * message and possibly an exception that caused the problem.
      */
     public static Outcome<UDPServer> getInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort,
-                                                  final OnDatagramReceipt _onReceiptHandler, final int _maxDatagramBytes, final OnErrorHandler _onErrorHandler,
+                                                  final OnDatagramReceiptHandler _onReceiptHandler, final int _maxDatagramBytes, final OnErrorHandler _onErrorHandler,
                                                   final SourceFilter _sourceFilter ) {
 
         try {
@@ -106,7 +106,7 @@ public class UDPServer extends UDPBase {
      * @param _sourceFilter The {@link SourceFilter} to use for filtering incoming UDP datagrams, or {@code null} to use the default source filter (accepts all).
      * @throws IOException on any I/O error.
      */
-    protected UDPServer( final NetworkingEngine _engine, final DatagramChannel _channel, final OnDatagramReceipt _onReceiptHandler,
+    protected UDPServer( final NetworkingEngine _engine, final DatagramChannel _channel, final OnDatagramReceiptHandler _onReceiptHandler,
                          final int _maxDatagramBytes, final OnErrorHandler _onErrorHandler, final SourceFilter _sourceFilter ) throws IOException {
         super( _engine, _channel, _maxDatagramBytes, _onErrorHandler );
 
@@ -143,11 +143,8 @@ public class UDPServer extends UDPBase {
                 if( sourceFilter.accept( IPAddress.fromInetAddress( socket.getAddress() ), socket.getPort() ) ) {
 
                     // handle the case of the datagram being truncated...
-                    var truncated = false;
-                    if( readBuffer.limit() == readBuffer.capacity() ) {
-                        truncated = true;
-                        readBuffer.limit( readBuffer.limit() - 1 );   // getting rid of the extra truncation-detection byte...
-                    }
+                    var truncated = ( readBuffer.limit() == readBuffer.capacity() );
+                    if( truncated ) readBuffer.limit( readBuffer.limit() - 1 );   // getting rid of the extra truncation-detection byte...
 
                     // make our datagram...
                     readBuffer.flip();

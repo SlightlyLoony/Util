@@ -34,9 +34,9 @@ import static java.util.logging.Level.SEVERE;
  *     <li>If you want to send or receive datagrams, create a new instance of {@link UDPPipe} (using one of the {@code newUDPPipe()} methods), then use that instance to
  *     receive or send datagrams.</li>
  * </ul>
- * <p>The three classes in this package that implement the actual communications ({@link TCPListener}, {@link TCPPipe}, and {@link UDPPipe}) may all be subclassed to provide
- * specialized communications.  For instance, you might extend {@link TCPListener} to make an {@code HTTPListener} as the core of a web server.  Similarly you might extend
- * {@link TCPPipe} to make an {@code HTTPPipe} to implement individual connections to your web server.</p>
+ * <p>The four classes in this package that implement the actual communications ({@link TCPListener}, {@link TCPPipe}, {@link UDPServer}, and {@link UDPClient}) may all be
+ * subclassed to provide specialized communications.  For instance, you might extend {@link TCPListener} to make an {@code HTTPListener} as the core of a web server.  Similarly
+ * you might extend {@link TCPPipe} to make an {@code HTTPPipe} to implement individual connections to your web server.</p>
  * <p>Note that it is permissible for a single process to have multiple instances of this class, all active at the same time.  While it is possible that doing so might increase
  * the overall networking performance, this has not been verified.</p>
  * <p>Internally, instance of this class use a {@link ScheduledExecutor} for two purposes: (1) to offload non-trivial tasks from the I/O loop thread, and (2) to support

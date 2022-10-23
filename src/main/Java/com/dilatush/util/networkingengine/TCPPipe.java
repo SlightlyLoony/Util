@@ -129,11 +129,17 @@ public abstract class TCPPipe {
      * @param _onReadCompleteHandler This handler is called with the outcome of the read operation, when the read operation completes, whether normally, terminated by an error, or
      *                            canceled.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the network data read.  If not
      *                            ok, then there is an explanatory message and possibly the exception that caused the problem.
+     * @throws NetworkingEngineException if no read complete handle is specified, or if a read is already in progress
      */
-    public void read( final ByteBuffer _readBuffer, final int _minBytes, final OnTCPReadCompleteHandler _onReadCompleteHandler ) {
+    public void read( final ByteBuffer _readBuffer, final int _minBytes, final OnTCPReadCompleteHandler _onReadCompleteHandler )
+        throws NetworkingEngineException {
 
         // if we didn't get a read complete handler, then we really don't have any choice but to throw an exception...
-        if( isNull( _onReadCompleteHandler ) ) throw new IllegalArgumentException( "_onReadCompleteHandler is null" );
+        if( isNull( _onReadCompleteHandler ) ) throw new NetworkingEngineException( "_onReadCompleteHandler is null" );
+
+        // if we already have a read operation in progress, throw an exception...
+        if( readInProgress.getAndSet( true ) )
+            throw new NetworkingEngineException( "Read operation already in progress" );
 
         // in the code below, the TCPPipeException exists only to make the code easier to read and understand...
         try {
@@ -181,8 +187,9 @@ public abstract class TCPPipe {
      * @param _onReadCompleteHandler This handler is called with the outcome of the read operation, when the read operation completes, whether normally, terminated by an error, or
      *                            canceled.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the network data read.  If not
      *                            ok, then there is an explanatory message and possibly the exception that caused the problem.
+     * @throws NetworkingEngineException if no read complete handle is specified, or if a read is already in progress
      */
-    public void read( final ByteBuffer _readBuffer, final OnTCPReadCompleteHandler _onReadCompleteHandler ) {
+    public void read( final ByteBuffer _readBuffer, final OnTCPReadCompleteHandler _onReadCompleteHandler ) throws NetworkingEngineException {
         read( _readBuffer, 1, _onReadCompleteHandler );
     }
 
@@ -208,8 +215,9 @@ public abstract class TCPPipe {
      *                  of the read buffer.
      * @return The outcome of this operation.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the network data read.  If not
      *         ok, then there is an explanatory message and possibly the exception that caused the problem.
+     * @throws NetworkingEngineException if a read is already in progress
      */
-    public Outcome<ByteBuffer> read( final ByteBuffer _readBuffer, final int _minBytes ) {
+    public Outcome<ByteBuffer> read( final ByteBuffer _readBuffer, final int _minBytes ) throws NetworkingEngineException {
 
         Waiter<Outcome<ByteBuffer>> waiter = new Waiter<>();
         read( _readBuffer, _minBytes, waiter::complete );
@@ -235,8 +243,9 @@ public abstract class TCPPipe {
      *                    the read buffer!
      * @return The outcome of this operation.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the network data read.  If not
      *         ok, then there is an explanatory message and possibly the exception that caused the problem.
+     * @throws NetworkingEngineException if a read is already in progress
      */
-    public Outcome<ByteBuffer> read( final ByteBuffer _readBuffer ) {
+    public Outcome<ByteBuffer> read( final ByteBuffer _readBuffer ) throws NetworkingEngineException {
         return read( _readBuffer, 1 );
     }
 
@@ -324,23 +333,24 @@ public abstract class TCPPipe {
      * @param _onWriteCompleteHandler This handler is called with the outcome of the write operation, when the write operation completes, whether normally, terminated by an error, or
      *                            canceled.  If the outcome is ok, then the operation completed normally.  If not ok, then there is an explanatory message and possibly the
      *                                exception that caused the problem.
+     * @throws NetworkingEngineException if no on write complete handler is specified, or if another write operation is in progress.
      */
-    public void write( final ByteBuffer _writeBuffer, final OnTCPWriteCompleteHandler _onWriteCompleteHandler ) {
+    public void write( final ByteBuffer _writeBuffer, final OnTCPWriteCompleteHandler _onWriteCompleteHandler ) throws NetworkingEngineException {
 
         // set our write buffer to null, so in the postWriteCompletion we can tell if the mark has been set...
         writeBuffer = null;
 
         // if we didn't get a write complete handler, then we really don't have any choice but to throw an exception...
-        if( isNull( _onWriteCompleteHandler ) ) throw new IllegalArgumentException( "_onWriteCompleteHandler is null" );
+        if( isNull( _onWriteCompleteHandler ) ) throw new NetworkingEngineException( "_onWriteCompleteHandler is null" );
+
+        // make sure we haven't already got a write operation in progress...
+        if( writeInProgress.getAndSet( true ) ) throw new NetworkingEngineException( "Write operation already in progress" );
 
         // in the code below, the TCPPipeException exists only to make the code easier to read and understand...
         try {
 
             // sanity checks...
             if( isNull( _writeBuffer ) || (_writeBuffer.remaining() == 0) ) throw new TCPPipeException( "_writeBuffer is null or has no data to write" );
-
-            // make sure we haven't already got a write operation in progress...
-            if( writeInProgress.getAndSet( true ) ) throw new TCPPipeException( "Write operation already in progress" );
 
             // mark the current position, so that we may return the buffer to its initial state if the write does not complete normally...
             _writeBuffer.mark();
@@ -371,8 +381,9 @@ public abstract class TCPPipe {
      *                     the write buffer must not be manipulated other than by this instance - hands off the write buffer!
      * @return The outcome of the attempt.  If ok, the datagram was successfully sent.  If not ok, then there is an explanatory message and possibly the exception that caused
      * the problem.
+     * @throws NetworkingEngineException if another write operation is in progress.
      */
-    public Outcome<?> write( final ByteBuffer _writeBuffer ) {
+    public Outcome<?> write( final ByteBuffer _writeBuffer ) throws NetworkingEngineException {
         Waiter<Outcome<?>> waiter = new Waiter<>();
         write( _writeBuffer, waiter::complete );
         return waiter.waitForCompletion();

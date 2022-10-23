@@ -1,5 +1,6 @@
 package com.dilatush.util.networkingengine;
 
+import com.dilatush.util.Outcome;
 import com.dilatush.util.ip.IPv4Address;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -14,8 +15,7 @@ import java.util.logging.Logger;
 
 import static com.dilatush.util.General.getLogger;
 import static java.lang.Thread.sleep;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings( { "unused", "BusyWait" } )
 class NetworkingEngineTest {
@@ -62,7 +62,7 @@ class NetworkingEngineTest {
 
 
     @Test
-    void testSimpleTCP() {
+    void testSimpleTCP() throws NetworkingEngineException {
 
         // get an engine...
         var engineOutcome = NetworkingEngine.getInstance( "Test" );
@@ -119,8 +119,13 @@ class NetworkingEngineTest {
         public void run() {
             var rb = ByteBuffer.allocate( 100 );
             while( !interrupted() ) {
-                inboundPipe.read( rb );
-                inboundPipe.write( rb );
+                try {
+                    inboundPipe.read( rb );
+                    inboundPipe.write( rb );
+                }
+                catch( NetworkingEngineException _e ) {
+                    fail( "Unexpected exception: " + _e.getMessage() );
+                }
             }
         }
     }
@@ -156,7 +161,13 @@ class NetworkingEngineTest {
             var wb = ByteBuffer.allocate( 100 );
             wb.putInt( i );
             wb.flip();
-            var writeOutcome = pipe.write( wb );
+            Outcome<?> writeOutcome = null;
+            try {
+                writeOutcome = pipe.write( wb );
+            }
+            catch( NetworkingEngineException _e ) {
+                fail( "Unexpected exception: " + _e.getMessage() );
+            }
             assertTrue( writeOutcome.ok(), "Problem writing: " + writeOutcome.msg() );
         }
         var endTime = System.currentTimeMillis();
@@ -194,7 +205,13 @@ class NetworkingEngineTest {
             int shouldBe = 0;
             while( !interrupted() ) {
                 var rb = ByteBuffer.allocate( 4 );
-                var readOutcome = inboundPipe.read( rb );
+                Outcome<ByteBuffer> readOutcome = null;
+                try {
+                    readOutcome = inboundPipe.read( rb );
+                }
+                catch( NetworkingEngineException _e ) {
+                    fail( "Unexpected exception: " + _e.getMessage() );
+                }
                 assertTrue( readOutcome.ok(), "Problem reading: " + readOutcome.msg() );
                 var dataRead = rb.getInt();
                 assertEquals( shouldBe, dataRead, "Wrong data read, should be " + shouldBe + ", was " + dataRead );
@@ -256,7 +273,13 @@ class NetworkingEngineTest {
                 var wb = ByteBuffer.allocate( 100 );
                 wb.putInt( finalI );
                 wb.flip();
-                var writeOutcome = pipe.write( wb );
+                Outcome<?> writeOutcome = null;
+                try {
+                    writeOutcome = pipe.write( wb );
+                }
+                catch( NetworkingEngineException _e ) {
+                    fail( "Unexpected exception: " + _e.getMessage() );
+                }
                 assertTrue( writeOutcome.ok(), "Problem writing: " + writeOutcome.msg() );
             } );
         }
@@ -298,7 +321,13 @@ class NetworkingEngineTest {
             var shouldBe = 0;
             while( !interrupted() ) {
                 var rb = ByteBuffer.allocate( 4 );
-                var readOutcome = pipe.read( rb );
+                Outcome<ByteBuffer> readOutcome = null;
+                try {
+                    readOutcome = pipe.read( rb );
+                }
+                catch( NetworkingEngineException _e ) {
+                    fail( "Unexpected exception: " + _e.getMessage() );
+                }
                 assertTrue( readOutcome.ok(), "Read error: " + readOutcome.msg() );
                 var readData = rb.getInt();
                 assertEquals( shouldBe, readData, "Error in data, should be " + shouldBe + ", but was " + readData );

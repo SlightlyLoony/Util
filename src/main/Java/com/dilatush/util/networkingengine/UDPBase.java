@@ -36,7 +36,7 @@ import static com.dilatush.util.General.isNull;
     protected final NetworkingEngine engine;
     protected final DatagramChannel  channel;
     protected final int              maxDatagramBytes;
-    protected final OnErrorHandler onErrorHandler;
+    protected final OnErrorHandler   onErrorHandler;
     protected final AtomicBoolean    sendInProgress;
     protected final SelectionKey     key;
 
@@ -89,32 +89,29 @@ import static com.dilatush.util.General.isNull;
      *
      * @param _datagram The {@link OutboundDatagram} to send.
      * @param _onSendCompleteHandler The handler to call upon the completion of sending the datagram.
+     * @throws NetworkingEngineException if no on send complete handler is specified, or if a send operation is in progress.
      */
-    public void send( final OutboundDatagram _datagram, final OnSendCompleteHandler _onSendCompleteHandler ) {
+    public void send( final OutboundDatagram _datagram, final OnSendCompleteHandler _onSendCompleteHandler ) throws NetworkingEngineException {
 
         // if we didn't get a send complete handler, then we really don't have any choice but to throw an exception...
-        if( isNull( _onSendCompleteHandler ) ) throw new IllegalArgumentException( "_onSendCompleteHandler is null" );
+        if( isNull( _onSendCompleteHandler ) ) throw new NetworkingEngineException( "_onSendCompleteHandler is null" );
 
-        // in the code below, the UDPException exists only to make the code easier to read and understand...
-        try {
+        // make sure we haven't already got a send operation in progress...
+        if( sendInProgress.getAndSet( true ) ) throw new NetworkingEngineException( "Send operation already in progress" );
 
-            // sanity checks...
-            if( isNull( _datagram ) ) throw new UDPException( "_datagram is null" );
-
-            // make sure we haven't already got a send operation in progress...
-            if( sendInProgress.getAndSet( true ) ) throw new UDPException( "Send operation already in progress" );
-
-            // squirrel away our initial state...
-            outboundDatagram       = _datagram;
-            onSendCompleteHandler  = _onSendCompleteHandler;
-
-            // initiate the actual write process...
-            send();
+        // sanity checks...
+        if( isNull( _datagram ) ) {
+            postSendCompletion( forge.notOk( "_datagram is null" ) );
+            return;
         }
-        catch( UDPException _e ) {
-            postSendCompletion( forge.notOk( _e.getMessage() ) );
-        }
-    }
+
+        // squirrel away our initial state...
+        outboundDatagram       = _datagram;
+        onSendCompleteHandler  = _onSendCompleteHandler;
+
+        // initiate the actual write process...
+        send();
+   }
 
 
     /**
@@ -123,8 +120,9 @@ import static com.dilatush.util.General.isNull;
      * @param _datagram The {@link OutboundDatagram} to send.
      * @return The outcome of the attempt.  If ok, the datagram was successfully sent.  If not ok, then there is an explanatory message and possibly the exception that caused
      * the problem.
+     * @throws NetworkingEngineException if a send operation is in progress.
      */
-    public Outcome<?> send( final OutboundDatagram _datagram ) {
+    public Outcome<?> send( final OutboundDatagram _datagram ) throws NetworkingEngineException {
         Waiter<Outcome<?>> waiter = new Waiter<>();
         send( _datagram, waiter::complete );
         return waiter.waitForCompletion();
@@ -192,16 +190,6 @@ import static com.dilatush.util.General.isNull;
        if( sendInProgress.getAndSet( false ) ) {
            engine.execute( () -> onSendCompleteHandler.handle( _outcome ) );
        }
-    }
-
-
-    /**
-     * An internal exception type that is used for code convenience and is never thrown outside this class or its subclasses).
-     */
-    protected static class UDPException extends Exception {
-        public UDPException( final String message ) {
-            super( message );
-        }
     }
 
 
