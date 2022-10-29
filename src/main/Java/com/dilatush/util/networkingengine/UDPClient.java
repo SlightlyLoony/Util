@@ -12,6 +12,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static com.dilatush.util.General.getLogger;
@@ -20,6 +21,7 @@ import static com.dilatush.util.General.isNull;
 public class UDPClient extends UDPBase {
 
     private static final Outcome.Forge<InboundDatagram> forgeInboundDatagram = new Outcome.Forge<>();
+    private static final Outcome.Forge<UDPClient>       forgeUDPClient       = new Outcome.Forge<>();
 
     private static final Logger LOGGER = getLogger();
 
@@ -27,6 +29,21 @@ public class UDPClient extends UDPBase {
     protected final AtomicBoolean receiveInProgress;
 
     protected OnReceiveDatagramHandler onReceiveDatagramHandler;
+
+
+    public static Outcome<UDPClient> getNewInstance( final NetworkingEngine _engine, final DatagramChannel _channel,
+                                                     final IPAddress _bindToAddress, final int _bindToPort,
+                                                     final IPAddress _remoteAddress, final int _remotePort,
+                                                     final int _maxDatagramBytes, final OnErrorHandler _onErrorHandler ) {
+
+        try {
+            return forgeUDPClient.ok( new UDPClient( _engine, _channel, _bindToAddress, _bindToPort, _remoteAddress, _remotePort, _maxDatagramBytes, _onErrorHandler ) );
+        }
+        catch( final Exception _e ) {
+            return forgeUDPClient.notOk( "Problem instantiating UDPClient: " + _e.getMessage(), _e );
+        }
+
+    }
 
 
     protected UDPClient( final NetworkingEngine _engine, final DatagramChannel _channel,
@@ -105,6 +122,7 @@ public class UDPClient extends UDPBase {
             }
         }
         catch( Exception _e ) {
+            LOGGER.log( Level.FINE, "Problem in onReadable: " + General.toString( _e ), _e );
             postReceiveOutcome( forgeInboundDatagram.notOk( "Problem in onReadable: " + General.toString( _e ), _e ) );
         }
     }

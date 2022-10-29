@@ -60,9 +60,9 @@ public class TCPListener {
      * @return The outcome of the attempt.  If ok, the info contains the new {@link TCPListener} instance, configured and registered.  If not ok, it contains an explanatory
      * message and possibly an exception that caused the problem.
      */
-    public static Outcome<TCPListener> getInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort,
-                                                    final OnAcceptHandler _onAcceptHandler, final OnErrorHandler _onErrorHandler,
-                                                    final SourceFilter _sourceFilter ) {
+    public static Outcome<TCPListener> getNewInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort,
+                                                       final OnAcceptHandler _onAcceptHandler, final OnErrorHandler _onErrorHandler,
+                                                       final SourceFilter _sourceFilter ) {
 
         try {
 
@@ -95,8 +95,8 @@ public class TCPListener {
      * @return The outcome of the attempt.  If ok, the info contains the new {@link TCPListener} instance, configured and registered.  If not ok, it contains an explanatory
      * message and possibly an exception that caused the problem.
      */
-    public static Outcome<TCPListener> getInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort, final OnAcceptHandler _onAcceptHandler ) {
-        return getInstance( _engine, _bindToIP, _bindToPort, _onAcceptHandler, null, null );
+    public static Outcome<TCPListener> getNewInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort, final OnAcceptHandler _onAcceptHandler ) {
+        return getNewInstance( _engine, _bindToIP, _bindToPort, _onAcceptHandler, null, null );
     }
 
 
@@ -117,9 +117,9 @@ public class TCPListener {
      * @return The outcome of the attempt.  If ok, the info contains the new {@link TCPListener} instance, configured and registered.  If not ok, it contains an explanatory
      * message and possibly an exception that caused the problem.
      */
-    public static Outcome<TCPListener> getInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort,
-                                                    final OnAcceptHandler _onAcceptHandler, final OnErrorHandler _onErrorHandler ) {
-        return getInstance( _engine, _bindToIP, _bindToPort, _onAcceptHandler, _onErrorHandler, null );
+    public static Outcome<TCPListener> getNewInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort,
+                                                       final OnAcceptHandler _onAcceptHandler, final OnErrorHandler _onErrorHandler ) {
+        return getNewInstance( _engine, _bindToIP, _bindToPort, _onAcceptHandler, _onErrorHandler, null );
     }
 
 
@@ -138,9 +138,9 @@ public class TCPListener {
      * @return The outcome of the attempt.  If ok, the info contains the new {@link TCPListener} instance, configured and registered.  If not ok, it contains an explanatory
      * message and possibly an exception that caused the problem.
      */
-    public static Outcome<TCPListener> getInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort,
-                                                    final OnAcceptHandler _onAcceptHandler, final SourceFilter _sourceFilter ) {
-        return getInstance( _engine, _bindToIP, _bindToPort, _onAcceptHandler, null, _sourceFilter );
+    public static Outcome<TCPListener> getNewInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort,
+                                                       final OnAcceptHandler _onAcceptHandler, final SourceFilter _sourceFilter ) {
+        return getNewInstance( _engine, _bindToIP, _bindToPort, _onAcceptHandler, null, _sourceFilter );
     }
 
 
@@ -227,7 +227,7 @@ public class TCPListener {
      * @throws IOException if there was a problem accepting the connection.
      */
     protected Outcome<TCPInboundPipe> getPipe() throws IOException {
-        var pipe = TCPInboundPipe.getTCPInboundPipe( engine, channel.accept() );
+        var pipe = TCPInboundPipe.getNewInstance( engine, channel.accept() );
         key.interestOpsOr( SelectionKey.OP_ACCEPT );
         return pipe;
     }

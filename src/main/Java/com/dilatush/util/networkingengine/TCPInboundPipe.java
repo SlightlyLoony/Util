@@ -24,7 +24,7 @@ public class TCPInboundPipe extends TCPPipe {
      * @return The outcome of attempting to create a new instance of this class.  If ok, the info contains the new instance.  If not ok, there is an explanatory message and
      * possibly the exception that caused the problem.
      */
-    public static Outcome<TCPInboundPipe> getTCPInboundPipe( final NetworkingEngine _engine, final SocketChannel _channel ) {
+    public static Outcome<TCPInboundPipe> getNewInstance( final NetworkingEngine _engine, final SocketChannel _channel ) {
 
         try {
 
@@ -33,6 +33,7 @@ public class TCPInboundPipe extends TCPPipe {
 
             // construct our new instance...
             var pipe = new TCPInboundPipe( _engine, _channel );
+
             return forgeTCPInboundPipe.ok( pipe );
         }
         catch( Exception _e ) {

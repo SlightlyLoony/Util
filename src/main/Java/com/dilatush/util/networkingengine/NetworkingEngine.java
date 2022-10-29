@@ -24,19 +24,6 @@ import static java.util.logging.Level.SEVERE;
  * <p>Instances of this class (and associated classes in this package) implement a general purpose networking engine that supports unicast communications on TCP and UDP, using
  * either IPv4 or IPv6 IP addresses.  This class is based on NIO, which means it can support many simultaneous listeners and connections using just a few threads.  All methods
  * that may not complete immediately are available in either synchronous (blocking) or asynchronous (non-blocking) versions.</p>
- * <p>The general pattern of use is very straightforward:</p>
- * <ul>
- *     <li>First, create an instance of this class, and keep it alive.</li>
- *     <li>If you want to listen on a TCP port, create a new instance of {@link TCPListener} (using one of the {@code newTCPListener()} methods).  When a connection is made
- *     to the listener, it will automatically create and connect to an instance of {@link TCPPipe}, with which you may read and write data.</li>
- *     <li>If you want to make a connection to a listening TCP port, create a new instance of {@link TCPPipe} (using one of the {@code newTCPPipe()} methods), and use it to
- *     initiate the connection, read data, and write data.</li>
- *     <li>If you want to send or receive datagrams, create a new instance of {@link UDPPipe} (using one of the {@code newUDPPipe()} methods), then use that instance to
- *     receive or send datagrams.</li>
- * </ul>
- * <p>The four classes in this package that implement the actual communications ({@link TCPListener}, {@link TCPPipe}, {@link UDPServer}, and {@link UDPClient}) may all be
- * subclassed to provide specialized communications.  For instance, you might extend {@link TCPListener} to make an {@code HTTPListener} as the core of a web server.  Similarly
- * you might extend {@link TCPPipe} to make an {@code HTTPPipe} to implement individual connections to your web server.</p>
  * <p>Note that it is permissible for a single process to have multiple instances of this class, all active at the same time.  While it is possible that doing so might increase
  * the overall networking performance, this has not been verified.</p>
  * <p>Internally, instance of this class use a {@link ScheduledExecutor} for two purposes: (1) to offload non-trivial tasks from the I/O loop thread, and (2) to support

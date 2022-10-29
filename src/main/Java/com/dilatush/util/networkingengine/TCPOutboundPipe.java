@@ -55,7 +55,7 @@ public class TCPOutboundPipe extends TCPPipe {
      * @return The outcome of the attempt to create a new instance of {@link TCPOutboundPipe}.  If ok, the info contains the new instance.  If not ok, there is an explanatory
      * message and possibly the exception that caused the problem.
      */
-    public static Outcome<TCPOutboundPipe> getTCPOutboundPipe( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort ) {
+    public static Outcome<TCPOutboundPipe> getNewInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort ) {
         try {
             // sanity checks...
             if( isNull( _engine, _bindToIP ) )   return forgeTCPOutboundPipe.notOk( "_engine or _bindToIP is null" );
@@ -89,8 +89,8 @@ public class TCPOutboundPipe extends TCPPipe {
      * @return The outcome of the attempt to create a new instance of {@link TCPOutboundPipe}.  If ok, the info contains the new instance.  If not ok, there is an explanatory
      * message and possibly the exception that caused the problem.
      */
-    public static Outcome<TCPOutboundPipe> getTCPOutboundPipe( final NetworkingEngine _engine, final IPAddress _bindToIP ) {
-        return getTCPOutboundPipe( _engine, _bindToIP, 0 );
+    public static Outcome<TCPOutboundPipe> getNewInstance( final NetworkingEngine _engine, final IPAddress _bindToIP ) {
+        return getNewInstance( _engine, _bindToIP, 0 );
     }
 
 

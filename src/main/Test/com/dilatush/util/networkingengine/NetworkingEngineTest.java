@@ -36,7 +36,7 @@ class NetworkingEngineTest {
         var engine = engineOutcome.info();
 
         // get an outbound pipe...
-        var pipeOutcome = TCPOutboundPipe.getTCPOutboundPipe( engine, IPv4Address.WILDCARD );
+        var pipeOutcome = TCPOutboundPipe.getNewInstance( engine, IPv4Address.WILDCARD );
         assertTrue( pipeOutcome.ok(), "Problem creating TCPOutboundPipe: " + engineOutcome.msg() );
         var pipe = pipeOutcome.info();
 
@@ -47,7 +47,7 @@ class NetworkingEngineTest {
         pipe.close();
 
         // get a new outbound pipe...
-        pipeOutcome = TCPOutboundPipe.getTCPOutboundPipe( engine, IPv4Address.WILDCARD );
+        pipeOutcome = TCPOutboundPipe.getNewInstance( engine, IPv4Address.WILDCARD );
         assertTrue( pipeOutcome.ok(), "Problem creating TCPOutboundPipe: " + engineOutcome.msg() );
         pipe = pipeOutcome.info();
 
@@ -64,19 +64,21 @@ class NetworkingEngineTest {
     @Test
     void testSimpleTCP() throws NetworkingEngineException {
 
+        LOGGER.info( "Starting testSimpleTCP()" );
+
         // get an engine...
         var engineOutcome = NetworkingEngine.getInstance( "Test" );
         assertTrue( engineOutcome.ok(), "Problem creating NetworkingEngine: " + engineOutcome.msg() );
         var engine = engineOutcome.info();
 
         // start up a listener...
-        var listenerOutcome = TCPListener.getInstance( engine, IPv4Address.LOOPBACK, 5555, NetworkingEngineTest::onAcceptEcho );
-        assertTrue( listenerOutcome.ok(), "Problem creating TCPListener: " + engineOutcome.msg() );
+        var listenerOutcome = TCPListener.getNewInstance( engine, IPv4Address.LOOPBACK, 5555, NetworkingEngineTest::onAcceptEcho );
+        assertTrue( listenerOutcome.ok(), "Problem creating TCPListener: " + listenerOutcome.msg() );
         var listener = listenerOutcome.info();
 
         // get an outbound pipe and connect it...
-        var pipeOutcome = TCPOutboundPipe.getTCPOutboundPipe( engine, IPv4Address.LOOPBACK );
-        assertTrue( pipeOutcome.ok(), "Problem creating TCPOutboundPipe: " + engineOutcome.msg() );
+        var pipeOutcome = TCPOutboundPipe.getNewInstance( engine, IPv4Address.LOOPBACK );
+        assertTrue( pipeOutcome.ok(), "Problem creating TCPOutboundPipe: " + pipeOutcome.msg() );
         var pipe = pipeOutcome.info();
         var connectOutcome = pipe.connect( IPv4Address.LOOPBACK, 5555 );
         assertTrue( connectOutcome.ok(), "Problem with connect: " + connectOutcome.msg() );
@@ -120,7 +122,9 @@ class NetworkingEngineTest {
             var rb = ByteBuffer.allocate( 100 );
             while( !interrupted() ) {
                 try {
+                    LOGGER.info( "Reading TCP echo" );
                     inboundPipe.read( rb );
+                    LOGGER.info( "Writing TCP echo" );
                     inboundPipe.write( rb );
                 }
                 catch( NetworkingEngineException _e ) {
@@ -140,12 +144,12 @@ class NetworkingEngineTest {
         var engine = engineOutcome.info();
 
         // start up a listener...
-        var listenerOutcome = TCPListener.getInstance( engine, IPv4Address.LOOPBACK, 5555, NetworkingEngineTest::onAcceptSlowReceiver );
+        var listenerOutcome = TCPListener.getNewInstance( engine, IPv4Address.LOOPBACK, 5555, NetworkingEngineTest::onAcceptSlowReceiver );
         assertTrue( listenerOutcome.ok(), "Problem creating TCPListener: " + engineOutcome.msg() );
         var listener = listenerOutcome.info();
 
         // get an outbound pipe and connect it...
-        var pipeOutcome = TCPOutboundPipe.getTCPOutboundPipe( engine, IPv4Address.LOOPBACK );
+        var pipeOutcome = TCPOutboundPipe.getNewInstance( engine, IPv4Address.LOOPBACK );
         assertTrue( pipeOutcome.ok(), "Problem creating TCPOutboundPipe: " + engineOutcome.msg() );
         var pipe = pipeOutcome.info();
         var connectOutcome = pipe.connect( IPv4Address.LOOPBACK, 5555 );
@@ -240,14 +244,14 @@ class NetworkingEngineTest {
         var engine = engineOutcome.info();
 
         // start up a listener...
-        var listenerOutcome = TCPListener.getInstance( engine, IPv4Address.LOOPBACK, 5555, NetworkingEngineTest::onAcceptMultipleTCP );
+        var listenerOutcome = TCPListener.getNewInstance( engine, IPv4Address.LOOPBACK, 5555, NetworkingEngineTest::onAcceptMultipleTCP );
         assertTrue( listenerOutcome.ok(), "Problem creating TCPListener: " + engineOutcome.msg() );
         var listener = listenerOutcome.info();
 
         // get some outbound pipes and connect them...
         Set<TCPOutboundPipe> pipes = new HashSet<>();
         for( int i = 0; i < NUM_PIPES; i++ ) {
-            var pipeOutcome = TCPOutboundPipe.getTCPOutboundPipe( engine, IPv4Address.LOOPBACK );
+            var pipeOutcome = TCPOutboundPipe.getNewInstance( engine, IPv4Address.LOOPBACK );
             assertTrue( pipeOutcome.ok(), "Problem creating TCPOutboundPipe: " + engineOutcome.msg() );
             var pipe = pipeOutcome.info();
             var connectOutcome = pipe.connect( IPv4Address.LOOPBACK, 5555 );

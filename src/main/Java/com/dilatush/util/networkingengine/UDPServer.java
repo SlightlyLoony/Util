@@ -56,9 +56,9 @@ public class UDPServer extends UDPBase {
      * @return The outcome of the attempt.  If ok, the info contains the new {@link UDPServer} instance, configured and registered.  If not ok, it contains an explanatory
      * message and possibly an exception that caused the problem.
      */
-    public static Outcome<UDPServer> getInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort,
-                                                  final OnDatagramReceiptHandler _onReceiptHandler, final int _maxDatagramBytes, final OnErrorHandler _onErrorHandler,
-                                                  final SourceFilter _sourceFilter ) {
+    public static Outcome<UDPServer> getNewInstance( final NetworkingEngine _engine, final IPAddress _bindToIP, final int _bindToPort,
+                                                     final OnDatagramReceiptHandler _onReceiptHandler, final int _maxDatagramBytes, final OnErrorHandler _onErrorHandler,
+                                                     final SourceFilter _sourceFilter ) {
 
         try {
             // sanity checks...
