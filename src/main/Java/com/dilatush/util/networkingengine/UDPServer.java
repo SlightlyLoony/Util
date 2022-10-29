@@ -67,7 +67,8 @@ public class UDPServer extends UDPBase {
 
             // get a datagram channel bound to the interface identified by the given IP, and to the given UDP port on that interface...
             var protocolFamily = (_bindToIP instanceof IPv4Address) ? StandardProtocolFamily.INET : StandardProtocolFamily.INET6;
-            DatagramChannel channel = DatagramChannel.open( protocolFamily );
+            var channel = DatagramChannel.open( protocolFamily );
+            channel.configureBlocking( false );
             var socketAddress = new InetSocketAddress( _bindToIP.toInetAddress(), _bindToPort );
             channel.bind( socketAddress );
 

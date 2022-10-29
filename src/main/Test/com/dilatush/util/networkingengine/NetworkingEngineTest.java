@@ -11,6 +11,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static com.dilatush.util.General.getLogger;
@@ -59,6 +60,59 @@ class NetworkingEngineTest {
         pipe.close();
         engine.shutdown();
     }
+
+
+    private static UDPServer udpServer;
+
+    @Test
+    void testSimpleUDP() throws NetworkingEngineException {
+
+        // get an engine...
+        var engineOutcome = NetworkingEngine.getInstance( "Test" );
+        assertTrue( engineOutcome.ok(), "Problem creating NetworkingEngine: " + engineOutcome.msg() );
+        var engine = engineOutcome.info();
+
+        // start up a UDP server...
+        var serverOutcome = UDPServer.getNewInstance( engine, IPv4Address.LOOPBACK, 5555, NetworkingEngineTest::onInboundUDP, 200, null, null );
+        assertTrue( serverOutcome.ok(), "Problem creating UDPServer: " + serverOutcome.msg() );
+        udpServer = serverOutcome.info();
+
+        // get a UDP client...
+        var clientOutcome = UDPClient.getNewInstance( engine, IPv4Address.LOOPBACK, 5556, IPv4Address.LOOPBACK, 5555, 200, null );
+        assertTrue( clientOutcome.ok(), "Problem creating TCPOutboundPipe: " + clientOutcome.msg() );
+        var client = clientOutcome.info();
+
+        // write an int...
+        var wb = ByteBuffer.allocate( 100 );
+        wb.putInt( 8217 );
+        wb.flip();
+        var datagram = new OutboundDatagram( wb, IPv4Address.LOOPBACK, 5555 );
+        var sendOutcome = client.send( datagram );
+        assertTrue( sendOutcome.ok(), "Problem sending: " + sendOutcome.msg() );
+
+        // read back the echo and make sure it's correct...
+        var readOutcome = client.receive();
+        assertTrue( readOutcome.ok(), "Problem reading: " + readOutcome.msg() );
+        var rd = readOutcome.info().getData().getInt();
+        assertEquals( 8217, rd, "Data read does not match data transmitted" );
+
+        // shut it all down...
+        echo.inboundPipe.close();
+        client.close();
+        udpServer.close();
+        engine.shutdown();
+    }
+
+    private static void onInboundUDP( final InboundDatagram _datagram ) {
+        var datagram = new OutboundDatagram( _datagram.getData(), _datagram );
+        try {
+            udpServer.send( datagram );
+        }
+        catch( NetworkingEngineException _e ) {
+            LOGGER.log( Level.WARNING, "Problem sending datagram: " + _e.getMessage(), _e );
+        }
+    }
+
 
 
     @Test

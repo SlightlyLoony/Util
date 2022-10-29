@@ -4,11 +4,13 @@ import com.dilatush.util.General;
 import com.dilatush.util.Outcome;
 import com.dilatush.util.Waiter;
 import com.dilatush.util.ip.IPAddress;
+import com.dilatush.util.ip.IPv4Address;
 import com.dilatush.util.networkingengine.interfaces.OnErrorHandler;
 import com.dilatush.util.networkingengine.interfaces.OnReceiveDatagramHandler;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -18,6 +20,7 @@ import java.util.logging.Logger;
 import static com.dilatush.util.General.getLogger;
 import static com.dilatush.util.General.isNull;
 
+// TODO: all the classes using channels need close mechanisms...
 public class UDPClient extends UDPBase {
 
     private static final Outcome.Forge<InboundDatagram> forgeInboundDatagram = new Outcome.Forge<>();
@@ -31,13 +34,22 @@ public class UDPClient extends UDPBase {
     protected OnReceiveDatagramHandler onReceiveDatagramHandler;
 
 
-    public static Outcome<UDPClient> getNewInstance( final NetworkingEngine _engine, final DatagramChannel _channel,
+    public static Outcome<UDPClient> getNewInstance( final NetworkingEngine _engine,
                                                      final IPAddress _bindToAddress, final int _bindToPort,
                                                      final IPAddress _remoteAddress, final int _remotePort,
                                                      final int _maxDatagramBytes, final OnErrorHandler _onErrorHandler ) {
 
         try {
-            return forgeUDPClient.ok( new UDPClient( _engine, _channel, _bindToAddress, _bindToPort, _remoteAddress, _remotePort, _maxDatagramBytes, _onErrorHandler ) );
+            // get a datagram channel...
+            var protocolFamily = (_bindToAddress instanceof IPv4Address) ? StandardProtocolFamily.INET : StandardProtocolFamily.INET6;
+            var channel = DatagramChannel.open( protocolFamily );
+            channel.configureBlocking( false );
+
+            // bind and connect our channel...
+            channel.bind( new InetSocketAddress( _bindToAddress.toInetAddress(), _bindToPort ) );
+            channel.connect( new InetSocketAddress( _remoteAddress.toInetAddress(), _remotePort ) );
+
+            return forgeUDPClient.ok( new UDPClient( _engine, channel, _maxDatagramBytes, _onErrorHandler ) );
         }
         catch( final Exception _e ) {
             return forgeUDPClient.notOk( "Problem instantiating UDPClient: " + _e.getMessage(), _e );
@@ -47,18 +59,8 @@ public class UDPClient extends UDPBase {
 
 
     protected UDPClient( final NetworkingEngine _engine, final DatagramChannel _channel,
-                         final IPAddress _bindToAddress, final int _bindToPort,
-                         final IPAddress _remoteAddress, final int _remotePort,
                          final int _maxDatagramBytes, final OnErrorHandler _onErrorHandler ) throws IOException {
         super( _engine, _channel, _maxDatagramBytes, _onErrorHandler );
-
-        // sanity checks...
-        if( isNull( _bindToAddress, _bindToPort, _remoteAddress, _remotePort ) )
-            throw new IllegalArgumentException( "_bindToAddress, _bindToPort, _remoteAddress, or _remotePort is null" );
-
-        // bind and connect our channel...
-        channel.bind( new InetSocketAddress( _bindToAddress.toInetAddress(), _bindToPort ) );
-        channel.connect( new InetSocketAddress( _remoteAddress.toInetAddress(), _remotePort ) );
 
         // some setup...
         receiveInProgress = new AtomicBoolean( false );

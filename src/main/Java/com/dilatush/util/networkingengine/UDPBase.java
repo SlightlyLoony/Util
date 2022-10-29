@@ -193,6 +193,17 @@ import static com.dilatush.util.General.isNull;
     }
 
 
+    public void close() {
+
+        try {
+            channel.close();
+        }
+        catch( IOException _e ) {
+            // naught to do...
+        }
+    }
+
+
     /**
      * The default {@code onErrorHandler}, which just logs the error as a warning.
      *
