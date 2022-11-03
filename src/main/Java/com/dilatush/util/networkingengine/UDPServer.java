@@ -20,8 +20,8 @@ import static com.dilatush.util.General.getLogger;
 import static com.dilatush.util.General.isNull;
 
 /**
- * Instances of this class (or its subclasses) implement servers using the UDP protocol.  In particular, they listen for inbound UDP datagrams, calling a specified handler when
- * each datagram is received.
+ * Instances of this class (or its subclasses) implement servers using the UDP protocol.  In particular, they listen for inbound UDP datagrams from any remote source, calling a
+ * specified handler when each datagram is received, and they permit sending datagrams to any remote destinations.
  */
 @SuppressWarnings( "unused" )
 public class UDPServer extends UDPBase {
@@ -144,7 +144,7 @@ public class UDPServer extends UDPBase {
                 if( sourceFilter.accept( IPAddress.fromInetAddress( socket.getAddress() ), socket.getPort() ) ) {
 
                     // handle the case of the datagram being truncated...
-                    var truncated = ( readBuffer.limit() == readBuffer.capacity() );
+                    var truncated = ( readBuffer.position() == readBuffer.capacity() );
                     if( truncated ) readBuffer.limit( readBuffer.limit() - 1 );   // getting rid of the extra truncation-detection byte...
 
                     // make our datagram...
@@ -163,6 +163,7 @@ public class UDPServer extends UDPBase {
 
             // re-enable read interest on our selection key...
             key.interestOpsOr( SelectionKey.OP_READ );
+            engine.wakeSelector();
         }
     }
 }

@@ -35,6 +35,8 @@ public class OutboundDatagram {
         // sanity checks...
         if( isNull( _data, _ip ) )
             throw new IllegalArgumentException( "_data or _ip is null" );
+        if( !_data.hasRemaining() )
+            throw new IllegalArgumentException( "_data has no bytes remaining" );
         if( _ip.isWildcard() )
             throw new IllegalArgumentException( "_ip is the wildcard address" );
         if( (_port < 1) || (_port > 65535) )

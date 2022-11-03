@@ -52,7 +52,7 @@ import static com.dilatush.util.General.isNull;
      *<p>Note that this constructor should not be invoked directly.  Instead, get a new instance of this class through one of the factory methods in this class.</p>
      *
      * @param _engine The {@link NetworkingEngine} to associate the new instance with.
-     * @param _channel The {@link DatagramChannel} for this instance to use.  The channel must be bound and unconnected.
+     * @param _channel The {@link DatagramChannel} for this instance to use.
      * @param _maxDatagramBytes The maximum number of bytes to receive in a datagram (bytes more than this are truncated).
      * @param _onErrorHandler The handler to call when an error occurs.
      * @throws IOException on any I/O error.
@@ -201,6 +201,9 @@ import static com.dilatush.util.General.isNull;
         catch( IOException _e ) {
             // naught to do...
         }
+
+        // wake up the selector to make sure the close has immediate effect...
+        engine.wakeSelector();
     }
 
 
