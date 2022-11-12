@@ -5,6 +5,11 @@ import static com.dilatush.util.General.isNull;
 /**
  * Calculate Cyclic Redundancy Codes (CRCs) for various CRC algorithms.  The algorithm used is determined by the {@link CRCAlgorithm} constructor argument.  The CRC algorithm's
  * width must be a multiple of 8 (the number of bits in a byte).
+ * References:
+ * <a href="http://www.sunshine2k.de/articles/coding/crc/understanding_crc.html">here</a>,
+ * <a href="https://en.wikipedia.org/wiki/Cyclic_redundancy_check">here</a>,
+ * <a href="https://reveng.sourceforge.io/crc-catalogue/all.htm">here</a>, and
+ * <a href="https://developer.classpath.org/doc/java/util/zip/CRC32-source.html">here</a>.
  */
 public class CRC {
 
