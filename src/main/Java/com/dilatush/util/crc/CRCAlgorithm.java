@@ -49,13 +49,16 @@ public enum CRCAlgorithm {
     /** The standard test data used to generate the CRC code for checking the CRC algorithms.  The result of the calculation should equal the "check" value of each algorithm. */
     final public static byte[] CHECK_INPUT = "123456789".getBytes( StandardCharsets.UTF_8 );
 
-    final public String   name;
-    final public long     polynomial;
-    final public int      width;
-    final public long     initialValue;
-    final public long     xorOut;
-    final public BitOrder bitOrder;
-    final public long     check;
+    final public  String   name;
+    final public  long     polynomial;
+    final public  int      width;
+    final public  long     initialValue;
+    final public  long     xorOut;
+    final public  BitOrder bitOrder;
+    final public  long     check;
+    final public  long     crcMask;
+
+    private long[]   precomputed;         // a table of precomputed (memoized) CRCs the indexed byte values and this algorithm...
 
     CRCAlgorithm( final String _name, final long _polynomial, final int _width, final long _initialValue, final long _xorOut,
                   final BitOrder _bitOrder, final long _check ) {
@@ -72,5 +75,102 @@ public enum CRCAlgorithm {
         xorOut       = _xorOut;
         bitOrder     = _bitOrder;
         check        = _check;
+        crcMask     = (~0L) >>> (64 - width);
+    }
+
+
+    /**
+     * Return the precomputed CRC for the given index byte.
+     *
+     * @param _byte The index byte to look up the CRC for.
+     * @return The precomputed CRC for the given index byte.
+     */
+    public long getByteCRC( final int _byte ) {
+
+        // lazy initialization...
+        if( precomputed == null )
+            precompute();
+
+        // look up the CRC and return it...
+        return precomputed[0xff & _byte];
+    }
+
+
+    /**
+     * Generate the table of precomputed CRCs for this CRC algorithm.
+     */
+    private void precompute() {
+
+        // some setup...
+        precomputed = new long[256];
+
+        // the table computation details depend on the bit order...
+        if( bitOrder == BitOrder.NORMAL ) {
+
+            // get a mask for the high-order bit in the CRC...
+            long hiBit = 1L << (width - 1);
+
+            // for all possible index byte values...
+            for( int n = 0; n < 256; n++ ) {
+
+                // put n (the current index byte value) in the high-order byte of the CRC...
+                long pCRC = ((long)n) << (width - 8);
+
+                // for each bit in the byte...
+                for( int b = 0; b < 8; b++ ) {
+
+                    // if the high-order bit is a one, XOR the polynomial coefficients with the CRC left shifted one...
+                    if( (pCRC & hiBit) != 0 )
+                        pCRC = polynomial ^ (pCRC << 1);
+
+                        // otherwise, just left shift the CRC one...
+                    else
+                        pCRC <<= 1;
+                }
+
+                // stuff away the calculated CRC value for this index byte value...
+                precomputed[n] = pCRC & crcMask;
+            }
+        }
+
+        // when reversed bit order...
+        else {
+
+            // mirror the polynomial coefficients (so the high-order coefficient is in the low-order bit)
+            var poly = reverse( polynomial );
+
+            // for all possible index byte values...
+            for( int n = 0; n < 256; n++ ) {
+
+                // put n (the current index byte value) in the low-order byte of the CRC...
+                long pCRC = n;
+
+                // for each bit in the byte...
+                for( int b = 0; b < 8; b++ ) {
+
+                    // if the high-order (reversed!) bit is a one, XOR the polynomial coefficients with the CRC right shifted one...
+                    if( (pCRC & 1) != 0 )
+                        pCRC = poly ^ (pCRC >>> 1);
+
+                        // otherwise, just right shift the CRC one...
+                    else
+                        pCRC >>>= 1;
+                }
+
+                // stuff away the calculated value for this index byte value...
+                precomputed[n] = pCRC & crcMask;
+            }
+        }
+    }
+
+
+    /**
+     * Mirror the low-order (width) bits in the given value.
+     *
+     * @param _val The value to mirror.
+     * @return The mirrored value.
+     */
+    private long reverse( final long _val ) {
+        return Long.reverse( _val ) >>> (64 - width);
     }
 }

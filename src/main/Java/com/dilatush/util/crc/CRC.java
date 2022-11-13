@@ -16,8 +16,6 @@ public class CRC {
     private final  CRCAlgorithm algo;   // the algorithm used for this instance...
 
     private long   crc;                 // the CRC at the current point in the computation...
-    private long[] precomputed;         // a table of precomputed (memoized) CRCs the indexed byte values and this algorithm...
-    private long   crcMask;             // the bit mask for this CRC algorithm; the low-order (width) bits are set to 1s...
 
 
     /**
@@ -31,7 +29,6 @@ public class CRC {
         if( isNull( _algo ) ) throw new IllegalArgumentException( "_algo may not be null" );
 
         algo = _algo;
-        precompute();  // precompute the CRC values for all possible index bytes...
         init();        // initialize the CRC value...
     }
 
@@ -51,7 +48,7 @@ public class CRC {
             int index = 0xff & ((int)(crc >>> (algo.width - 8)) ^ _byte);
 
             // the updated CRC is the XOR of the precomputed CRC and the low-order bytes of the current CRC, shifted toward the MSB by a byte...
-            crc = precomputed[index] ^ (crc << 8);
+            crc = algo.getByteCRC( index ) ^ (crc << 8);
         }
 
         else {
@@ -60,7 +57,7 @@ public class CRC {
             int index = 0xff & ((int)crc ^ _byte);
 
             // the updated CRC is the XOR of the precomputed CRC and the low-order bytes of the current CRC, shifted toward the MSB by a byte...
-            crc = precomputed[index] ^ (crc >>> 8);
+            crc = algo.getByteCRC( index ) ^ (crc >>> 8);
         }
     }
 
@@ -104,87 +101,7 @@ public class CRC {
      * @return The current value of the CRC.
      */
     public long getCRC() {
-        return crcMask & (crc ^ algo.xorOut);
-    }
-
-
-    /**
-     * Mirror the low-order (width) bits in the given value.
-     *
-     * @param _val The value to mirror.
-     * @return The mirrored value.
-     */
-    private long reverse( final long _val ) {
-        return Long.reverse( _val ) >>> (64 - algo.width);
-    }
-
-
-    /**
-     * Generate the table of precomputed CRCs for this CRC algorithm.
-     */
-    private void precompute() {
-
-        // some setup...
-        precomputed = new long[256];
-        crcMask     = (~0L) >>> (64 - algo.width);
-
-        // the table computation details depend on the bit order...
-        if( algo.bitOrder == BitOrder.NORMAL ) {
-
-            // get a mask for the high-order bit in the CRC...
-            long hiBit = 1L << (algo.width - 1);
-
-            // for all possible index byte values...
-            for( int n = 0; n < 256; n++ ) {
-
-                // put n (the current index byte value) in the high-order byte of the CRC...
-                long pCRC = ((long)n) << (algo.width - 8);
-
-                // for each bit in the byte...
-                for( int b = 0; b < 8; b++ ) {
-
-                    // if the high-order bit is a one, XOR the polynomial coefficients with the CRC left shifted one...
-                    if( (pCRC & hiBit) != 0 )
-                        pCRC = algo.polynomial ^ (pCRC << 1);
-
-                    // otherwise, just left shift the CRC one...
-                    else
-                        pCRC <<= 1;
-                }
-
-                // stuff away the calculated CRC value for this index byte value...
-                precomputed[n] = pCRC & crcMask;
-            }
-        }
-
-        // when reversed bit order...
-        else {
-
-            // mirror the polynomial coefficients (so the high-order coefficient is in the low-order bit)
-            var poly = reverse( algo.polynomial );
-
-            // for all possible index byte values...
-            for( int n = 0; n < 256; n++ ) {
-
-                // put n (the current index byte value) in the low-order byte of the CRC...
-                long pCRC = n;
-
-                // for each bit in the byte...
-                for( int b = 0; b < 8; b++ ) {
-
-                    // if the high-order (reversed!) bit is a one, XOR the polynomial coefficients with the CRC right shifted one...
-                    if( (pCRC & 1) != 0 )
-                        pCRC = poly ^ (pCRC >>> 1);
-
-                    // otherwise, just right shift the CRC one...
-                    else
-                        pCRC >>>= 1;
-                }
-
-                // stuff away the calculated value for this index byte value...
-                precomputed[n] = pCRC & crcMask;
-            }
-        }
+        return algo.crcMask & (crc ^ algo.xorOut);
     }
 
 
