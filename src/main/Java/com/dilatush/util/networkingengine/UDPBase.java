@@ -89,15 +89,15 @@ import static com.dilatush.util.General.isNull;
      *
      * @param _datagram The {@link OutboundDatagram} to send.
      * @param _onSendCompleteHandler The handler to call upon the completion of sending the datagram.
-     * @throws NetworkingEngineException if no on send complete handler is specified, or if a send operation is in progress.
+     * @throws IllegalStateException if no on send complete handler is specified, or if a send operation is in progress.
      */
-    public void send( final OutboundDatagram _datagram, final OnSendCompleteHandler _onSendCompleteHandler ) throws NetworkingEngineException {
+    public void send( final OutboundDatagram _datagram, final OnSendCompleteHandler _onSendCompleteHandler ) throws IllegalStateException {
 
         // if we didn't get a send complete handler, then we really don't have any choice but to throw an exception...
-        if( isNull( _onSendCompleteHandler ) ) throw new NetworkingEngineException( "_onSendCompleteHandler is null" );
+        if( isNull( _onSendCompleteHandler ) ) throw new IllegalStateException( "_onSendCompleteHandler is null" );
 
         // make sure we haven't already got a send operation in progress...
-        if( sendInProgress.getAndSet( true ) ) throw new NetworkingEngineException( "Send operation already in progress" );
+        if( sendInProgress.getAndSet( true ) ) throw new IllegalStateException( "Send operation already in progress" );
 
         // sanity checks...
         if( isNull( _datagram ) ) {
@@ -120,9 +120,9 @@ import static com.dilatush.util.General.isNull;
      * @param _datagram The {@link OutboundDatagram} to send.
      * @return The outcome of the attempt.  If ok, the datagram was successfully sent.  If not ok, then there is an explanatory message and possibly the exception that caused
      * the problem.
-     * @throws NetworkingEngineException if a send operation is in progress.
+     * @throws IllegalStateException if a send operation is in progress.
      */
-    public Outcome<?> send( final OutboundDatagram _datagram ) throws NetworkingEngineException {
+    public Outcome<?> send( final OutboundDatagram _datagram ) throws IllegalStateException {
         Waiter<Outcome<?>> waiter = new Waiter<>();
         send( _datagram, waiter::complete );
         return waiter.waitForCompletion();

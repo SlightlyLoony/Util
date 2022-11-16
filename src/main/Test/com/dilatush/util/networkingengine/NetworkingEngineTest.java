@@ -66,7 +66,7 @@ class NetworkingEngineTest {
     private static UDPServer udpServer;
 
     @Test
-    void testSimpleUDP() throws NetworkingEngineException {
+    void testSimpleUDP() throws IllegalStateException {
 
         // get an engine...
         var engineOutcome = NetworkingEngine.getInstance( "Test" );
@@ -109,13 +109,13 @@ class NetworkingEngineTest {
         try {
             udpServer.send( datagram );
         }
-        catch( NetworkingEngineException _e ) {
+        catch( IllegalStateException _e ) {
             LOGGER.log( Level.WARNING, "Problem sending datagram: " + _e.getMessage(), _e );
         }
     }
 
     @Test
-    void testTruncatedUDP() throws NetworkingEngineException, InterruptedException {
+    void testTruncatedUDP() throws IllegalStateException, InterruptedException {
         LOGGER.finest( "test truncated UDP" );
 
         // get an engine...
@@ -166,7 +166,7 @@ class NetworkingEngineTest {
     }
 
     @Test
-    void testUDPClients() throws NetworkingEngineException {
+    void testUDPClients() throws IllegalStateException {
 
         // get an engine...
         var engineOutcome = NetworkingEngine.getInstance( "Test" );
@@ -233,7 +233,7 @@ class NetworkingEngineTest {
 
 
     @Test
-    void testFastUDP() throws NetworkingEngineException, InterruptedException {
+    void testFastUDP() throws IllegalStateException, InterruptedException {
 
         // get an engine...
         var engineOutcome = NetworkingEngine.getInstance( "Test" );
@@ -297,7 +297,7 @@ class NetworkingEngineTest {
                 try {
                     readOutcome = client.receive();
                 }
-                catch( NetworkingEngineException _e ) {
+                catch( IllegalStateException _e ) {
                     fail( "Got unexpected exception: " + _e.getMessage(), _e );
                 }
                 assertTrue( readOutcome.ok(), "Problem reading: " + readOutcome.msg() );
@@ -315,7 +315,7 @@ class NetworkingEngineTest {
 
 
     @Test
-    void testSimpleTCP() throws NetworkingEngineException {
+    void testSimpleTCP() throws IllegalStateException {
 
         LOGGER.info( "Starting testSimpleTCP()" );
 
@@ -380,7 +380,7 @@ class NetworkingEngineTest {
                     LOGGER.info( "Writing TCP echo" );
                     inboundPipe.write( rb );
                 }
-                catch( NetworkingEngineException _e ) {
+                catch( IllegalStateException _e ) {
                     fail( "Unexpected exception: " + _e.getMessage() );
                 }
             }
@@ -422,7 +422,7 @@ class NetworkingEngineTest {
             try {
                 writeOutcome = pipe.write( wb );
             }
-            catch( NetworkingEngineException _e ) {
+            catch( IllegalStateException _e ) {
                 fail( "Unexpected exception: " + _e.getMessage() );
             }
             assertTrue( writeOutcome.ok(), "Problem writing: " + writeOutcome.msg() );
@@ -466,7 +466,7 @@ class NetworkingEngineTest {
                 try {
                     readOutcome = inboundPipe.read( rb );
                 }
-                catch( NetworkingEngineException _e ) {
+                catch( IllegalStateException _e ) {
                     fail( "Unexpected exception: " + _e.getMessage() );
                 }
                 assertTrue( readOutcome.ok(), "Problem reading: " + readOutcome.msg() );
@@ -534,7 +534,7 @@ class NetworkingEngineTest {
                 try {
                     writeOutcome = pipe.write( wb );
                 }
-                catch( NetworkingEngineException _e ) {
+                catch( IllegalStateException _e ) {
                     fail( "Unexpected exception: " + _e.getMessage() );
                 }
                 assertTrue( writeOutcome.ok(), "Problem writing: " + writeOutcome.msg() );
@@ -582,7 +582,7 @@ class NetworkingEngineTest {
                 try {
                     readOutcome = pipe.read( rb );
                 }
-                catch( NetworkingEngineException _e ) {
+                catch( IllegalStateException _e ) {
                     fail( "Unexpected exception: " + _e.getMessage() );
                 }
                 assertTrue( readOutcome.ok(), "Read error: " + readOutcome.msg() );

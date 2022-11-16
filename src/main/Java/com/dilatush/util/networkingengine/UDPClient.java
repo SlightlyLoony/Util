@@ -184,15 +184,15 @@ public class UDPClient extends UDPBase {
      * be in progress at any given time; any attempt to initiate more than one will result in an exception.
      *
      * @param _onReceiveDatagramHandler The handler to call when a datagram is received.
-     * @throws NetworkingEngineException if no handler is supplied, or if a receive operation is already in progress.
+     * @throws IllegalStateException if no handler is supplied, or if a receive operation is already in progress.
      */
-    public void receive( final OnReceiveDatagramHandler _onReceiveDatagramHandler ) throws NetworkingEngineException {
+    public void receive( final OnReceiveDatagramHandler _onReceiveDatagramHandler ) throws IllegalStateException {
 
         // if we don't get a handler, we really have no alternative to an exception...
-        if( isNull( _onReceiveDatagramHandler ) ) throw new NetworkingEngineException( "_onReceiveDatagramHandler is null" );
+        if( isNull( _onReceiveDatagramHandler ) ) throw new IllegalStateException( "_onReceiveDatagramHandler is null" );
 
         // if we have a receive operation in progress, stop here and tell the caller...
-        if( receiveInProgress.getAndSet( true ) ) throw new NetworkingEngineException( "Receive operation already in progress" );
+        if( receiveInProgress.getAndSet( true ) ) throw new IllegalStateException( "Receive operation already in progress" );
 
         // save our handler...
         onReceiveDatagramHandler = _onReceiveDatagramHandler;
@@ -207,9 +207,9 @@ public class UDPClient extends UDPBase {
      *
      * @return The result of this operation.  If ok, then the info contains the received datagram.  If not ok, there is an explanatory message and possibly the exception that
      * caused the problem.
-     * @throws NetworkingEngineException if a receive operation is already in progress.
+     * @throws IllegalStateException if a receive operation is already in progress.
      */
-    public Outcome<InboundDatagram> receive() throws NetworkingEngineException {
+    public Outcome<InboundDatagram> receive() throws IllegalStateException {
         var waiter = new Waiter<Outcome<InboundDatagram>>();
         receive( waiter::complete );
         return waiter.waitForCompletion();
