@@ -4,7 +4,7 @@ import com.dilatush.util.Outcome;
 import com.dilatush.util.ScheduledExecutor;
 import com.dilatush.util.Waiter;
 import com.dilatush.util.feed.InFeed;
-import com.dilatush.util.feed.ReadCompleteHandler;
+import com.dilatush.util.feed.OnReadCompleteHandler;
 import com.dilatush.util.ip.IPAddress;
 import com.dilatush.util.networkingengine.interfaces.OnTCPWriteCompleteHandler;
 
@@ -58,7 +58,7 @@ public abstract class TCPPipe implements InFeed {
     private ByteBuffer                    readBuffer;
     private ByteBuffer                    writeBuffer;
     private int                           minBytes;
-    private ReadCompleteHandler           onReadCompleteHandler;
+    private OnReadCompleteHandler onReadCompleteHandler;
     private OnTCPWriteCompleteHandler     onWriteCompleteHandler;
 
 
@@ -110,8 +110,8 @@ public abstract class TCPPipe implements InFeed {
 
     /**
      * <p>Initiates an asynchronous (non-blocking) operation to read network data from the TCP connection represented by this instance.  The data is received from the network and
-     * copied into the given read buffer.  The {@code _onReadCompleteHandler} is called when the read operation completes, whether that operation completed normally, was
-     * terminated because of an error, or was canceled.  Note that the {@code _onReadCompleteHandler} will always be called in one of the threads from the associated
+     * copied into the given read buffer.  The {@code _handler} is called when the read operation completes, whether that operation completed normally, was
+     * terminated because of an error, or was canceled.  Note that the {@code _handler} will always be called in one of the threads from the associated
      * {@link NetworkingEngine}'s {@link ScheduledExecutor}, never in the thread that calls this method.</p>
      * <p>Data is read into the read buffer starting at the buffer's current position.  When the read operation is complete, the buffer is flipped (i.e., {@link ByteBuffer#flip()}
      * is called), so the buffer's position upon completion will always be zero, and its limit will indicate the end of the data previously unprocessed along with the network data
@@ -124,21 +124,20 @@ public abstract class TCPPipe implements InFeed {
      * a packet, exactly one packet, or multiple packets with the last one possibly not completely read.  The code calling this method should always treat the data read as a
      * stream, and not a series of discrete packets.</p>
      *
-     * @param _readBuffer The read buffer to read network data into.  Note that this buffer may be compacted by this method before any data is read.  While the read operation is
-     *                    in  progress (i.e, before the {@code _onReadCompleteHandler} is called), the read buffer must not be manipulated other than by this instance - hands off
-     *                    the read buffer!
+     * @param _readBuffer The read buffer to read network data into.  While the read operation is in  progress (i.e, before the {@code _handler} is called), the read buffer must
+     *                    not be manipulated other than by this instance - hands off the read buffer!
      * @param _minBytes The minimum number of bytes that must be read for this read operation to be considered complete.  This must be at least 1, and no greater than the capacity
      *                  of the read buffer.
-     * @param _onReadCompleteHandler This handler is called with the outcome of the read operation, when the read operation completes, whether normally, terminated by an error, or
-     *                            canceled.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the network data read.  If not
-     *                            ok, then there is an explanatory message and possibly the exception that caused the problem.
-     * @throws IllegalStateException if no read complete handle is specified, or if a read is already in progress
+     * @param _handler This handler is called with the outcome of the read operation, when the read operation completes, whether normally, terminated by an error, or
+     *                 canceled.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the network data read.  If not
+     *                 ok, then there is an explanatory message and possibly the exception that caused the problem.
+     * @throws IllegalStateException if a read is already in progress
+     * @throws IllegalArgumentException if {@code _handler} is null
      */
-    public void read( final ByteBuffer _readBuffer, final int _minBytes, final ReadCompleteHandler _onReadCompleteHandler )
-        throws IllegalStateException {
+    public void read( final ByteBuffer _readBuffer, final int _minBytes, final OnReadCompleteHandler _handler ) {
 
         // if we didn't get a read complete handler, then we really don't have any choice but to throw an exception...
-        if( isNull( _onReadCompleteHandler ) ) throw new IllegalStateException( "_onReadCompleteHandler is null" );
+        if( isNull( _handler ) ) throw new IllegalArgumentException( "_handler is null" );
 
         // if we already have a read operation in progress, throw an exception...
         if( readInProgress.getAndSet( true ) )
@@ -154,7 +153,7 @@ public abstract class TCPPipe implements InFeed {
             // squirrel away our read state...
             minBytes              = _minBytes;
             readBuffer            = _readBuffer;
-            onReadCompleteHandler = _onReadCompleteHandler;
+            onReadCompleteHandler = _handler;
             bytesRead.set( 0 );
 
             // initiate the actual read process...
@@ -164,88 +163,6 @@ public abstract class TCPPipe implements InFeed {
         catch( TCPPipeException _e ) {
             postReadCompletion( forgeByteBuffer.notOk( _e.getMessage() ) );
         }
-    }
-
-
-    /**
-     * <p>Initiates an asynchronous (non-blocking) operation to read network data from the TCP connection represented by this instance.  The data is received from the network and
-     * copied into the given read buffer.  The {@code _onReadCompleteHandler} is called when the read operation completes, whether that operation completed normally, was
-     * terminated because of an error, or was canceled.  Note that the {@code _onReadCompleteHandler} will always be called in one of the threads from the associated
-     * {@link NetworkingEngine}'s {@link ScheduledExecutor}, never in the thread that calls this method.</p>
-     * <p>Data is read into the read buffer starting at the buffer's current position.  When the read operation is complete, the buffer is flipped (i.e., {@link ByteBuffer#flip()}
-     * is called), so the buffer's position upon completion will always be zero, and its limit will indicate the end of the data previously unprocessed along with the network data
-     * just read.  Because the read buffer may have already contained data when this method is called, the number of bytes in the read buffer upon completion may be greater than
-     * the number of bytes actually read.  If the number of bytes actually read is needed, the {@link #getBytesRead()} method can be used (upon the read operation completing) to
-     * obtain that value.</p>
-     * <p>The number of bytes that will actually be read into the read buffer depends on a number of factors, not all of which are predictable or controllable.  In general, the
-     * read operation will complete after reading the contents of a received TCP packet <i>and</i> the at least one byte has been read from the network.  That means the read
-     * operation will complete after the first successful read operation - which could be part of a packet, exactly one packet, or multiple packets with the last one possibly not
-     * completely read.  The code calling this method should always treat the data read as a stream, and not a series of discrete packets.</p>
-     *
-     * @param _readBuffer The read buffer to read network data into.  Note that this buffer may be compacted by this method before any data is read.  While the read operation is
-     *                    in  progress (i.e, before the {@code _onReadCompleteHandler} is called), the read buffer must not be manipulated other than by this instance - hands off
-     *                    the read buffer!
-     * @param _onReadCompleteHandler This handler is called with the outcome of the read operation, when the read operation completes, whether normally, terminated by an error, or
-     *                            canceled.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the network data read.  If not
-     *                            ok, then there is an explanatory message and possibly the exception that caused the problem.
-     * @throws IllegalStateException if no read complete handle is specified, or if a read is already in progress
-     */
-    public void read( final ByteBuffer _readBuffer, final ReadCompleteHandler _onReadCompleteHandler ) throws IllegalStateException {
-        read( _readBuffer, 1, _onReadCompleteHandler );
-    }
-
-
-    /**
-     * <p>Initiates a synchronous (blocking) operation to read network data from the TCP connection represented by this instance.  The data is received from the network and
-     * copied into the given read buffer.  This method will return when the operation is complete, whether it completed normally, with an error, or was canceled</p>
-     * <p>Data is read into the read buffer starting at the buffer's current position.  When the read operation is complete, the buffer is flipped (i.e., {@link ByteBuffer#flip()}
-     * is called), so the buffer's position upon completion will always be zero, and its limit will indicate the end of the data previously unprocessed along with the network data
-     * just read.  Because the read buffer may have already contained data when this method is called, the number of bytes in the read buffer upon completion may be greater than
-     * the number of bytes actually read.  If the number of bytes actually read is needed, the {@link #getBytesRead()} method can be used (upon the read operation completing) to
-     * obtain that value.</p>
-     * <p>The number of bytes that will actually be read into the read buffer depends on a number of factors, not all of which are predictable or controllable.  In general, the
-     * read operation will complete after reading the contents of a received TCP packet <i>and</i> the total number of bytes read is at least equal to the minimum number of bytes
-     * specified in {@code _minBytes}.  If {@code _minBytes} is 1, that means the read operation will complete after the first successful read operation - which could be part of
-     * a packet, exactly one packet, or multiple packets with the last one possibly not completely read.  The code calling this method should always treat the data read as a
-     * stream, and not a series of discrete packets.</p>
-     *
-     * @param _readBuffer The read buffer to read network data into.  Note that this buffer may be compacted by this method before any data is read.  While the read operation is
-     *                    in  progress (i.e, before the {@code _onReadCompleteHandler} is called), the read buffer must not be manipulated other than by this instance - hands off
-     *                    the read buffer!
-     * @param _minBytes The minimum number of bytes that must be read for this read operation to be considered complete.  This must be at least 1, and no greater than the capacity
-     *                  of the read buffer.
-     * @return The outcome of this operation.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the network data read.  If not
-     *         ok, then there is an explanatory message and possibly the exception that caused the problem.
-     */
-    public Outcome<ByteBuffer> read( final ByteBuffer _readBuffer, final int _minBytes ) {
-
-        Waiter<Outcome<ByteBuffer>> waiter = new Waiter<>();
-        read( _readBuffer, _minBytes, waiter::complete );
-        return waiter.waitForCompletion();
-    }
-
-
-    /**
-     * <p>Initiates a synchronous (blocking) operation to read network data from the TCP connection represented by this instance.  The data is received from the network and
-     * copied into the given read buffer.  This method will return when the operation is complete, whether it completed normally, with an error, or was canceled</p>
-     * <p>Data is read into the read buffer starting at the buffer's current position.  When the read operation is complete, the buffer is flipped (i.e., {@link ByteBuffer#flip()}
-     * is called), so the buffer's position upon completion will always be zero, and its limit will indicate the end of the data previously unprocessed along with the network data
-     * just read.  Because the read buffer may have already contained data when this method is called, the number of bytes in the read buffer upon completion may be greater than
-     * the number of bytes actually read.  If the number of bytes actually read is needed, the {@link #getBytesRead()} method can be used (upon the read operation completing) to
-     * obtain that value.</p>
-     * <p>The number of bytes that will actually be read into the read buffer depends on a number of factors, not all of which are predictable or controllable.  In general, the
-     * read operation will complete after reading the contents of a received TCP packet <i>and</i> the at least one byte has been read from the network.  That means the read
-     * operation will complete after the first successful read operation - which could be part of a packet, exactly one packet, or multiple packets with the last one possibly not
-     * completely read.  The code calling this method should always treat the data read as a stream, and not a series of discrete packets.</p>
-     *
-     * @param _readBuffer The read buffer to read network data into.  Note that this buffer may be compacted by this method before any data is read.  While the read operation is
-     *                    in  progress (i.e, before the {@code _onReadCompleteHandler} is called), the read buffer must not be manipulated other than by this instance - hands off
-     *                    the read buffer!
-     * @return The outcome of this operation.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the network data read.  If not
-     *         ok, then there is an explanatory message and possibly the exception that caused the problem.
-     */
-    public Outcome<ByteBuffer> read( final ByteBuffer _readBuffer ) {
-        return read( _readBuffer, 1 );
     }
 
 

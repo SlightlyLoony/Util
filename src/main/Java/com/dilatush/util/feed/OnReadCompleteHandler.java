@@ -8,7 +8,7 @@ import java.nio.ByteBuffer;
  * Implemented by {@link InFeed} read complete handlers.
  */
 @FunctionalInterface
-public interface ReadCompleteHandler {
+public interface OnReadCompleteHandler {
 
     /**
      * Handle the {@link InFeed} read completion with the given outcome.
