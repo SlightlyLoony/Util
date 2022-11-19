@@ -36,7 +36,7 @@ public interface InFeed extends Closeable {
      *                 by any previously read, but not processed data).  If not ok, then there is an explanatory message and possibly the exception that caused the
      *                 problem.
      */
-    void read( final ByteBuffer _readBuffer, final int _minBytes, final OnReadCompleteHandler _handler );
+    void read( final ByteBuffer _readBuffer, final int _minBytes, final OnReadComplete _handler );
 
 
     /**
@@ -59,7 +59,7 @@ public interface InFeed extends Closeable {
      *                 by any previously read, but not processed data).  If not ok, then there is an explanatory message and possibly the exception that caused the
      *                 problem.
      */
-    default void read( final ByteBuffer _readBuffer, final OnReadCompleteHandler _handler ) {
+    default void read( final ByteBuffer _readBuffer, final OnReadComplete _handler ) {
         read( _readBuffer, 1, _handler );
     }
 

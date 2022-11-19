@@ -2,11 +2,11 @@ package com.dilatush.util.networkingengine;
 
 import com.dilatush.util.Outcome;
 import com.dilatush.util.ScheduledExecutor;
-import com.dilatush.util.Waiter;
 import com.dilatush.util.feed.InFeed;
-import com.dilatush.util.feed.OnReadCompleteHandler;
+import com.dilatush.util.feed.OnReadComplete;
+import com.dilatush.util.feed.OnWriteComplete;
+import com.dilatush.util.feed.OutFeed;
 import com.dilatush.util.ip.IPAddress;
-import com.dilatush.util.networkingengine.interfaces.OnTCPWriteCompleteHandler;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -30,7 +30,7 @@ import static com.dilatush.util.General.isNull;
  * Abstract base class for all TCP pipes, each of which provides communications on a single TCP connection; subclasses implement specific kinds of TCP pipes.
  */
 @SuppressWarnings( "unused" )
-public abstract class TCPPipe implements InFeed {
+public abstract class TCPPipe implements InFeed, OutFeed {
 
     private static final Logger                      LOGGER                                      = getLogger();
 
@@ -55,11 +55,11 @@ public abstract class TCPPipe implements InFeed {
     private final AtomicInteger    bytesRead;               // the number of bytes read in the current read operation...
     private final AtomicInteger    bytesWritten;            // the number of bytes written in the current write operation...
 
-    private ByteBuffer                    readBuffer;
-    private ByteBuffer                    writeBuffer;
-    private int                           minBytes;
-    private OnReadCompleteHandler onReadCompleteHandler;
-    private OnTCPWriteCompleteHandler     onWriteCompleteHandler;
+    private ByteBuffer      readBuffer;
+    private ByteBuffer      writeBuffer;
+    private int             minBytes;
+    private OnReadComplete  onReadCompleteHandler;
+    private OnWriteComplete onWriteCompleteHandler;
 
 
     /**
@@ -134,7 +134,7 @@ public abstract class TCPPipe implements InFeed {
      * @throws IllegalStateException if a read is already in progress
      * @throws IllegalArgumentException if {@code _handler} is null
      */
-    public void read( final ByteBuffer _readBuffer, final int _minBytes, final OnReadCompleteHandler _handler ) {
+    public void read( final ByteBuffer _readBuffer, final int _minBytes, final OnReadComplete _handler ) {
 
         // if we didn't get a read complete handler, then we really don't have any choice but to throw an exception...
         if( isNull( _handler ) ) throw new IllegalArgumentException( "_handler is null" );
@@ -250,18 +250,19 @@ public abstract class TCPPipe implements InFeed {
      *
      * @param _writeBuffer The write buffer to write network data from.  While the write operation is in  progress (i.e, before the {@code _onWriteCompleteHandler} is called),
      *                     the write buffer must not be manipulated other than by this instance - hands off the write buffer!
-     * @param _onWriteCompleteHandler This handler is called with the outcome of the write operation, when the write operation completes, whether normally, terminated by an error, or
-     *                            canceled.  If the outcome is ok, then the operation completed normally.  If not ok, then there is an explanatory message and possibly the
+     * @param _onWriteCompleteHandler This handler is called with the outcome of the write operation, when the write operation completes, whether normally, terminated by an error,
+     *                                or canceled.  If the outcome is ok, then the operation completed normally.  If not ok, then there is an explanatory message and possibly the
      *                                exception that caused the problem.
-     * @throws IllegalStateException if no on write complete handler is specified, or if another write operation is in progress.
+     * @throws IllegalStateException if another write operation is already in progress.
+     * @throws IllegalArgumentException if no on write complete handler is specified.
      */
-    public void write( final ByteBuffer _writeBuffer, final OnTCPWriteCompleteHandler _onWriteCompleteHandler ) throws IllegalStateException {
+    public void write( final ByteBuffer _writeBuffer, final OnWriteComplete _onWriteCompleteHandler ) {
 
         // set our write buffer to null, so in the postWriteCompletion we can tell if the mark has been set...
         writeBuffer = null;
 
         // if we didn't get a write complete handler, then we really don't have any choice but to throw an exception...
-        if( isNull( _onWriteCompleteHandler ) ) throw new IllegalStateException( "_onWriteCompleteHandler is null" );
+        if( isNull( _onWriteCompleteHandler ) ) throw new IllegalArgumentException( "_onWriteCompleteHandler is null" );
 
         // make sure we haven't already got a write operation in progress...
         if( writeInProgress.getAndSet( true ) ) throw new IllegalStateException( "Write operation already in progress" );
@@ -286,27 +287,6 @@ public abstract class TCPPipe implements InFeed {
         catch( TCPPipeException _e ) {
             postWriteCompletion( forge.notOk( _e.getMessage() ) );
         }
-    }
-
-
-    /**
-     * <p>Attempts a synchronous (blocking) operation to write network data to the TCP connection represented by this instance, from the given write buffer.  This method returns
-     * when the write operation completes, whether that operation completed normally, was terminated because of an error, or was canceled.</p>
-     * <p>The data remaining in the given write buffer (i.e., the bytes between the position and the limit) will be written to the network.  When the write operation completes
-     * normally, the write buffer will be cleared.  Otherwise, the buffer's position is set to the first byte that was <i>not</i> successfully written.  Note that this is not
-     * a guarantee in any way that the bytes that were successfully written actually reached the destination - only that they were successfully written to the local TCP/IP
-     * queue.</p>
-     *
-     * @param _writeBuffer The write buffer to write network data from.  While the write operation is in  progress (i.e, before the {@code _onWriteCompleteHandler} is called),
-     *                     the write buffer must not be manipulated other than by this instance - hands off the write buffer!
-     * @return The outcome of the attempt.  If ok, the datagram was successfully sent.  If not ok, then there is an explanatory message and possibly the exception that caused
-     * the problem.
-     * @throws IllegalStateException if another write operation is in progress.
-     */
-    public Outcome<?> write( final ByteBuffer _writeBuffer ) throws IllegalStateException {
-        Waiter<Outcome<?>> waiter = new Waiter<>();
-        write( _writeBuffer, waiter::complete );
-        return waiter.waitForCompletion();
     }
 
 

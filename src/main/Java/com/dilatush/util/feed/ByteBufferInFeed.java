@@ -8,7 +8,7 @@ import java.nio.ByteBuffer;
 import static com.dilatush.util.General.isNull;
 
 /**
- * A {@link ByteBufferInFeed} contains an internal {@link ByteBuffer} whose remaining bytes that may be read from the feed.
+ * A {@link ByteBufferInFeed} that contains an internal {@link ByteBuffer} whose remaining bytes that may be read from the feed.
  */
 public class ByteBufferInFeed implements InFeed {
 
@@ -54,7 +54,7 @@ public class ByteBufferInFeed implements InFeed {
      *                    problem.
      */
     @Override
-    public void read( final ByteBuffer _readBuffer, final int _minBytes, final OnReadCompleteHandler _handler ) {
+    public void read( final ByteBuffer _readBuffer, final int _minBytes, final OnReadComplete _handler ) {
 
         if( isNull( _readBuffer, _handler ) ) throw new IllegalArgumentException( "_readBuffer or _handler is null" );
 
