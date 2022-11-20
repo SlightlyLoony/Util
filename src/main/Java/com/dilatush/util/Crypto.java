@@ -302,12 +302,12 @@ public class Crypto {
 
 
     /**
-     *  In number theory, the Legendre symbol is a multiplicative function with values 1, -1, 0 that is a quadratic character modulo a prime number p:
+     *  <p>In number theory, the Legendre symbol is a multiplicative function with values 1, -1, 0 that is a quadratic character modulo a prime number p:
      *  its value on a (nonzero) quadratic residue mod p is 1 and on a quadratic non-residue is -1.  See this
      *  <a href="https://en.wikipedia.org/wiki/Legendre_symbol">Wikipedia article</a> for more detail.
-     *
+     * </p><p>
      *  This is a straight port with only slight modifications of the C# code I found <a href="https://www.codeproject.com/Tips/369798/Legendre-Symbol-Csharp-code">here</a>.
-     *
+     * </p>
      * @param _a The number to test for being a square modulo p (below).
      * @param _p The modulus to use when testing a for squareness (above).
      * @return 1 if a modulo p is a quadratic residue, -1 if a modulo p is not a quadratic residue, and 0 if a mod p equals 0.

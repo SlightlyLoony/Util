@@ -7,30 +7,29 @@ import java.nio.ByteBuffer;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class ByteBufferInFeedTest {
+class BufferedInFeedSourceTest {
 
     @SuppressWarnings( "resource" )
     @Test
     void read() {
 
-        // try a simple read, first setting up a buffer...
+        // create our feed...
+        BufferedInFeedSource bbif = new BufferedInFeedSource( 100 );
+
+        // give it some bytes to read...
         var bb = ByteBuffer.allocate( 100 );
         bb.putInt( 123456 );
         bb.flip();
-
-        // then create our feed...
-        ByteBufferInFeed bbif = new ByteBufferInFeed( bb );
+        bbif.write( bb );
 
         // then read it back out...
-        var bb2 = ByteBuffer.allocate( 50 );
-        var bo = bbif.read( bb2 );
+        var bo = bbif.read( 50 );
         assertTrue( bo.ok(), "Read outcome was not ok: " + bo.msg() );
         var result = bo.info().getInt();
         assertEquals( 123456, result, "Mismatch" );
 
         // now make sure there's no more bytes to be read...
-        bb2.clear();
-        bo = bbif.read( bb2 );
+        bo = bbif.read( 50 );
         assertFalse( bo.ok(), "Bytes area available when they shouldn't be" );
         assertTrue( bo.cause() instanceof BufferUnderflowException, "Did not get expected BufferUnderflowException" );
 
@@ -38,7 +37,7 @@ class ByteBufferInFeedTest {
         bb.clear();
         bb.putInt( 12 );
         bb.flip();
-        bo = bbif.read( bb2, 0 );
+        bo = bbif.read( 0, 50 );
         assertFalse( bo.ok(), "minBytes of 0 didn't make an error" );
         assertTrue( bo.cause() instanceof IllegalArgumentException, "Did not get expected IllegalArgumentException" );
     }
@@ -47,21 +46,20 @@ class ByteBufferInFeedTest {
     @Test
     void close() {
 
-        // try a simple read, first setting up a buffer...
+        // create our feed...
+        BufferedInFeedSource bbif = new BufferedInFeedSource( 100 );
+
+        // feed it some data...
         var bb = ByteBuffer.allocate( 100 );
         bb.putInt( 123456 );
         bb.flip();
-
-        // then create our feed...
-        ByteBufferInFeed bbif = new ByteBufferInFeed( bb );
+        bbif.write( bb );
 
         // now close it...
         bbif.close();
 
         // then try to read it back out...
-        var bb2 = ByteBuffer.allocate( 50 );
-        var bo = bbif.read( bb2 );
+        var bo = bbif.read( 50 );
         assertFalse( bo.ok(), "Read outcome was ok" );
-        assertTrue( bo.cause() instanceof BufferUnderflowException, "Did not get expected BufferUnderflowException" );
     }
 }

@@ -2,10 +2,7 @@ package com.dilatush.util.networkingengine;
 
 import com.dilatush.util.Outcome;
 import com.dilatush.util.ScheduledExecutor;
-import com.dilatush.util.feed.InFeed;
-import com.dilatush.util.feed.OnReadComplete;
-import com.dilatush.util.feed.OnWriteComplete;
-import com.dilatush.util.feed.OutFeed;
+import com.dilatush.util.feed.*;
 import com.dilatush.util.ip.IPAddress;
 
 import java.io.IOException;
@@ -18,8 +15,6 @@ import java.nio.channels.SocketChannel;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -30,7 +25,7 @@ import static com.dilatush.util.General.isNull;
  * Abstract base class for all TCP pipes, each of which provides communications on a single TCP connection; subclasses implement specific kinds of TCP pipes.
  */
 @SuppressWarnings( "unused" )
-public abstract class TCPPipe implements InFeed, OutFeed {
+public abstract class TCPPipe implements InFeedSource, OutFeedSink {
 
     private static final Logger                      LOGGER                                      = getLogger();
 
@@ -42,18 +37,14 @@ public abstract class TCPPipe implements InFeed, OutFeed {
     protected static final int READ_INTEREST  = SelectionKey.OP_READ;
     protected static final int WRITE_INTEREST = SelectionKey.OP_WRITE;
 
-    protected final SocketChannel    channel;                 // the channel for the TCP connection this instance abstracts...
-    protected final NetworkingEngine engine;                  // the networking engine whose Selector our channel's SelectionKey is registered with...
-    protected final SelectionKey     key;                     // the SelectionKey for our channel...
+    protected final SocketChannel    channel;               // the channel for the TCP connection this instance abstracts...
+    protected final NetworkingEngine engine;                // the networking engine whose Selector our channel's SelectionKey is registered with...
+    protected final SelectionKey     key;                   // the SelectionKey for our channel...
 
-    protected IPAddress        remoteIP;                    // the IP address of the remote side of this connection...
-    protected int              remotePort;                  // the TCP port of the remote side of this connection...
-    private final AtomicBoolean    readInProgress;          // true when a read operation is in progress...
-    private final AtomicBoolean    writeInProgress;         // true when a write operation is in progress...
-    private final AtomicLong       cumulativeBytesRead;     // total number of bytes read by this instance since instantiation or counters cleared...
-    private final AtomicLong       cumulativeBytesWritten;  // total number of bytes written by this instance since instantiation or counters cleared...
-    private final AtomicInteger    bytesRead;               // the number of bytes read in the current read operation...
-    private final AtomicInteger    bytesWritten;            // the number of bytes written in the current write operation...
+    protected IPAddress            remoteIP;                // the IP address of the remote side of this connection...
+    protected int                  remotePort;              // the TCP port of the remote side of this connection...
+    private final AtomicBoolean    reading;                 // true when a read operation is in progress...
+    private final AtomicBoolean    writing;                 // true when a write operation is in progress...
 
     private ByteBuffer      readBuffer;
     private ByteBuffer      writeBuffer;
@@ -97,71 +88,55 @@ public abstract class TCPPipe implements InFeed, OutFeed {
         key = engine.register( channel, NO_INTEREST, this );
 
         // create and initialize our operation in progress and cancel flags...
-        readInProgress  = new AtomicBoolean( false );
-        writeInProgress = new AtomicBoolean( false );
-
-        // create and initialize our bytes read and written accumulators...
-        cumulativeBytesRead    = new AtomicLong( 0 );
-        cumulativeBytesWritten = new AtomicLong( 0 );
-        bytesRead              = new AtomicInteger( 0 );
-        bytesWritten           = new AtomicInteger( 0 );
+        reading = new AtomicBoolean( false );
+        writing = new AtomicBoolean( false );
     }
 
 
     /**
-     * <p>Initiates an asynchronous (non-blocking) operation to read network data from the TCP connection represented by this instance.  The data is received from the network and
-     * copied into the given read buffer.  The {@code _handler} is called when the read operation completes, whether that operation completed normally, was
-     * terminated because of an error, or was canceled.  Note that the {@code _handler} will always be called in one of the threads from the associated
-     * {@link NetworkingEngine}'s {@link ScheduledExecutor}, never in the thread that calls this method.</p>
-     * <p>Data is read into the read buffer starting at the buffer's current position.  When the read operation is complete, the buffer is flipped (i.e., {@link ByteBuffer#flip()}
-     * is called), so the buffer's position upon completion will always be zero, and its limit will indicate the end of the data previously unprocessed along with the network data
-     * just read.  Because the read buffer may have already contained data when this method is called, the number of bytes in the read buffer upon completion may be greater than
-     * the number of bytes actually read.  If the number of bytes actually read is needed, the {@link #getBytesRead()} method can be used (upon the read operation completing) to
-     * obtain that value.</p>
-     * <p>The number of bytes that will actually be read into the read buffer depends on a number of factors, not all of which are predictable or controllable.  In general, the
-     * read operation will complete after reading the contents of a received TCP packet <i>and</i> the total number of bytes read is at least equal to the minimum number of bytes
-     * specified in {@code _minBytes}.  If {@code _minBytes} is 1, that means the read operation will complete after the first successful read operation - which could be part of
-     * a packet, exactly one packet, or multiple packets with the last one possibly not completely read.  The code calling this method should always treat the data read as a
-     * stream, and not a series of discrete packets.</p>
+     * <p>Initiates an asynchronous (non-blocking) operation to read between the given {@code _minBytes} and {@code _maxBytes} bytes from this feed, which gets its data from a
+     * TCP network connection.  The data is read into a new {@link ByteBuffer}, which is the info in the {@link Outcome} if the outcome was ok.  The {@code _handler} is called
+     * when the read operation completes, whether that operation completed normally, was terminated because of an error, or was canceled.</p>
+     * <p>The {@code _handler} will <i>always</i> be called from a different thread than the call to this method was made in.</p>
      *
-     * @param _readBuffer The read buffer to read network data into.  While the read operation is in  progress (i.e, before the {@code _handler} is called), the read buffer must
-     *                    not be manipulated other than by this instance - hands off the read buffer!
-     * @param _minBytes The minimum number of bytes that must be read for this read operation to be considered complete.  This must be at least 1, and no greater than the capacity
-     *                  of the read buffer.
+     * @param _minBytes The minimum number of bytes that must be read for this read operation to be considered complete.  The value must be in the range [1..{@code _maxBytes}].
+     * @param _maxBytes The maximum number of bytes that may be read in this read operation.  The value must be in the range [{@code _minBytes}..65536].
      * @param _handler This handler is called with the outcome of the read operation, when the read operation completes, whether normally, terminated by an error, or
-     *                 canceled.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the network data read.  If not
-     *                 ok, then there is an explanatory message and possibly the exception that caused the problem.
-     * @throws IllegalStateException if a read is already in progress
-     * @throws IllegalArgumentException if {@code _handler} is null
+     *                 canceled.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the bytes read from this feed.  If not ok,
+     *                 then there is an explanatory message and possibly the exception that caused the problem.
+     * @throws IllegalArgumentException if the {@code _handler} is {@code null}.
+     * @throws IllegalStateException if a read operation is already in progress.
      */
-    public void read( final ByteBuffer _readBuffer, final int _minBytes, final OnReadComplete _handler ) {
+    public void read( final int _minBytes, final int _maxBytes, final OnReadComplete _handler ) {
 
         // if we didn't get a read complete handler, then we really don't have any choice but to throw an exception...
         if( isNull( _handler ) ) throw new IllegalArgumentException( "_handler is null" );
 
         // if we already have a read operation in progress, throw an exception...
-        if( readInProgress.getAndSet( true ) )
+        if( reading.getAndSet( true ) )
             throw new IllegalStateException( "Read operation already in progress" );
 
-        // in the code below, the TCPPipeException exists only to make the code easier to read and understand...
-        try {
+        // squirrel away the handler, as we may need it asynchronously...
+        onReadCompleteHandler = _handler;
 
-            // sanity checks...
-            if( isNull( _readBuffer ) || (_readBuffer.capacity() == 0) ) throw new TCPPipeException( "_readBuffer is null or has zero capacity" );
-            if( (_minBytes < 1) || (_minBytes > _readBuffer.capacity())) throw new TCPPipeException( "_minBytes out of range: " + _minBytes );
+        // sanity checks...
+        if( _minBytes < 1 )
+            postReadCompletion( forgeByteBuffer.notOk( "_minBytes is " + _minBytes + ", but must be >= 1" ) );
+        else if( _minBytes > _maxBytes )
+            postReadCompletion( forgeByteBuffer.notOk( "_minBytes is " + _minBytes + " and _maxBytes is " + _maxBytes + ", but _minBytes must be <= _maxBytes" ) );
+        else if( _maxBytes > InFeed.MAX_READ_BYTES )
+            postReadCompletion( forgeByteBuffer.notOk( "_maxBytes is " + _maxBytes + ", but must be <= 65,536" ) );
 
-            // squirrel away our read state...
-            minBytes              = _minBytes;
-            readBuffer            = _readBuffer;
-            onReadCompleteHandler = _handler;
-            bytesRead.set( 0 );
+        // if things look sane, then it's time to read some bytes...
+        else {
+
+            // set up for this read...
+            readBuffer = ByteBuffer.allocate( _maxBytes );
+            minBytes = _minBytes;
 
             // initiate the actual read process...
             LOGGER.finest( "Initiating the actual read process" );
             read();
-        }
-        catch( TCPPipeException _e ) {
-            postReadCompletion( forgeByteBuffer.notOk( _e.getMessage() ) );
         }
     }
 
@@ -173,7 +148,7 @@ public abstract class TCPPipe implements InFeed, OutFeed {
     /* package-private */ void onReadable() {
 
         // if there's no read in progress, we just log and ignore this call...
-        if( !readInProgress.get() ) {
+        if( !reading.get() ) {
             LOGGER.log( Level.WARNING, "TCPPipe::onReadable() called when no read was in progress; ignoring" );
             return;
         }
@@ -190,20 +165,22 @@ public abstract class TCPPipe implements InFeed, OutFeed {
     private void read() {
 
         try {
+
+            // if there's no read in progress, just leave...
+            if( !reading.get() ) return;
+
             // read what data we can...
             LOGGER.finest( "Reading TCP bytes" );
             var bc = channel.read( readBuffer );  // this can throw an IOException...
-            bytesRead.addAndGet( bc );
             LOGGER.finest( "Read " + bc + " bytes from " + this );
 
             // if the total bytes read is at least the minimum number of bytes, then we're done...
-            if( bytesRead.get() >= minBytes ) {
+            if( readBuffer.position() >= minBytes ) {
 
                 LOGGER.finest( "Reading buffered TCP bytes" );
 
-                // set up the read buffer for use by our caller, accumulate the bytes read, and post our completion...
+                // set up the read buffer for use by our caller and post our completion...
                 readBuffer.flip();
-                cumulativeBytesRead.addAndGet( 0xFFFFFFFFL & bytesRead.get() );
                 postReadCompletion( forgeByteBuffer.ok( readBuffer ) );
             }
 
@@ -231,7 +208,7 @@ public abstract class TCPPipe implements InFeed, OutFeed {
         // if there was no read in progress, just return...
         // this catches a race condition when a cancelRead occurs just as a read is completing normally...
         // or when a read "completes" just after a cancelRead...
-        if( !readInProgress.getAndSet( false ) ) return;
+        if( !reading.getAndSet( false ) ) return;
 
         // otherwise, send the completion...
         engine.execute( () -> onReadCompleteHandler.handle( _outcome ) );
@@ -265,7 +242,7 @@ public abstract class TCPPipe implements InFeed, OutFeed {
         if( isNull( _onWriteCompleteHandler ) ) throw new IllegalArgumentException( "_onWriteCompleteHandler is null" );
 
         // make sure we haven't already got a write operation in progress...
-        if( writeInProgress.getAndSet( true ) ) throw new IllegalStateException( "Write operation already in progress" );
+        if( writing.getAndSet( true ) ) throw new IllegalStateException( "Write operation already in progress" );
 
         // in the code below, the TCPPipeException exists only to make the code easier to read and understand...
         try {
@@ -279,7 +256,6 @@ public abstract class TCPPipe implements InFeed, OutFeed {
             // squirrel away our write state...
             writeBuffer            = _writeBuffer;
             onWriteCompleteHandler = _onWriteCompleteHandler;
-            bytesWritten.set( 0 );
 
             // initiate the actual write process...
             write();
@@ -297,7 +273,7 @@ public abstract class TCPPipe implements InFeed, OutFeed {
     /* package-private */ void onWriteable() {
 
         // if there's no write in progress, we just log and ignore this call...
-        if( !writeInProgress.get() ) {
+        if( !writing.get() ) {
             LOGGER.log( Level.WARNING, "TCPPipe::onWriteable() called when no write was in progress; ignoring" );
             return;
         }
@@ -314,17 +290,17 @@ public abstract class TCPPipe implements InFeed, OutFeed {
     private void write() {
 
         try {
+
             // write what data we can, and set the mark...
-            bytesWritten.set( channel.write( writeBuffer ) );  // this can throw an IOException...
+            var bytesWritten = channel.write( writeBuffer );  // this can throw an IOException...
             writeBuffer.mark();
-            LOGGER.finest( "Wrote " + bytesWritten.get() + " bytes to " + this );
+            LOGGER.finest( "Wrote " + bytesWritten + " bytes to " + this );
 
             // if there are no bytes remaining, then we're done...
             if( !writeBuffer.hasRemaining() ) {
 
                 // clear the write buffer for use by our caller, accumulate the bytes written, and post our completion...
                 writeBuffer.clear();
-                cumulativeBytesWritten.addAndGet( 0xFFFFFFFFL & bytesWritten.get() );
                 postWriteCompletion( forge.ok() );
             }
 
@@ -351,7 +327,7 @@ public abstract class TCPPipe implements InFeed, OutFeed {
         // if there was no write in progress, just return...
         // this catches a race condition when a cancelWrite occurs just as a write is completing normally...
         // or when a write "completes" just after a cancelWrite...
-        if( !writeInProgress.getAndSet( false ) ) return;
+        if( !writing.getAndSet( false ) ) return;
 
         // if we're sending a completion that's ok, clear the buffer, otherwise, reset position to the mark...
         if( writeBuffer != null ) {
@@ -379,55 +355,6 @@ public abstract class TCPPipe implements InFeed, OutFeed {
      */
     public void cancelWrite() {
         postWriteCompletion( forge.notOk( "Write canceled" ) );
-    }
-
-
-    /**
-     * Returns the number of bytes read by the most recent read operation, assuming that read has not been called again.
-     *
-     * @return The number of bytes read by the most recent read operation.
-     */
-    public int getBytesRead() {
-        return bytesRead.get();
-    }
-
-
-    /**
-     * Returns the number of bytes written by the most recent write operation, assuming that write has not been called again.
-     *
-     * @return The number of bytes written by the most recent write operation.
-     */
-    public int getBytesWritten() {
-        return bytesWritten.get();
-    }
-
-
-    /**
-     * Resets the counters for cumulative bytes read or written to zero.
-     */
-    public void clearAccumulators() {
-        cumulativeBytesRead.set( 0 );
-        cumulativeBytesWritten.set( 0 );
-    }
-
-
-    /**
-     * Returns the total number of bytes read by this instance since its instantiation or since the most recent time {@link #clearAccumulators()} was called.
-     *
-     * @return The total number of bytes read by this instance.
-     */
-    public long getCumulativeBytesRead() {
-        return cumulativeBytesRead.get();
-    }
-
-
-    /**
-     * Returns the total number of bytes written by this instance since its instantiation or since the most recent time {@link #clearAccumulators()} was called.
-     *
-     * @return The total number of bytes written by this instance.
-     */
-    public long getCumulativeBytesWritten() {
-        return cumulativeBytesWritten.get();
     }
 
 
@@ -520,6 +447,30 @@ public abstract class TCPPipe implements InFeed, OutFeed {
 
     public int getRemotePort() {
         return remotePort;
+    }
+
+
+    /**
+     * Return {@code true} if a read operation is already in progress.
+     *
+     * @return {@code true} if a read operation is already in progress.
+     */
+    @Override
+    public boolean isReading() {
+
+        return reading.get();
+    }
+
+
+    /**
+     * Return {@code true} if a write operation is already in progress.
+     *
+     * @return {@code true} if a write operation is already in progress.
+     */
+    @Override
+    public boolean isWriting() {
+
+        return writing.get();
     }
 
 

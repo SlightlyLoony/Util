@@ -344,9 +344,9 @@ class NetworkingEngineTest {
         assertTrue( writeOutcome.ok(), "Problem writing: " + writeOutcome.msg() );
 
         // read back the echo and make sure it's correct...
-        var rb = ByteBuffer.allocate( 100 );
-        var readOutcome = pipe.read( rb );
+        var readOutcome = pipe.read( 100 );
         assertTrue( readOutcome.ok(), "Problem reading: " + readOutcome.msg() );
+        var rb = readOutcome.info();
         var rd = rb.getInt();
         assertEquals( 8383, rd, "Data read does not match data transmitted" );
 
@@ -372,11 +372,10 @@ class NetworkingEngineTest {
         }
 
         public void run() {
-            var rb = ByteBuffer.allocate( 100 );
             while( !interrupted() ) {
                 try {
                     LOGGER.info( "Reading TCP echo" );
-                    inboundPipe.read( rb );
+                    var rb = inboundPipe.read( 100 ).info();
                     LOGGER.info( "Writing TCP echo" );
                     inboundPipe.write( rb );
                 }
@@ -461,15 +460,15 @@ class NetworkingEngineTest {
         public void run() {
             int shouldBe = 0;
             while( !interrupted() ) {
-                var rb = ByteBuffer.allocate( 4 );
                 Outcome<ByteBuffer> readOutcome = null;
                 try {
-                    readOutcome = inboundPipe.read( rb );
+                    readOutcome = inboundPipe.read( 4 );
                 }
                 catch( IllegalStateException _e ) {
                     fail( "Unexpected exception: " + _e.getMessage() );
                 }
                 assertTrue( readOutcome.ok(), "Problem reading: " + readOutcome.msg() );
+                var rb = readOutcome.info();
                 var dataRead = rb.getInt();
                 assertEquals( shouldBe, dataRead, "Wrong data read, should be " + shouldBe + ", was " + dataRead );
                 shouldBe++;
@@ -577,15 +576,15 @@ class NetworkingEngineTest {
         public void run() {
             var shouldBe = 0;
             while( !interrupted() ) {
-                var rb = ByteBuffer.allocate( 4 );
                 Outcome<ByteBuffer> readOutcome = null;
                 try {
-                    readOutcome = pipe.read( rb );
+                    readOutcome = pipe.read( 4 );
                 }
                 catch( IllegalStateException _e ) {
                     fail( "Unexpected exception: " + _e.getMessage() );
                 }
                 assertTrue( readOutcome.ok(), "Read error: " + readOutcome.msg() );
+                var rb = readOutcome.info();
                 var readData = rb.getInt();
                 assertEquals( shouldBe, readData, "Error in data, should be " + shouldBe + ", but was " + readData );
                 shouldBe++;

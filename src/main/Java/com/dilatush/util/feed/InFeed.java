@@ -12,100 +12,80 @@ import java.nio.ByteBuffer;
  */
 public interface InFeed extends Closeable {
 
+    /** The maximum number of bytes in a single read operation. */
+    int MAX_READ_BYTES = 65536;
 
     /**
-     * <p>Initiates an asynchronous (non-blocking) operation to read data from this feed.  The data read is
-     * copied into the given read buffer.  The {@code _handler} is called when the read operation completes, whether that operation completed normally, was
-     * terminated because of an error, or was canceled.</p>
-     * <p>This method has no default; it <i>must</i> be implemented.</p>
-     * <p>Data is read from the feed into the read buffer starting at the buffer's current position (which may be non-zero, in which case the data between the start of the buffer
-     * is considered previously read, but unprocessed feed data).  When the read operation is complete, the buffer is flipped (i.e., {@link ByteBuffer#flip()}
-     * is called), so the buffer's position upon completion will always be zero, and its limit will indicate the end of the data (including any previously read, but unprocessed
-     * data).</p>
-     * <p>On success, the number of bytes actually read will be between the given minimum number of bytes and the remaining capacity of the read buffer when this method was
-     * called.</p>
+     * <p>Initiates an asynchronous (non-blocking) operation to read between the given {@code _minBytes} and {@code _maxBytes} bytes from this feed.  The data is read into a new
+     * {@link ByteBuffer}, which is the info in the {@link Outcome} if the outcome was ok.  The {@code _handler} is called when the read operation completes, whether that
+     * operation completed normally, was terminated because of an error, or was canceled.</p>
+     * <p>This method has no default implementation; it <i>must</i> be provided by every {@link InFeed} implementation.</p>
      * <p>Whether the handler is called in the same thread this method was called in, or in a separate thread (or even either, depending on conditions), is
      * implementation-dependent and should be documented for each implementation.</p>
      *
-     * @param _readBuffer The read buffer to read feed data into.  While the read operation is in  progress (i.e, before the {@code _handler} is called), the read
-     *                    buffer must not be manipulated other than by this instance - hands off the read buffer!
-     * @param _minBytes The minimum number of bytes that must be read for this read operation to be considered complete.  This must be at least 1, and no greater than the
-     *                  remaining capacity of the read buffer when this method is called.
+     * @param _minBytes The minimum number of bytes that must be read for this read operation to be considered complete.  The value must be in the range [1..{@code _maxBytes}].
+     * @param _maxBytes The maximum number of bytes that may be read in this read operation.  The value must be in the range [{@code _minBytes}..65536].
      * @param _handler This handler is called with the outcome of the read operation, when the read operation completes, whether normally, terminated by an error, or
-     *                 canceled.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the feed data read (preceded
-     *                 by any previously read, but not processed data).  If not ok, then there is an explanatory message and possibly the exception that caused the
-     *                 problem.
+     *                 canceled.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the bytes read from this feed.  If not ok,
+     *                 then there is an explanatory message and possibly the exception that caused the problem.
+     * @throws IllegalArgumentException if the {@code _handler} is {@code null}.
+     * @throws IllegalStateException if a read operation is already in progress.
      */
-    void read( final ByteBuffer _readBuffer, final int _minBytes, final OnReadComplete _handler );
+    void read( final int _minBytes, final int _maxBytes, final OnReadComplete _handler );
 
 
     /**
-     * <p>Initiates an asynchronous (non-blocking) operation to read data from this feed.  The data read is
-     * copied into the given read buffer.  The {@code _handler} is called when the read operation completes, whether that operation completed normally, was
-     * terminated because of an error, or was canceled.</p>
+     * <p>Initiates an asynchronous (non-blocking) operation to read between 1 and the given {@code _maxBytes} bytes from this feed.  The data is read into a new
+     * {@link ByteBuffer}, which is the info in the {@link Outcome} if the outcome was ok.  The {@code _handler} is called when the read operation completes, whether that
+     * operation completed normally, was terminated because of an error, or was canceled.</p>
      * <p>This method has a default implementation, which <i>may</i> be overridden, but <i>must</i> retain the default behavior.</p>
-     * <p>Data is read from the feed into the read buffer starting at the buffer's current position (which may be non-zero, in which case the data between the start of the buffer
-     * is considered previously read, but unprocessed feed data).  When the read operation is complete, the buffer is flipped (i.e., {@link ByteBuffer#flip()}
-     * is called), so the buffer's position upon completion will always be zero, and its limit will indicate the end of the data (including any previously read, but unprocessed
-     * data).</p>
-     * <p>On success, the number of bytes actually read will be between 1 and the remaining capacity of the read buffer when this method was called.</p>
      * <p>Whether the handler is called in the same thread this method was called in, or in a separate thread (or even either, depending on conditions), is
      * implementation-dependent and should be documented for each implementation.</p>
      *
-     * @param _readBuffer The read buffer to read feed data into.  While the read operation is in  progress (i.e, before the {@code _handler} is called), the read
-     *                    buffer must not be manipulated other than by this instance - hands off the read buffer!
+     * @param _maxBytes The maximum number of bytes that may be read in this read operation.  The value must be in the range [1..65536].
      * @param _handler This handler is called with the outcome of the read operation, when the read operation completes, whether normally, terminated by an error, or
-     *                 canceled.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the feed data read (preceded
-     *                 by any previously read, but not processed data).  If not ok, then there is an explanatory message and possibly the exception that caused the
-     *                 problem.
+     *                 canceled.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the bytes read from this feed.  If not ok,
+     *                 then there is an explanatory message and possibly the exception that caused the problem.
+     * @throws IllegalArgumentException if the {@code _handler} is {@code null}.
+     * @throws IllegalStateException if a read operation is already in progress.
      */
-    default void read( final ByteBuffer _readBuffer, final OnReadComplete _handler ) {
-        read( _readBuffer, 1, _handler );
+    default void read( final int _maxBytes, final OnReadComplete _handler ) {
+        read( 1, _maxBytes, _handler );
     }
 
 
     /**
-     * <p>Initiates a synchronous (blocking) operation to read data from this feed.  The data read is
-     * copied into the given read buffer.  This method will return when the operation is complete, whether it completed normally, with an error, or was canceled</p>
+     * <p>Initiates an asynchronous (non-blocking) operation to read between the given {@code _minBytes} and {@code _maxBytes} bytes from this feed.  The data is read into a new
+     * {@link ByteBuffer}, which is the info in the {@link Outcome} if the outcome was ok.  This method will return when the operation is complete, whether it completed normally,
+     * with an error, or was canceled</p>
      * <p>This method has a default implementation, which <i>may</i> be overridden, but <i>must</i> retain the default behavior.</p>
-     * <p>Data is read from the feed into the read buffer starting at the buffer's current position (which may be non-zero, in which case the data between the start of the buffer
-     * is considered previously read, but unprocessed feed data).  When the read operation is complete, the buffer is flipped (i.e., {@link ByteBuffer#flip()}
-     * is called), so the buffer's position upon completion will always be zero, and its limit will indicate the end of the data (including any previously read, but unprocessed
-     * data).</p>
-     * <p>On success, the number of bytes actually read will be between the given minimum number of bytes and the remaining capacity of the read buffer when this method was
-     * called.</p>
      *
-     * @param _readBuffer The read buffer to read feed data into.  While the read operation is in  progress (i.e, before the {@code _handler} is called), the read
-     *                    buffer must not be manipulated other than by this instance - hands off the read buffer!
-     * @param _minBytes The minimum number of bytes that must be read for this read operation to be considered complete.  This must be at least 1, and no greater than the
-     *                  remaining capacity of the read buffer when this method is called.
-     * @return The outcome of this operation.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the feed data read (preceded
-     *         by any previously read, but not processed data).  If not ok, then there is an explanatory message and possibly the exception that caused the problem.
+     * @param _minBytes The minimum number of bytes that must be read for this read operation to be considered complete.  The value must be in the range [1..{@code _maxBytes}].
+     * @param _maxBytes The maximum number of bytes that may be read in this read operation.  The value must be in the range [{@code _minBytes}..65536].
+     * @return The outcome of this operation.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the bytes read from this
+     * feed.  If not ok, then there is an explanatory message and possibly the exception that caused the problem.
+     * @throws IllegalStateException if a read operation is already in progress.
      */
-    default Outcome<ByteBuffer> read( final ByteBuffer _readBuffer, final int _minBytes ) {
+    default Outcome<ByteBuffer> read( final int _minBytes, final int _maxBytes ) {
         Waiter<Outcome<ByteBuffer>> waiter = new Waiter<>();
-        read( _readBuffer, _minBytes, waiter::complete );
+        read( _minBytes, _maxBytes, waiter::complete );
         return waiter.waitForCompletion();
     }
 
 
     /**
-     * <p>Initiates a synchronous (blocking) operation to read data from this feed.  The data read is
-     * copied into the given read buffer.  This method will return when the operation is complete, whether it completed normally, with an error, or was canceled</p>
+     * <p>Initiates an asynchronous (non-blocking) operation to read between 1 and the given {@code _maxBytes} bytes from this feed.  The data is read into a new
+     * {@link ByteBuffer}, which is the info in the {@link Outcome} if the outcome was ok.  This method will return when the operation is complete, whether it completed normally,
+     * with an error, or was canceled</p>
      * <p>This method has a default implementation, which <i>may</i> be overridden, but <i>must</i> retain the default behavior.</p>
-     * <p>Data is read from the feed into the read buffer starting at the buffer's current position (which may be non-zero, in which case the data between the start of the buffer
-     * is considered previously read, but unprocessed feed data).  When the read operation is complete, the buffer is flipped (i.e., {@link ByteBuffer#flip()}
-     * is called), so the buffer's position upon completion will always be zero, and its limit will indicate the end of the data (including any previously read, but unprocessed
-     * data).</p>
-     * <p>On success, the number of bytes actually read will be between 1 and the remaining capacity of the read buffer when this method was called.</p>
      *
-     * @param _readBuffer The read buffer to read feed data into.  While the read operation is in  progress (i.e, before the {@code _handler} is called), the read
-     *                    buffer must not be manipulated other than by this instance - hands off the read buffer!
-     * @return The outcome of this operation.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the feed data read (preceded
-     *         by any previously read, but not processed data).  If not ok, then there is an explanatory message and possibly the exception that caused the problem.
+     * @param _maxBytes The maximum number of bytes that may be read in this read operation.  The value must be in the range [{@code _minBytes}..65536].
+     * @return The outcome of this operation.  If the outcome is ok, then the operation completed normally and the info contains the read buffer with the bytes read from this
+     * feed.  If not ok, then there is an explanatory message and possibly the exception that caused the problem.
+     * @throws IllegalStateException if a read operation is already in progress.
      */
-    default Outcome<ByteBuffer> read( final ByteBuffer _readBuffer ) {
-        return read( _readBuffer, 1 );
+    default Outcome<ByteBuffer> read( final int _maxBytes ) {
+        return read( 1, _maxBytes );
     }
 
 
