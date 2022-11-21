@@ -116,13 +116,14 @@ public class BufferedInFeedSource implements InFeedSource {
         if( closed )
             postReadCompletion( forgeByteBuffer.notOk( "BufferedInFeedSource is closed" ) );
         else if( _minBytes < 1 )
-            postReadCompletion( forgeByteBuffer.notOk( "_minBytes is " + _minBytes + ", but must be >= 1" ) );
+            postReadCompletion( forgeByteBuffer.notOk( "_minBytes is " + _minBytes + ", but must be >= 1", new IllegalArgumentException() ) );
         else if( _minBytes > _maxBytes )
-            postReadCompletion( forgeByteBuffer.notOk( "_minBytes is " + _minBytes + " and _maxBytes is " + _maxBytes + ", but _minBytes must be <= _maxBytes" ) );
+            postReadCompletion( forgeByteBuffer.notOk(
+                    "_minBytes is " + _minBytes + " and _maxBytes is " + _maxBytes + ", but _minBytes must be <= _maxBytes", new IllegalArgumentException() ) );
         else if( _maxBytes > InFeed.MAX_READ_BYTES )
-            postReadCompletion( forgeByteBuffer.notOk( "_maxBytes is " + _maxBytes + ", but must be <= 65,536" ) );
+            postReadCompletion( forgeByteBuffer.notOk( "_maxBytes is " + _maxBytes + ", but must be <= 65,536", new IllegalArgumentException() ) );
 
-            // if things look sane, then it's time to read some bytes...
+        // if things look sane, then it's time to read some bytes...
         else {
 
             // set up for this read...
@@ -152,8 +153,8 @@ public class BufferedInFeedSource implements InFeedSource {
 
         // complete the read...
         var n = Math.min( readBuffer.remaining(), buffer.remaining() );
-        readBuffer.put( buffer.slice( 0, n ) );
-        buffer.position( n );   // update the position on our internal buffer, as the .slice() above prevents that...
+        readBuffer.put( buffer.slice( buffer.position(), n ) );
+        buffer.position( buffer.position() + n );   // update the position on our internal buffer, as the .slice() above prevents that...
 
         // get the read buffer ready and post the completion...
         readBuffer.flip();
