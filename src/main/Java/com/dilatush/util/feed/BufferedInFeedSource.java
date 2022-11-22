@@ -10,8 +10,7 @@ import static com.dilatush.util.General.getLogger;
 import static com.dilatush.util.General.isNull;
 
 /**
- * An {@link InFeedSource} that empties available bytes from an internal buffer.  Several methods allow querying for how many bytes the internal buffer can accept, and for adding
- * bytes to the internal buffer.
+ * An {@link InFeedSource} that empties available bytes from an internal buffer.  Several methods allow adding bytes to the internal buffer to make them available to the feed.
  */
 public class BufferedInFeedSource implements InFeedSource {
 
@@ -46,7 +45,13 @@ public class BufferedInFeedSource implements InFeedSource {
     }
 
 
-    public synchronized boolean write( final byte[] _bytes ) {
+    /**
+     * Attempt to append the given bytes to the internal buffer, to make them available for reading from this feed.
+     *
+     * @param _bytes the bytes to append.
+     * @return {@code true} if the bytes were successfully appended, {@code false} otherwise.  If the bytes were not successfully added, the internal buffer is not modified.
+     */
+    public synchronized boolean append( final byte[] _bytes ) {
 
         // sanity check...
         if( (_bytes == null) || (_bytes.length == 0) ) throw new IllegalArgumentException( "_bytes is null or empty" );
@@ -72,14 +77,20 @@ public class BufferedInFeedSource implements InFeedSource {
     }
 
 
-    public synchronized boolean write( final ByteBuffer _buffer ) {
+    /**
+     * Attempt to append the remaining bytes in the given {@link ByteBuffer} to the internal buffer, to make them available for reading from this feed.
+     *
+     * @param _buffer the buffer whose remaining bytes will be appended.
+     * @return {@code true} if the bytes were successfully appended, {@code false} otherwise.  If the bytes were not successfully added, the internal buffer is not modified.
+     */
+    public synchronized boolean append( final ByteBuffer _buffer ) {
 
         // sanity check...
         if( isNull( _buffer ) || (_buffer.remaining() == 0) ) throw new IllegalArgumentException( "_buffer is null or empty" );
 
         var bytes = new byte[_buffer.remaining()];
         _buffer.get( bytes );
-        return write( bytes );
+        return append( bytes );
     }
 
 
@@ -137,13 +148,13 @@ public class BufferedInFeedSource implements InFeedSource {
     }
 
 
+    /**
+     * The actual read operation.
+     */
     private void read() {
 
         // if there's no read in progress, just leave...
         if( !reading.get() ) return;
-
-        // if we don't have enough bytes to meet the minimum, just leave...
-        if( (writeMode && (buffer.position() < minBytes)) || (!writeMode && (buffer.limit() - buffer.position() < minBytes)) ) return;
 
         // put the buffer in read mode if it's not already...
         if( writeMode ) {
@@ -152,11 +163,14 @@ public class BufferedInFeedSource implements InFeedSource {
         }
 
         // complete the read...
-        var n = Math.min( readBuffer.remaining(), buffer.remaining() );
-        readBuffer.put( buffer.slice( buffer.position(), n ) );
-        buffer.position( buffer.position() + n );   // update the position on our internal buffer, as the .slice() above prevents that...
+        var n = Math.min( readBuffer.remaining(), buffer.remaining() );  // calculate how many bytes we're going to pull out of our internal buffer and send to the feed...
+        readBuffer.put( buffer.slice( buffer.position(), n ) );               // copy a slice of our internal buffer into the read buffer...
+        buffer.position( buffer.position() + n );                             // update the position on our internal buffer, as the .slice() above prevents that...
 
-        // get the read buffer ready and post the completion...
+        // if we haven't read the minimum number of bytes yet, just leave...
+        if( readBuffer.position() < minBytes ) return;
+
+        // otherwise, get the read buffer ready and post the completion...
         readBuffer.flip();
         postReadCompletion( forgeByteBuffer.ok( readBuffer ) );
     }

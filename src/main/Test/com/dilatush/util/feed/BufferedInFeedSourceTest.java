@@ -22,7 +22,7 @@ class BufferedInFeedSourceTest {
         bb.putInt( 1234 );
         bb.putInt( 5678 );
         bb.flip();
-        bbif.write( bb );
+        bbif.append( bb );
 
         // then read it back out...
         var bo = bbif.read( 4 );
@@ -43,7 +43,7 @@ class BufferedInFeedSourceTest {
         bb = ByteBuffer.allocate( 100 );
         bb.putInt( 3456 );
         bb.flip();
-        bbif.write( bb );
+        bbif.append( bb );
         sleep( 100 );
         assertTrue( handledResult.ok(), "Read outcome was not ok: " + bo.msg() );
         assertEquals( 3456, handledResult.info().getInt(), "Mismatch" );
@@ -74,7 +74,7 @@ class BufferedInFeedSourceTest {
         var bb = ByteBuffer.allocate( 100 );
         bb.putInt( 123456 );
         bb.flip();
-        bbif.write( bb );
+        bbif.append( bb );
 
         // now close it...
         bbif.close();

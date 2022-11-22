@@ -220,8 +220,7 @@ public abstract class TCPPipe implements InFeedSource, OutFeedSink {
      * {@code _onWriteCompleteHandler} is called when the write operation completes, whether that operation completed normally, was terminated because of an error, or was canceled.
      * Note that the {@code _onWriteCompleteHandler} will always be called in one of the threads from the associated {@link NetworkingEngine}'s {@link ScheduledExecutor}, never in
      * the thread that calls this method.</p>
-     * <p>The data remaining in the given write buffer (i.e., the bytes between the position and the limit) will be written to the network.  When the write operation completes
-     * normally, the write buffer will be cleared.  Otherwise, the buffer's position is set to the first byte that was <i>not</i> successfully written.  Note that this is not
+     * <p>The data remaining in the given write buffer (i.e., the bytes between the position and the limit) will be written to the network.  Note that this is not
      * a guarantee in any way that the bytes that were successfully written actually reached the destination - only that they were successfully written to the local TCP/IP
      * queue.</p>
      *
@@ -291,16 +290,14 @@ public abstract class TCPPipe implements InFeedSource, OutFeedSink {
 
         try {
 
-            // write what data we can, and set the mark...
+            // write what data we can...
             var bytesWritten = channel.write( writeBuffer );  // this can throw an IOException...
-            writeBuffer.mark();
             LOGGER.finest( "Wrote " + bytesWritten + " bytes to " + this );
 
             // if there are no bytes remaining, then we're done...
             if( !writeBuffer.hasRemaining() ) {
 
-                // clear the write buffer for use by our caller, accumulate the bytes written, and post our completion...
-                writeBuffer.clear();
+                // post our completion...
                 postWriteCompletion( forge.ok() );
             }
 

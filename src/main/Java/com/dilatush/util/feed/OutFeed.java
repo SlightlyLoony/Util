@@ -15,9 +15,8 @@ public interface OutFeed extends Closeable {
     /**
      * <p>Initiates an asynchronous (non-blocking) operation to write data to this feed, from the given write buffer.  The
      * {@code _handler} is called when the write operation completes, whether that operation completed normally, was terminated because of an error, or was canceled.</p>
-     * <p>This method has no default; it <i>must</i> be implemented.</p>
-     * <p>The data remaining in the given write buffer (i.e., the bytes between the position and the limit) will be written to the feed.  When the write operation completes
-     * normally, the write buffer will be cleared.  Otherwise, the buffer's position is set to the first byte that was <i>not</i> successfully written.  Note that this is not
+     * <p>This method has no default; it <i>must</i> be provided by every {@link OutFeed} implementation.</p>
+     * <p>The data remaining in the given write buffer (i.e., the bytes between the position and the limit) will be written to the feed.  Note that this is not
      * a guarantee in any way that the bytes that were successfully written actually reached their ultimate destination - only that they were successfully written to the feed.</p>
      * <p>Whether the handler is called in the same thread this method was called in, or in a separate thread (or even either, depending on conditions), is
      * implementation-dependent and should be documented for each implementation.</p>
@@ -37,8 +36,7 @@ public interface OutFeed extends Closeable {
      * <p>Attempts a synchronous (blocking) operation to write data to this feed, from the given write buffer.  This method returns
      * when the write operation completes, whether that operation completed normally, was terminated because of an error, or was canceled.</p>
      * <p>This method has a default implementation, which <i>may</i> be overridden, but <i>must</i> retain the default behavior.</p>
-     * <p>The data remaining in the given write buffer (i.e., the bytes between the position and the limit) will be written to the feed.  When the write operation completes
-     * normally, the write buffer will be cleared.  Otherwise, the buffer's position is set to the first byte that was <i>not</i> successfully written.  Note that this is not
+     * <p>The data remaining in the given write buffer (i.e., the bytes between the position and the limit) will be written to the feed.  Note that this is not
      * a guarantee in any way that the bytes that were successfully written actually reached their ultimate destination - only that they were successfully written to the feed.</p>
      *
      * @param _writeBuffer The write buffer to write to the feed from.  While the write operation is in  progress (i.e, before this method returns),
