@@ -15,7 +15,7 @@ import static com.dilatush.util.General.isNull;
 /**
  * An {@link InFeed} that provides data read from another {@link InFeed} and decrypted.
  */
-public class DecryptingPipedInFeed implements InFeed {
+public class DecryptingInFeed implements InFeed {
 
 
     private final InFeed inFeed;
@@ -23,14 +23,14 @@ public class DecryptingPipedInFeed implements InFeed {
 
 
     /**
-     * Create a new instance of {@link DecryptingPipedInFeed} that uses the given {@link Cipher} to decrypt bytes read from the given {@link InFeed}.  The cipher must be fully
+     * Create a new instance of {@link DecryptingInFeed} that uses the given {@link Cipher} to decrypt bytes read from the given {@link InFeed}.  The cipher must be fully
      * initialized, must use CFB8 or OFB8 mode, no padding, and be in decrypt mode.
      *
      * @param _inFeed the {@link InFeed} to read encrypted bytes from.
      * @param _cipher the fully initialized {@link Cipher}
      */
     // TODO: change this to actually get the Cipher instance, to ensure the correct initialization...
-    public DecryptingPipedInFeed( final InFeed _inFeed, final Cipher _cipher ) {
+    public DecryptingInFeed( final InFeed _inFeed, final Cipher _cipher ) {
 
         // sanity checks...
         if( isNull( _inFeed, _cipher ) ) throw new IllegalArgumentException( "_inFeed or _cipher is null" );

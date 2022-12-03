@@ -34,18 +34,8 @@ class BufferedOutFeedSinkTest {
         assertEquals( 123456789L, r, "not the expected value" );
 
         // then make sure we detect no remaining...
-        b.clear();
-        b.limit( 0 );
-        bo = bbof.write( b );
-        assertFalse( bo.ok(), "write outcome shouldn't have been ok" );
-
-        // then make sure we detect not enough remaining...
-        // noinspection resource
-        bbof = new BufferedOutFeedSink( 10 );
-        b.clear();
-        b.limit( 12 );
-        bo = bbof.write( b );
-        assertFalse( bo.ok(), "write outcome shouldn't have been ok" );
+        ib = bbof.drainToByteBuffer();
+        assertNull( ib, "should be null, indicating no bytes available" );
     }
 
 
