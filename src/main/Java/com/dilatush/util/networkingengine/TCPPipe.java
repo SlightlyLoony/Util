@@ -25,7 +25,7 @@ import static com.dilatush.util.General.isNull;
  * Abstract base class for all TCP pipes, each of which provides communications on a single TCP connection; subclasses implement specific kinds of TCP pipes.
  */
 @SuppressWarnings( "unused" )
-public abstract class TCPPipe implements FullFeedSourceSink {
+public abstract class TCPPipe implements Feed {
 
     private static final Logger                      LOGGER                                      = getLogger();
 

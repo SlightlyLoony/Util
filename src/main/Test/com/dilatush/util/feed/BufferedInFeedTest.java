@@ -8,14 +8,14 @@ import java.nio.ByteBuffer;
 import static java.lang.Thread.sleep;
 import static org.junit.jupiter.api.Assertions.*;
 
-class BufferedInFeedSourceTest {
+class BufferedInFeedTest {
 
     @SuppressWarnings( "resource" )
     @Test
     void read() throws InterruptedException {
 
         // create our feed...
-        BufferedInFeedSource bbif = new BufferedInFeedSource( 100 );
+        BufferedInFeed bbif = new BufferedInFeed( 100 );
 
         // give it some bytes to read...
         var bb = ByteBuffer.allocate( 100 );
@@ -68,7 +68,7 @@ class BufferedInFeedSourceTest {
     void close() {
 
         // create our feed...
-        BufferedInFeedSource bbif = new BufferedInFeedSource( 100 );
+        BufferedInFeed bbif = new BufferedInFeed( 100 );
 
         // feed it some data...
         var bb = ByteBuffer.allocate( 100 );

@@ -1,20 +1,21 @@
 /**
- * <p>This package implements "feeds", which are similar to streams - except that they have asynchronous (non-blocking) interfaces as well as synchronous (blocking) interfaces,
- * and they use {@link java.nio.ByteBuffer}s instead of bytes or byte arrays, and {@link com.dilatush.util.Outcome}s instead of {@link java.lang.Exception}s.  This makes them
- * eminently suitable for use with asynchronous components such as the {@link com.dilatush.util.networkingengine.NetworkingEngine}.  These interfaces form the core of feeds:</p>
+ * <p>This package implements "feeds", which are conceptually similar to streams - except that they have asynchronous (non-blocking) interfaces as well as synchronous (blocking)
+ * interfaces, and they use {@link java.nio.ByteBuffer}s instead of bytes or byte arrays, and {@link com.dilatush.util.Outcome}s instead of {@link java.lang.Exception}s.  This
+ * makes them eminently suitable for use with asynchronous components such as the {@link com.dilatush.util.networkingengine.NetworkingEngine}.  These three interfaces form the
+ * core of the feeds package:</p>
  * <ul>
- *     <li>Implementations of {@link com.dilatush.util.feed.InFeed} accepts bytes from another {@link com.dilatush.util.feed.InFeed}, transforms them somehow, then makes the
- *     transformed bytes available.  An example is </li>
- *     <li></li>
- *     <li>Implementations of {@link com.dilatush.util.feed.InFeedSource} (an extension of {@link com.dilatush.util.feed.InFeed}) make bytes available as an
- *     {@link com.dilatush.util.feed.InFeed}, from any source <i>other than</i> another {@link com.dilatush.util.feed.InFeed}.  For instance,
- *     {@link com.dilatush.util.feed.BufferedInFeedSource} has methods to fill a buffer with bytes that are then available as an {@link com.dilatush.util.feed.InFeed}.  </li>
- *     <li>Implementations of {@link com.dilatush.util.feed.OutFeedSink} (an extension of {@link com.dilatush.util.feed.OutFeed}) make bytes from any source <i>other than</i>
- *     an {@link com.dilatush.util.feed.InFeed}.  For instance, {@link com.dilatush.util.feed.BufferedOutFeedSink} accepts bytes as an {@link com.dilatush.util.feed.OutFeed},
- *     then has methods to empty the buffer those bytes were stored in.</li>
+ *     <li>Implementations of {@link com.dilatush.util.feed.InFeed} accept bytes from some source, optionally transforms them somehow, then make the resulting bytes available from
+ *     the {@link com.dilatush.util.feed.InFeed}.  Note that the source of the bytes could be another {@link com.dilatush.util.feed.InFeed}.  An example is
+ *     {@link com.dilatush.util.feed.BufferedInFeed}, which accepts bytes through its own API, then makes the same bytes available as an {@link com.dilatush.util.feed.InFeed}.</li>
+ *     <li>Implementations of {@link com.dilatush.util.feed.OutFeed} accept bytes from the {@link com.dilatush.util.feed.OutFeed}, optionally transforms them somehow, then
+ *     make the resulting bytes available to to some destination.  Note that the destination of the bytes could be another {@link com.dilatush.util.feed.OutFeed}.  An example is
+ *     {@link com.dilatush.util.feed.BufferedOutFeed}, which accepts bytes as an {@link com.dilatush.util.feed.OutFeed}, then makes the same bytes available through its
+ *     own API.</li>
+ *     <li>The {@link com.dilatush.util.feed.Feed} interface simply extends both {@link com.dilatush.util.feed.InFeed} and {@link com.dilatush.util.feed.OutFeed}.  Implementations
+ *     of {@link com.dilatush.util.feed.Feed} act as both an {@link com.dilatush.util.feed.InFeed} and an {@link com.dilatush.util.feed.OutFeed}.  Examples include
+ *     {@link com.dilatush.util.feed.BufferedPipedFeed} (which accepts bytes from the {@link com.dilatush.util.feed.OutFeed}, buffers them, and makes the same bytes available from
+ *     the {@link com.dilatush.util.feed.InFeed}) and {@link com.dilatush.util.networkingengine.TCPPipe} (which makes bytes read from a network TCP connection available from the
+ *     {@link com.dilatush.util.feed.InFeed}, and accepts bytes from the {@link com.dilatush.util.feed.OutFeed} and writes them to a network TCP connection).</li>
  * </ul>
  */
 package com.dilatush.util.feed;
-/*
-Similarly, {@link com.dilatush.util.networkingengine.TCPInboundPipe} accepts bytes from the inbound side of a TCP connection, and makes those available as an {@link com.dilatush.util.feed.InFeed}.
- */

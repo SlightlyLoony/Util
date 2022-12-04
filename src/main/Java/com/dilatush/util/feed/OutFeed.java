@@ -53,6 +53,16 @@ public interface OutFeed extends Closeable {
 
 
     /**
+     * Return {@code true} if a write operation is already in progress.  The default implementation always returns {@code false}.
+     *
+     * @return {@code true} if a write operation is already in progress.
+     */
+    default boolean isWriting() {
+        return false;
+    }
+
+
+    /**
      * Closes this output feed and releases any system resources associated with the feed.
      */
     void close();

@@ -90,6 +90,16 @@ public interface InFeed extends Closeable {
 
 
     /**
+     * Return {@code true} if a read operation is already in progress.  The default implementation always returns {@code false}.
+     *
+     * @return {@code true} if a read operation is already in progress.
+     */
+    default boolean isReading() {
+        return false;
+    }
+
+
+    /**
      * Closes this input feed and releases any system resources associated with the feed.
      */
     void close();

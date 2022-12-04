@@ -10,9 +10,9 @@ import static com.dilatush.util.General.getLogger;
 import static com.dilatush.util.General.isNull;
 
 /**
- * An {@link InFeedSource} that empties available bytes from an internal buffer.  Several methods allow adding bytes to the internal buffer to make them available to the feed.
+ * An {@link InFeed} that empties available bytes from an internal buffer.  Several methods allow adding bytes to the internal buffer to make them available to the feed.
  */
-public class BufferedInFeedSource implements InFeedSource {
+public class BufferedInFeed implements InFeed {
 
     private static final Logger                    LOGGER          = getLogger();
 
@@ -29,11 +29,11 @@ public class BufferedInFeedSource implements InFeedSource {
 
 
     /**
-     * Create a new instance of {@link BufferedInFeedSource} with an internal buffer that can hold the given number of bytes, which must be in the range [1..65536].
+     * Create a new instance of {@link BufferedInFeed} with an internal buffer that can hold the given number of bytes, which must be in the range [1..65536].
      *
      * @param _size the number of bytes in the internal buffer.
      */
-    public BufferedInFeedSource( final int _size ) {
+    public BufferedInFeed( final int _size ) {
 
         // sanity checks...
         if( (_size < 1) || (_size > 65536) ) throw new IllegalArgumentException( "_size is out of range [1..65536]: " + _size );
@@ -125,7 +125,7 @@ public class BufferedInFeedSource implements InFeedSource {
 
         // sanity checks...
         if( closed )
-            postReadCompletion( forgeByteBuffer.notOk( "BufferedInFeedSource is closed" ) );
+            postReadCompletion( forgeByteBuffer.notOk( "BufferedInFeed is closed" ) );
         else if( _minBytes < 1 )
             postReadCompletion( forgeByteBuffer.notOk( "_minBytes is " + _minBytes + ", but must be >= 1", new IllegalArgumentException() ) );
         else if( _minBytes > _maxBytes )

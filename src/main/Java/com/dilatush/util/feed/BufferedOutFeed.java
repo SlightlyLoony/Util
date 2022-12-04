@@ -9,9 +9,9 @@ import static com.dilatush.util.General.isNull;
 
 
 /**
- * A {@link BufferedOutFeedSink} that adds bytes to an internal buffer.  Several methods allow emptying bytes from the buffer to make more room for bytes from the feed.
+ * A {@link BufferedOutFeed} that adds bytes to an internal buffer.  Several methods allow emptying bytes from the buffer to make more room for bytes from the feed.
  */
-public class BufferedOutFeedSink implements OutFeedSink {
+public class BufferedOutFeed implements OutFeed {
 
     private static final Outcome.Forge<?> forge = new Outcome.Forge<>();
 
@@ -25,11 +25,11 @@ public class BufferedOutFeedSink implements OutFeedSink {
 
 
     /**
-     * Create a new instance of {@link BufferedOutFeedSink} with an internal buffer that can hold the given number of bytes, which must be in the range [1..65536].
+     * Create a new instance of {@link BufferedOutFeed} with an internal buffer that can hold the given number of bytes, which must be in the range [1..65536].
      *
      * @param _size the number of bytes in the internal buffer.
      */
-    public BufferedOutFeedSink( final int _size ) {
+    public BufferedOutFeed( final int _size ) {
 
         // sanity checks...
         if( (_size < 1) || (_size > 65536) ) throw new IllegalArgumentException( "_size is out of range [1..65536]: " + _size );

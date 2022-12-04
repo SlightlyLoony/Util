@@ -6,14 +6,14 @@ import java.nio.ByteBuffer;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class BufferedOutFeedSinkTest {
+class BufferedOutFeedTest {
 
     @Test
     void write() {
 
-        // first get an instance of BufferedOutFeedSink...
+        // first get an instance of BufferedOutFeed...
         // noinspection resource
-        var bbof = new BufferedOutFeedSink( 100 );
+        var bbof = new BufferedOutFeed( 100 );
 
         // then write a long to it...
         var b = ByteBuffer.allocate( 100 ).putLong( 123456789L ).flip();
@@ -43,7 +43,7 @@ class BufferedOutFeedSinkTest {
     void close() {
 
         // make sure a closed instance doesn't work...
-        var bbof = new BufferedOutFeedSink( 10 );
+        var bbof = new BufferedOutFeed( 10 );
         var b = ByteBuffer.allocate( 10 );
         b.putInt( 12 );
         b.flip();

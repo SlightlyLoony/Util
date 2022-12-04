@@ -14,7 +14,7 @@ import static java.util.logging.Level.FINEST;
  * A piped feed (the combination of an {@link OutFeed} and an {@link InFeed}) that makes bytes written to the {@link OutFeed} available to be read from the {@link InFeed}.  The
  * bytes written are stored in an internal buffer until they are read.  The size of the internal buffer is set on instantiation.
  */
-public class BufferedPipedFeed implements InFeedSource, OutFeedSink {
+public class BufferedPipedFeed implements Feed {
 
     private static final Logger LOGGER          = getLogger();
 
@@ -35,7 +35,7 @@ public class BufferedPipedFeed implements InFeedSource, OutFeedSink {
 
 
     /**
-     * Create a new instance of {@link BufferedInFeedSource} with an internal buffer that can hold the given number of bytes, which must be in the range [1..65536].
+     * Create a new instance of {@link BufferedInFeed} with an internal buffer that can hold the given number of bytes, which must be in the range [1..65536].
      *
      * @param _size the number of bytes in the internal buffer.
      */
@@ -83,7 +83,7 @@ public class BufferedPipedFeed implements InFeedSource, OutFeedSink {
 
         // sanity checks...
         if( closed )
-            postReadCompletion( forgeByteBuffer.notOk( "BufferedInFeedSource is closed" ) );
+            postReadCompletion( forgeByteBuffer.notOk( "BufferedInFeed is closed" ) );
         else if( _minBytes < 1 )
             postReadCompletion( forgeByteBuffer.notOk( "_minBytes is " + _minBytes + ", but must be >= 1", new IllegalArgumentException() ) );
         else if( _minBytes > _maxBytes )
