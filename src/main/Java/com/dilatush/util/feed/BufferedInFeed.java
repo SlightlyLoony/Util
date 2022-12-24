@@ -10,7 +10,8 @@ import static com.dilatush.util.General.getLogger;
 import static com.dilatush.util.General.isNull;
 
 /**
- * An {@link InFeed} that empties available bytes from an internal buffer.  Several methods allow adding bytes to the internal buffer to make them available to the feed.
+ * An {@link InFeed} that empties available bytes from an internal buffer, which is initially empty.  Several methods allow adding bytes to the internal buffer to make them
+ * available to the feed.
  */
 public class BufferedInFeed implements InFeed {
 

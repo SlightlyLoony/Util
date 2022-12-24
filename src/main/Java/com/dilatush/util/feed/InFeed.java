@@ -8,7 +8,7 @@ import java.nio.ByteBuffer;
 
 
 /**
- * Implemented by input feeds that read data from a source.
+ * Implemented by classes that provide a feed of bytes from a source.
  */
 public interface InFeed extends Closeable {
 

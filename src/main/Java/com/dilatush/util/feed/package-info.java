@@ -4,10 +4,10 @@
  * makes them eminently suitable for use with asynchronous components such as the {@link com.dilatush.util.networkingengine.NetworkingEngine}.  These three interfaces form the
  * core of the feeds package:</p>
  * <ul>
- *     <li>Implementations of {@link com.dilatush.util.feed.InFeed} accept bytes from some source, optionally transforms them somehow, then make the resulting bytes available from
+ *     <li>Implementations of {@link com.dilatush.util.feed.InFeed} accept bytes from some source, optionally transform them somehow, then make the resulting bytes available from
  *     the {@link com.dilatush.util.feed.InFeed}.  Note that the source of the bytes could be another {@link com.dilatush.util.feed.InFeed}.  An example is
  *     {@link com.dilatush.util.feed.BufferedInFeed}, which accepts bytes through its own API, then makes the same bytes available as an {@link com.dilatush.util.feed.InFeed}.</li>
- *     <li>Implementations of {@link com.dilatush.util.feed.OutFeed} accept bytes from the {@link com.dilatush.util.feed.OutFeed}, optionally transforms them somehow, then
+ *     <li>Implementations of {@link com.dilatush.util.feed.OutFeed} accept bytes from the {@link com.dilatush.util.feed.OutFeed}, optionally transform them somehow, then
  *     make the resulting bytes available to to some destination.  Note that the destination of the bytes could be another {@link com.dilatush.util.feed.OutFeed}.  An example is
  *     {@link com.dilatush.util.feed.BufferedOutFeed}, which accepts bytes as an {@link com.dilatush.util.feed.OutFeed}, then makes the same bytes available through its
  *     own API.</li>

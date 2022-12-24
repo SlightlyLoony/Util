@@ -8,7 +8,7 @@ import java.nio.ByteBuffer;
 
 
 /**
- * Implemented by output feeds that write data to a sink.
+ * Implemented by classes that accept a feed of bytes to a destination.
  */
 public interface OutFeed extends Closeable {
 
