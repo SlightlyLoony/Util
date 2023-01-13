@@ -17,6 +17,7 @@
       <w>cgnat</w>
       <w>dilatush</w>
       <w>dnsnio</w>
+      <w>ecuyer</w>
       <w>egcd</w>
       <w>exponentiate</w>
       <w>ffff</w>
@@ -47,6 +48,7 @@
       <w>oaep</w>
       <w>oopsie</w>
       <w>ownself</w>
+      <w>panneton</w>
       <w>paradiseweather</w>
       <w>patoot</w>
       <w>peasy</w>
@@ -78,6 +80,7 @@
       <w>unquoter</w>
       <w>worser</w>
       <w>xcrt</w>
+      <w>xorshift</w>
       <w>zabcdefghijklmnopqrstuvwxyz</w>
     </words>
   </dictionary>

@@ -52,4 +52,18 @@ public class RandomishAPI implements Randomish {
     public long nextLong() {
         return (long)nextInt() << 32 | (long)nextInt();
     }
+
+
+    /**
+     * Returns the cycle length of the random or pseudorandom sequence provided by this instance.  If the sequence is a truly random sequence, positive infinity will be returned.
+     * Otherwise, for a pseudorandom sequence it returns the actual cycle length (defined somewhat arbitrarily as the number of invocations of {@link #nextInt()} between the start
+     * of a pattern of 10 integers and the start of the next repetition of those same 10 integers).
+     *
+     * @return the cycle length of the random or pseudorandom sequence provided by this instance.
+     */
+    @Override
+    public double cycleLength() {
+
+        return 0;
+    }
 }

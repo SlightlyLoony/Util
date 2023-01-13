@@ -5,42 +5,106 @@ package com.dilatush.util.random;
  * Marsaglia's paper <a href="https://www.jstatsoft.org/index.php/jss/article/view/v008i14/916"><i>Xorshift RNGs</i></a>.
  */
 public class XORShift32 implements Randomish {
-    
+
+    // preloaded static table of all possible triplets...
     private final static Triplet[] TRIPLETS = initTriplets();
 
-    private final int  generator;  // [0..7] for the 8 possible generator variants in George Marsaglia's paper...
-    private final int  a;
-    private final int  b;
-    private final int  c;
+    // immutable state of this PRNG instance...
+    private final int  generator;          // [0..7] for the 8 possible generator variants in George Marsaglia's paper...
+    private final int  a;                  // the "a" value in the selected triplet from George Marsaglia's paper...
+    private final int  b;                  // the "b" value...
+    private final int  c;                  // the "c" value...
+    private final int  insertZeroTrigger;  // the output value to insert a zero output after (or zero to never insert a zero)...
 
-    private int state;             // the current state of the RNG...
+    // mutable state of the PRNG...
+    private int     state;     // the current state of the PRNG...
+    private boolean zeroNext;  // true if the next value returned by nextInt() should be the inserted zero, and the next state value...
 
 
     /**
+     * Create a new instance of this class using the given triplet index, generator index, initial state, and whether zero states should be inserted.
      *
      * @param _triplet Index for the triplet to be used; must be in the range [0..80].
      * @param _generator Index for the generator to be used; must be in the range [0..7].
-     * @param _initalState The initial state of the RNG; must not be zero.
+     * @param _initialState The initial state of the RNG; may be any value other than zero.
+     * @param _zeroInsertion If {@code false}, all possible integer values except zero will be returned from {@link #nextInt()} in the course of one cycle of the pseudorandom
+     *                       cycle (so the cycle length in that case is 2^32 - 1).  If {@code true}, all possible integer values will be returned (so in that case the cycle
+     *                       length is 2^32.  The zero output will be inserted as the return value for {@link #nextInt()} after a call to {@link #nextInt()} returns a "trigger"
+     *                       value that is computed from the generator index, the triplet index, and the initial state.
      */
-    public XORShift32( final int _triplet, final int _generator, final int _initalState ) {
+    public XORShift32( final int _triplet, final int _generator, final int _initialState, final boolean _zeroInsertion ) {
 
-        a = TRIPLETS[_triplet].a;
-        b = TRIPLETS[_triplet].b;
-        c = TRIPLETS[_triplet].c;
+        // sanity checks...
+        if( (_triplet < 0) || (_triplet > 80)    ) throw new IllegalArgumentException( "_triplet is out of allowed range [0..80]: " + _triplet    );
+        if( (_generator < 0) || (_generator > 7) ) throw new IllegalArgumentException( "_generator is out of allowed range [0..7]: " + _generator );
+        if( _initialState == 0                   ) throw new IllegalArgumentException( "_initialState may not be zero"                            );
 
-        generator = _generator;
-        state = _initalState;
+        // we have good parameters, so initialize our new instance...
+        a                 = TRIPLETS[_triplet].a;
+        b                 = TRIPLETS[_triplet].b;
+        c                 = TRIPLETS[_triplet].c;
+        insertZeroTrigger = calcInsertZeroTrigger( _zeroInsertion );
+        generator         = _generator;
+        state             = _initialState;
+        zeroNext          = false;
     }
 
 
     /**
-     * Returns the next integer in the pseudorandom sequence provided by this instance. The integer's value will be in the range (-2^31..2^31).  Note that the range is exclusive,
-     * and is not the same as the usual Java int range of [-2^31..2^31).  The returned value has 2^32-1 possible values, and is symmetrical around zero.
+     * Create a new instance of this class that will not insert zeroes, using the given triplet index, generator index, and initial state.
      *
-     * @return The next integer in the pseudorandom sequence.
+     * @param _triplet Index for the triplet to be used; must be in the range [0..80].
+     * @param _generator Index for the generator to be used; must be in the range [0..7].
+     * @param _initialState The initial state of the RNG; must not be zero.
      */
+    public XORShift32( final int _triplet, final int _generator, final int _initialState ) {
+        this( _triplet, _generator, _initialState, false );
+    }
+
+
+    /**
+     * Returns the cycle length of the pseudorandom sequence provided by this instance, defined somewhat arbitrarily as the number of invocations of {@link #nextInt()} between the
+     * start of a pattern of 10 integers and the start of the next repetition of those same 10 integers.
+     *
+     * @return the cycle length of the pseudorandom sequence provided by this instance.
+     */
+    @Override
+    public double cycleLength() {
+        return (insertZeroTrigger == 0) ? Math.pow( 2d, 32d ) - 1 : Math.pow( 2d, 32d );
+    }
+
+
+    private int calcInsertZeroTrigger( final boolean _zeroInsertion ) {
+
+        // if we're not doing zero insertion, then the trigger is zero (which will, of course, never be reached)...
+        if( !_zeroInsertion ) return 0;
+
+        // otherwise, we munge our parameters until we get a non-zero trigger value...
+        var izt = 0;
+        var munge = (generator << 15) | (a << 10) | (b << 5) | c;
+        do {
+            izt = munge ^ state;
+            munge = Integer.rotateLeft( munge, 1 );
+        } while( izt == 0 );
+        return izt;
+    }
+
+
+    /**
+     * Returns the next integer in the pseudorandom sequence provided by this instance.
+     *
+     * @return The next integer in the random or pseudorandom sequence.
+     */
+    @Override
     public int nextInt() {
 
+        // if it's time to insert a zero, do so...
+        if( zeroNext ) {
+            zeroNext = false;
+            return 0;
+        }
+
+        // These generators are all lifted straight from George Marsaglia's paper, referenced in the javadoc for this class...
         switch( generator ) {
 
             case 0 -> {
@@ -91,16 +155,17 @@ public class XORShift32 implements Randomish {
                 state ^= (state <<  b);
             }
 
-            default -> {
-                throw new IllegalStateException( "Invalid generator value: " + generator );
-            }
+            default -> throw new IllegalStateException( "Invalid generator value: " + generator );
         }
+
+        // see if it's time to insert a zero on the next call...
+        zeroNext = (state == insertZeroTrigger);
 
         return state;
     }
 
 
-    private record Triplet( int a, int b, int c ){};
+    private record Triplet( int a, int b, int c ){}
 
 
     /**
