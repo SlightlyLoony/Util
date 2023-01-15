@@ -20,9 +20,8 @@ public class PrimeCycleFilter implements Randomish {
      *   more than enough to identify the 2,712 pairs of complements we need.
      */
 
-    private static long[] PRIMES    = initPrimes();  // the 256 largest prime numbers less than 2^32.
-    private static double TWO_TO_32 = Math.pow( 2, 32 );
-    private static int    POS_MASK  = 0x7FFF_FFFF;
+    private static final long[] PRIMES    = initPrimes();  // the 256 largest prime numbers less than 2^32.
+    private static final double TWO_TO_32 = Math.pow( 2, 32 );
 
     private final long      prime;     // the prime length of the cycle for this instance...
     private final Randomish source;    // the source for pseudorandom numbers to filter, with a cycle length of 2^32...
@@ -87,7 +86,7 @@ public class PrimeCycleFilter implements Randomish {
         var bits27 = new ArrayList<Integer>( 32 );
         var bits5  = new ArrayList<Integer>( 5  );
         for( int i = 0; i < 32; i++ ) bits27.add( i );
-        for( int i = 0; i < 5; i++ ) bits5.add( bits27.remove( ( POS_MASK & random.nextInt() ) % bits27.size() ) );
+        for( int i = 0; i < 5; i++ ) bits5.add( bits27.remove( ( random.nextInt() >>> 7 ) % bits27.size() ) );
         bits5.sort( Comparator.comparingInt( a -> a ) );
 
         // get our field descriptions...
@@ -115,10 +114,11 @@ public class PrimeCycleFilter implements Randomish {
         while( removalsLeft > 0 ) {
 
             // randomly pick a 2-bit combination in each of the 5-bit field and the 27-bit field...
-            var msb5  = random.nextInt() & 0x3;                       // get the 5-bit msb position in [1..4], offset by 1 to [0..3] as an index into skips...
-            var lsb5  = (POS_MASK & random.nextInt()) % (msb5 + 1);   // get the 5-bit lsb position in [0..msb5] as an index into skips...
-            var msb27 = (POS_MASK & random.nextInt()) % 26;           // get the 27-bit msb position in [1..26], offset by 1 to [0..35] as an index into skips...
-            var lsb27 = (POS_MASK & random.nextInt()) % (msb27 + 1);  // get the 27-bit lsb position in [0..msb27] as an index into skips...
+            var rand  = random.nextInt();
+            var msb5  = rand & 0x3;                   // get the 5-bit msb position in [1..4], offset by 1 to [0..3] as an index into skips...
+            var lsb5  = (rand >>> 3)  % (msb5 + 1);   // get the 5-bit lsb position in [0..msb5] as an index into skips...
+            var msb27 = (rand >>> 7)  % 26;           // get the 27-bit msb position in [1..26], offset by 1 to [0..35] as an index into skips...
+            var lsb27 = (rand >>> 14) % (msb27 + 1);  // get the 27-bit lsb position in [0..msb27] as an index into skips...
 
             // if we've already selected this integer as a removal, try again...
             if( (skips[msb5][lsb5][msb27] & (1 << lsb27)) != 0 ) continue;
@@ -260,17 +260,5 @@ public class PrimeCycleFilter implements Randomish {
                 4_294_966_877L, 4_294_966_909L, 4_294_966_927L, 4_294_966_943L, 4_294_966_981L, 4_294_966_997L, 4_294_967_029L, 4_294_967_087L,
                 4_294_967_111L, 4_294_967_143L, 4_294_967_161L, 4_294_967_189L, 4_294_967_197L, 4_294_967_231L, 4_294_967_279L, 4_294_967_291L,
         };
-    }
-
-
-    public static void main( String[] _arg ) {
-        var source = new XORShift32( 0,0,1,true );
-        var filter = new PrimeCycleFilter( source, 102 );
-
-        while( true ) {
-            filter.nextInt();
-        }
-
-        //new Object().hashCode();
     }
 }
