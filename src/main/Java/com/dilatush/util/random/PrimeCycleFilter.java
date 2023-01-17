@@ -77,20 +77,26 @@ public class PrimeCycleFilter implements Randomish {
 
         // Get a pseudorandom source to use for the rest of our setup.  The goal is a source that is "randomly" different for each possible prime...
         var triplet      = (int) (prime % 81);                                                                        // modulo THIS prime to get a triplet...
-        var generator    = (int) (7 & ((prime) ^ (prime >>> 3) ^ (prime >>> 6) ^ (prime >>> 9) ^ (prime >>> 12) ) );  // munge the lower 12 bits of THIS prime for a generator...
+        var generator    = (int) (7 & ((prime) ^ (prime >>> 3) ^ (prime >>> 6) ^ (prime >>> 8) ^ (prime >>> 11) ) );  // munge the lower 13 bits of THIS prime for a generator...
         var initialState = (int) (PRIMES[(_primeIndex + 3) & 0xFF] ^ PRIMES[(_primeIndex + 7) & 0xFF]);               // munge a couple OTHER primes to get initial state...
         var zeroInsert   = true;                                                                                      // we like our zeroes, though it doesn't really matter...
         var random       = new XORShift32( triplet, generator, initialState, zeroInsert );                            // and now, at last, we can construct our source...
 
         // get a sorted list of the randomly selected integer bits in our 5-bit and 27-bit fields...
-        var bits27 = new ArrayList<Integer>( 32 );
-        var bits5  = new ArrayList<Integer>( 5  );
-        for( int i = 0; i < 32; i++ ) bits27.add( i );
-        for( int i = 0; i < 5; i++ ) bits5.add( bits27.remove( ( random.nextInt() >>> 7 ) % bits27.size() ) );
-        bits5.sort( Comparator.comparingInt( a -> a ) );
+        var bits27 = new ArrayList<Integer>( 32 );           // a place to hold the bit numbers of our 27 bit field, but we're going to start with all 32 bits...
+        var bits5  = new ArrayList<Integer>( 5  );           // a place to hold the bit numbers of our 5 bit field...
+        for( int i = 0; i < 32; i++ ) bits27.add( i );       // fill in all the bit numbers from 0 to 31...
+        for( int i = 0; i < 5; i++ )                         // five times...
+            bits5.add(                                       // add a bit number to our 5 bit field, selected at random from the 32 bits in an int...
+                    bits27.remove(                           // remove a random bit from the initial collection of 32 bits...
+                            (random.nextInt() >>> 7)         // this gets us a random positive 25 bit integer...
+                                    % bits27.size()          // and this gets us a random number in [0..n), where n is the number of bits still in the 27 bit field's bit numbers...
+                    )
+            );
+        bits5.sort( Comparator.comparingInt( a -> a ) );     // sort the 5 bit list (the 27 bit list is already sorted)...
 
         // get our field descriptions...
-        field5 = getField( bits5 );
+        field5  = getField( bits5  );
         field27 = getField( bits27 );
 
         // build our empty skips structure...
@@ -127,20 +133,24 @@ public class PrimeCycleFilter implements Randomish {
             if( skipExceptionTemp == 0 ) {
 
                 // synthesize the actual integer from the bit positions, then randomly invert it half the time...
-                skipExceptionTemp = ((1 << field5.to32[msb5 + 1]) | (1 << field5.to32[lsb5]) | (1 << field27.to32[msb27 + 1]) | ((1 << field27.to32[lsb27])))
-                                    ^ ((random.nextInt() & 1) == 0 ? 0 : 0xFFFF_FFFF);
+                skipExceptionTemp =
+                        (
+                                (1 << field5.to32[msb5 + 1]) | (1 << field5.to32[lsb5])          // set the two bits in our 5-bit field...
+                                | (1 << field27.to32[msb27 + 1]) | ((1 << field27.to32[lsb27]))  // set the two bits in our 27-bit field...
+                        )
+                                ^ ((random.nextInt() & 1) == 0 ? 0 : 0xFFFF_FFFF);               // randomly decide whether to invert it...
 
-                removalsLeft--;
+                removalsLeft--;     // only one integer with these bits will be removed, because of the skip exception...
             }
             else {
-                removalsLeft -= 2;
+                removalsLeft -= 2;  // two integers with these bits (ones complements) will be removed...
             }
 
             // set the bit in skips for this one...
             skips[msb5][lsb5][msb27] |= (1 << lsb27);
         }
 
-        // some cleanup...'
+        // some cleanup...
         skipException = skipExceptionTemp;
     }
 
@@ -159,7 +169,7 @@ public class PrimeCycleFilter implements Randomish {
             // draw a trial integer from our source...
             var trial = source.nextInt();
 
-            // if the population of 1s is neither 4 nor 28, we've got valid answer...
+            // if the population of 1s is neither 4 nor 28, we've got valid answer (returns a valid answer about 99.9999% of the time)...
             if( (Integer.bitCount( trial ) != 4) && (Integer.bitCount( trial ) != 28) ) return trial;
 
             // if this integer is the skip exception, we've got a valid answer...
@@ -169,13 +179,14 @@ public class PrimeCycleFilter implements Randomish {
 
             // get the trial in normalized form, with 4 ones set, then isolate our two fields...
             var normalized = (Integer.bitCount( trial ) == 4) ? trial : ~trial;
-            var fld5 = normalized & field5.mask();
+            var fld5  = normalized & field5.mask();
             var fld27 = normalized & field27.mask();
 
-            // if we don't have 2 bits set in each field, then we've got a valid integer...
+            // if we don't have 2 bits set in each field, then we've got a valid integer (returns a valid answer about 99.9826% of the time)...
             if( Integer.bitCount( fld5 ) != 2 ) return trial;
 
             // look up this number in the skips table, and if it's not set then we've got a valid integer...
+            // the probability of returned valid from here depends on the prime; for the 0 index prime it's about 25%; for the 255 index prime it's about 99.8%...
             var dim1 = field5.from32[31 - Integer.numberOfLeadingZeros( fld5 )] - 1;
             var dim2 = field5.from32[Integer.numberOfTrailingZeros( fld5 )];
             var dim3 = field27.from32[31 - Integer.numberOfLeadingZeros( fld27 )] - 1;
@@ -199,25 +210,44 @@ public class PrimeCycleFilter implements Randomish {
     }
 
 
+    /**
+     * Holds values related to a field (the 5-bit field or the 27-bit field).
+     *
+     * @param size the number of bits in the field.
+     * @param bits a list of the integer bit numbers in the field.
+     * @param mask an integer mask of the bits in the field.
+     * @param from32 an array indexed by integer bit number, with each indexed entry containing the field bit number.
+     * @param to32 an array indexed by field bit number, with each indexed entry containing the integer bit number.
+     */
     private record Field( int size, List<Integer> bits, int mask, int[] from32, int[]to32 ) {}
 
 
-    private Field getField( final List<Integer> _bits ) {
+    /**
+     * Creates and returns a {@link Field} record, using the given list of integer bit numbers.  For example, given the list [4,15] this function will return a {@link Field} record
+     * with a size of 2, a bit list of [4,15], a mask of 0x0000_8010, a from32 of [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], and a to32 of [4,15].
+     *
+     * @param _bits a list of the integer bit numbers in this field.
+     * @return the {@link Field} record created.
+     */
+    private static Field getField( final List<Integer> _bits ) {
 
+        // some setup...
         var size = _bits.size();
         var mask   = 0;
         var from32 = new int[32];
         var to32   = new int[size];
 
+        // for each bit in the field...
         for( int fieldBit = 0; fieldBit < _bits.size(); fieldBit++ ) {
-            var intBit = _bits.get( fieldBit );
-            mask |= 1 << intBit;
-            from32[ intBit ] = fieldBit;
-            to32[ fieldBit ] = intBit;
+            var intBit = _bits.get( fieldBit );    // get the integer bit number for this field bit number...
+            mask |= (1 << intBit);                         // set the corresponding bit in the integer mask...
+            from32[ intBit ] = fieldBit;                   // set the field bit number in from32...
+            to32[ fieldBit ] = intBit;                     // set the integer bit number in to32...
         }
 
         return new Field( size, Collections.unmodifiableList(_bits), mask, from32, to32 );
     }
+
 
     /**
      * Returns the 256 largest prime numbers less than 2^32.  Shamelessly scraped from <a href="http://compoasso.free.fr/primelistweb/page/prime/liste_online_en.php">this
@@ -226,6 +256,8 @@ public class PrimeCycleFilter implements Randomish {
      * @return the 256 largest prime numbers less than 2^32.
      */
     private static long[] initPrimes() {
+
+        // Only the 13 LSBs of these numbers are different from each other - the 19 MSBs are all ones.
         return new long[] {
                 4_294_961_873L, 4_294_961_893L, 4_294_961_897L, 4_294_961_921L, 4_294_961_927L, 4_294_961_941L, 4_294_961_959L, 4_294_961_963L,
                 4_294_962_019L, 4_294_962_047L, 4_294_962_079L, 4_294_962_137L, 4_294_962_151L, 4_294_962_211L, 4_294_962_223L, 4_294_962_233L,
