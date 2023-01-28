@@ -1,5 +1,7 @@
 package com.dilatush.util.random;
 
+import java.math.BigInteger;
+
 /**
  * This class implements all 648 variations (81 triplets of shift variations, and 8 generator variations) of the 32-bit pseudorandom number generator (PRNG) described in George
  * Marsaglia's paper <a href="https://www.jstatsoft.org/index.php/jss/article/view/v008i14/916"><i>Xorshift RNGs</i></a>.
@@ -63,14 +65,15 @@ public class XORShift32 implements Randomish {
 
 
     /**
-     * Returns the cycle length of the pseudorandom sequence provided by this instance, defined somewhat arbitrarily as the number of invocations of {@link #nextInt()} between the
-     * start of a pattern of 10 integers and the start of the next repetition of those same 10 integers.
+     * <p>Returns the cycle length of the random or pseudorandom sequence provided by this instance.  The result is always an exact length.<p>
+     * <p>Cycle length is defined somewhat arbitrarily as the number of invocations of {@link #nextInt()} between the start
+     * of a pattern of 10 integers and the start of the next repetition of those same 10 integers</p>.
      *
-     * @return the cycle length of the pseudorandom sequence provided by this instance.
+     * @return the cycle length of the random or pseudorandom sequence provided by this instance.
      */
     @Override
-    public double cycleLength() {
-        return (insertZeroTrigger == 0) ? Math.pow( 2d, 32d ) - 1 : Math.pow( 2d, 32d );
+    public CycleLength cycleLength() {
+        return new CycleLength( CycleLengthForm.EXACTLY, (insertZeroTrigger == 0) ? TWO_TO_THIRTY_TWO.subtract( BigInteger.ONE ) : TWO_TO_THIRTY_TWO );
     }
 
 

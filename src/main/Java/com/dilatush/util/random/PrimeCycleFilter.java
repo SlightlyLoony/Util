@@ -1,5 +1,6 @@
 package com.dilatush.util.random;
 
+import java.math.BigInteger;
 import java.util.*;
 
 import static com.dilatush.util.General.isNull;
@@ -21,7 +22,6 @@ public class PrimeCycleFilter implements Randomish {
      */
 
     private static final long[] PRIMES    = initPrimes();  // the 256 largest prime numbers less than 2^32.
-    private static final double TWO_TO_32 = Math.pow( 2, 32 );
 
     private final long      prime;     // the prime length of the cycle for this instance...
     private final Randomish source;    // the source for pseudorandom numbers to filter, with a cycle length of 2^32...
@@ -67,9 +67,10 @@ public class PrimeCycleFilter implements Randomish {
     public PrimeCycleFilter( final Randomish _source, final int _primeIndex ) {
 
         // sanity checks...
-        if( isNull( _source ) )                        throw new IllegalArgumentException( "_source is null"                         );
-        if( _source.cycleLength() != TWO_TO_32 )       throw new IllegalArgumentException( "_source does not have 2^32 cycle length" );
-        if( (_primeIndex < 0) || (_primeIndex > 255) ) throw new IllegalArgumentException( "_primeIndex is not in [0..255]"          );
+        if( isNull( _source ) )                                                                 throw new IllegalArgumentException( "_source is null"                         );
+        var cl = _source.cycleLength();
+        if( (cl.form() != CycleLengthForm.EXACTLY) || (cl.cycleLength() != TWO_TO_THIRTY_TWO) ) throw new IllegalArgumentException( "_source does not have 2^32 cycle length" );
+        if( (_primeIndex < 0) || (_primeIndex > 255) )                                          throw new IllegalArgumentException( "_primeIndex is not in [0..255]"          );
 
         // some basic setup...
         prime = PRIMES[_primeIndex];
@@ -114,7 +115,7 @@ public class PrimeCycleFilter implements Randomish {
 
         // some setup...
         var skipExceptionTemp = 0;
-        var removalsLeft = (int)((long)TWO_TO_32 - prime);
+        var removalsLeft = (int)(TWO_TO_THIRTY_TWO.longValue() - prime);
 
         // loop until we've handled all the removals...
         while( removalsLeft > 0 ) {
@@ -197,16 +198,16 @@ public class PrimeCycleFilter implements Randomish {
 
 
     /**
-     * Returns the cycle length of the random or pseudorandom sequence provided by this instance.  If the sequence is a truly random sequence, positive infinity will be returned.
-     * Otherwise, for a pseudorandom sequence it returns the actual cycle length (defined somewhat arbitrarily as the number of invocations of {@link #nextInt()} between the start
-     * of a pattern of 10 integers and the start of the next repetition of those same 10 integers).
+     * <p>Returns the cycle length of the random or pseudorandom sequence provided by this instance.  The result is always an exact length.<p>
+     * <p>Cycle length is defined somewhat arbitrarily as the number of invocations of {@link #nextInt()} between the start
+     * of a pattern of 10 integers and the start of the next repetition of those same 10 integers</p>.
      *
      * @return the cycle length of the random or pseudorandom sequence provided by this instance.
      */
     @Override
-    public double cycleLength() {
+    public CycleLength cycleLength() {
 
-        return prime;
+        return new CycleLength( CycleLengthForm.EXACTLY, BigInteger.valueOf( prime ) );
     }
 
 

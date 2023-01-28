@@ -1,17 +1,32 @@
 package com.dilatush.util.random;
 
-import java.math.BigInteger;
+/**
+ * Instances of this class "mix" two or more {@link Randomish} pseudorandom sequences together to produce a high quality pseudorandom sequence with a longer cycle length.  The
+ * mixing is performed by XORing the {@link #nextInt()} result from each {@link Randomish} source to produce the next {@link #nextInt()} output from an instance of this class.
+ */
+public class XORMixer implements Randomish {
 
-public interface Randomish {
 
-    static BigInteger TWO_TO_THIRTY_TWO = BigInteger.valueOf( 0x1_0000_0000L );
+    /**
+     * Create a new instance of this class using the given sources.
+     *
+     * @param _sources
+     */
+    public XORMixer( final Randomish... _sources ) {
+
+    }
+
 
     /**
      * Returns the next integer in the random or pseudorandom sequence provided by this instance.
      *
      * @return The next integer in the random or pseudorandom sequence.
      */
-    int nextInt();
+    @Override
+    public int nextInt() {
+
+        return 0;
+    }
 
 
     /**
@@ -22,5 +37,9 @@ public interface Randomish {
      *
      * @return the cycle length of the random or pseudorandom sequence provided by this instance.
      */
-    CycleLength cycleLength();
+    @Override
+    public CycleLength cycleLength() {
+
+        return null;
+    }
 }

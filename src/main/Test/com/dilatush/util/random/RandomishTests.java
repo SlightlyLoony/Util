@@ -3,7 +3,7 @@ package com.dilatush.util.random;
 import org.junit.jupiter.api.Test;
 
 import static com.dilatush.util.General.isNull;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RandomishTests {
 
@@ -17,7 +17,9 @@ public class RandomishTests {
 
         // sanity checks...
         if( isNull( _source ) ) throw new IllegalArgumentException( "_source is null" );
-        if( _source.cycleLength() > (1L << 32) ) throw new IllegalArgumentException( "_source has a cycle length > 2^32" );
+        var cl = _source.cycleLength();
+        if( (cl.form() == CycleLengthForm.INFINITE) || (cl.form() == CycleLengthForm.UNKNOWN) ) throw new IllegalArgumentException( "_source cycle length form is unusable" );
+        if( cl.cycleLength().compareTo( Randomish.TWO_TO_THIRTY_TWO ) > 0 ) throw new IllegalArgumentException( "_source has a cycle length > 2^32" );
 
         // collect 10 integers from the source...
         var startPattern = new int[10];
@@ -25,33 +27,33 @@ public class RandomishTests {
 
         // now collect integers until we see that pattern again...
         var patternIndex = 0;  // 0 means we haven't run into the first element of the start pattern yet...
+        var statedCycleLength = cl.cycleLength().longValue();
+        var twoToThirtyTwo = Randomish.TWO_TO_THIRTY_TWO.longValue();
         var count = 0L;
-        while( count < (1L << 33) ) {
+        while( count <= twoToThirtyTwo ) {
             count++;
             var ni = _source.nextInt();
             if( startPattern[patternIndex] == ni ) {
                 patternIndex++;
                 if( patternIndex == 10 ) {
-                    return count == _source.cycleLength();
+                    return count == statedCycleLength;
                 }
             }
 
             else {
                 patternIndex = 0;
             }
-            if( count > _source.cycleLength() ) return false;
+            if( count > statedCycleLength ) return false;
         }
 
-        return _source.cycleLength() >= Math.pow( 2, 33 );
+        return false;
     }
 
 
     @Test
     void XORcycleLength() {
-
         assertTrue( cycleLengthTest( new XORShift32( 0, 0, 1, true ) ) );
         assertTrue( cycleLengthTest( new XORShift32( 1, 1, 1, false ) ) );
-
     }
 
 
