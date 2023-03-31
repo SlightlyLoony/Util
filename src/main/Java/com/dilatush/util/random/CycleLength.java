@@ -18,6 +18,17 @@ public record CycleLength( CycleLengthForm form, BigInteger cycleLength ) {
         if( cycleLength.compareTo( BigInteger.ZERO ) <= 0                   ) throw new IllegalArgumentException( "cycle length must be >+ 1"                    );
     }
 
+
+    public CycleLength( CycleLengthForm form ) {
+        this( form, null );
+    }
+
+
+    public boolean hasLength() {
+        return cycleLength != null;
+    }
+
+
     public CycleLength multiply( final CycleLength _operand ) {
 
         // sanity check...
