@@ -154,7 +154,7 @@ public abstract class AConfig {
 
 
     /**
-     * If the parameter {@code _valid} evaluates to {@code true}, this method just returns.  Otherwise it adds the given explanatory message to the
+     * If the parameter {@code _valid} evaluates to {@code true}, this method just returns.  Otherwise, it adds the given explanatory message to the
      * given list of explanatory messages, and logs a SEVERE log entry with the given message.
      *
      * @param _valid The validator function.
@@ -191,6 +191,7 @@ public abstract class AConfig {
      * @param _messages The list of messages for verification problems.
      * @param _subConfigName The human-readable name of the sub-configuration.
      */
+    @SuppressWarnings( "unused" )
     protected void verifySubConfig( final AConfig _subConfig, final List<String> _messages, final String _subConfigName ) {
 
         // first make sure we actually HAVE a sub-configuration...
