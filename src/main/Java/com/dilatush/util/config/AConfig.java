@@ -182,4 +182,22 @@ public abstract class AConfig {
          */
         boolean verify();
     }
+
+
+    /**
+     * Verify the given sub-configuration.
+     *
+     * @param _subConfig The sub-configuration to verify.
+     * @param _messages The list of messages for verification problems.
+     * @param _subConfigName The human-readable name of the sub-configuration.
+     */
+    protected void verifySubConfig( final AConfig _subConfig, final List<String> _messages, final String _subConfigName ) {
+
+        // first make sure we actually HAVE a sub-configuration...
+        validate( () -> _subConfig != null, _messages, _subConfigName + " must be present" );
+
+        // if it IS present, verify it...
+        if( _subConfig != null )
+            _subConfig.verify( _messages );
+    }
 }
