@@ -5,6 +5,7 @@ package com.dilatush.util;
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
+@SuppressWarnings( "unused" )
 public class Conversions {
 
 
@@ -70,7 +71,18 @@ public class Conversions {
      * @return the value in degrees Fahrenheit
      */
     public static double fromCtoF( final double _dC ) {
-        return (_dC * 9f / 5f) + 32f;
+        return (_dC * 9D / 5D) + 32D;
+    }
+
+
+    /**
+     * Converts the given value in degrees Fahrenheit to the equivalent value in degrees Celsius.
+     *
+     * @param _dF the value in degrees Fahrenheit
+     * @return the value in degrees Celsius
+     */
+    public static double fromFtoC( final double _dF ) {
+        return (_dF - 32D) * (5D / 9D);
     }
 
 
@@ -81,6 +93,6 @@ public class Conversions {
      * @return the value in Fahrenheit degree-days
      */
     public static double fromCDDtoFDD( final double _dC ) {
-        return _dC * 9f / 5f;
+        return _dC * 9D / 5D;
     }
 }
