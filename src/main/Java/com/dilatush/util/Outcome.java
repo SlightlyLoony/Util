@@ -111,6 +111,17 @@ public record Outcome<T>( boolean ok, String msg, Throwable cause, T info ) {
 
 
         /**
+         * Creates a new instance of {@link Outcome} that is not ok and takes the explanatory message and {@link Throwable} cause from the
+         * given outcome.
+         *
+         * @param _outcome The outcome to extract the message and cause from.
+         */
+        public Outcome<T> notOk( final Outcome<?> _outcome ) {
+            return new Outcome<>( false, _outcome.msg, _outcome.cause, null );
+        }
+
+
+        /**
          * Creates a new instance of {@link Outcome} that is not ok and has the given explanatory message and {@link Throwable} cause, and invalid or incomplete results.
          *
          * @param _msg A mandatory explanatory message about why the operation failed.
