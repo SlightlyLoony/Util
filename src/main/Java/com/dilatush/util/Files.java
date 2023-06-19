@@ -43,7 +43,7 @@ public class Files {
      */
     public static boolean writeToFile( final File _file, final String _data ) {
         try {
-            java.nio.file.Files.write( Paths.get( _file.getPath() ), _data.getBytes( StandardCharsets.UTF_8 ) );
+            java.nio.file.Files.writeString( Paths.get( _file.getPath() ), _data );
             return true;
         }
         catch( IOException _e ) {
