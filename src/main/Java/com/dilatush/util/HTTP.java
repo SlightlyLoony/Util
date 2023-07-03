@@ -1,9 +1,9 @@
 package com.dilatush.util;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 
 /**
@@ -79,21 +79,39 @@ public class HTTP {
     @SuppressWarnings( "JavadocLinkAsPlainText" )
     public static Outcome<String> request( final String _url, final String _accept ) {
 
+        /* The initial implementation of this method used the new HttpClient.  That implementation used dozens of threads for what was
+         * intended to be a simple utility method.  Went back to the old way, synchronous and single threaded.
+         */
+
         try {
-            // create a client
-            var client = HttpClient.newHttpClient();
+            // build the request...
+            var url = new URL( _url );
+            var httpConn = (HttpURLConnection) url.openConnection();
+            httpConn.setRequestProperty( "Accept", _accept );
+            httpConn.setRequestMethod( "GET" );
+            httpConn.setInstanceFollowRedirects(false);
 
-            // create a request
-            var request = HttpRequest.newBuilder( URI.create( _url ) )
-                    .header("accept", _accept )
-                    .build();
+            // make the request...
+            int status = httpConn.getResponseCode();
 
-            // use the client to send the request
-            var response = client.send( request, HttpResponse.BodyHandlers.ofString() );
-            var status = response.statusCode();
+            // if we didn't get a 200 response code, we've got an error...
             if( status != 200 )
                 return FORGE_STRING.notOk( "Not OK response status when reading " + _url + ", status code: " + status );
-            return FORGE_STRING.ok( response.body() );
+
+            // read the response...
+            BufferedReader in = new BufferedReader( new InputStreamReader( httpConn.getInputStream() ) );
+            String inputLine;
+            StringBuilder content = new StringBuilder();
+            while( (inputLine = in.readLine()) != null ) {
+                content.append( inputLine );
+            }
+            in.close();
+
+            // cleanup...
+            httpConn.disconnect();
+
+            // and we're done...
+            return FORGE_STRING.ok( content.toString() );
         }
         catch( Exception _e ) {
             return FORGE_STRING.notOk( "Problem reading " + _url, _e );
