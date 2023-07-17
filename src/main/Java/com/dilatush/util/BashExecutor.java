@@ -4,55 +4,42 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import static com.dilatush.util.General.getLogger;
 import static java.util.Objects.isNull;
 
 /**
- * Instances of this class execute a command outside any shell and return the results.  The command to be executed must be a command that
- * terminates the process itself.
+ * Instances of this class execute a command in a fresh copy of the bash shell, and return the results.  The command to be executed must be a command (or semicolon
+ * separated commands and pipes) that terminates the process itself.  Note that this class is intended to supersede the {@link Executor} class, which executes commands
+ * outside a shell.
  *
  * @author Tom Dilatush  tom@dilatush.com
  */
 @SuppressWarnings( "unused" )
-public class Executor {
+public class BashExecutor {
 
-    final static private Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
-
-    private final List<String> elements;
+    final static private Logger LOGGER = getLogger();
 
     private int exitCode;
 
+    private final String script;
+
 
     /**
-     * Creates an instance to run the given string command, which would be formatted exactly as you would run it from a Bash command line, including
-     * backslashes, single quotes, and double quotes.  Note that variable names ("$xxx") and globs ("*") are <i>not</i> expanded, but dollar signs
-     * <i>are</i> escaped.
+     * Creates a new instance of this class, ready to execute the given script inside an instance of {@code bash}.  Note that the given script is automagically prefixed
+     * with {@code set -o pipefail; } so that in the case of a pipe, any non-zero exit code is returned.
      *
-     * @param _command the command to execute
+     * @param _script The script to execute inside of {@code bash}.
      */
-    public Executor( final String _command ) {
-        //noinspection deprecation
-        elements = Bash.unquote( _command );
+    public BashExecutor( final String _script ) {
+        script = "set -o pipefail; " + _script;
     }
 
 
     /**
-     * Creates an instance to run the given list of command and arguments.  Note that these must be in the same format as seen by the main method
-     * of a program: unquoted.
-     *
-     * @param _elements the list of command and arguments.
-     */
-    @SuppressWarnings( "unused" )
-    public Executor( final List<String> _elements ) {
-        elements = _elements;
-    }
-
-
-    /**
-     * Runs this executor, returning the result (the output of the command being run) as a string.  If an error occurs, returns <code>null</code>.
+     * Runs this executor, returning the result (the output of the script being run) as a string.  If an error occurs, returns <code>null</code>.
      * The error stream is redirected to stdout, and is returned as part of the result.  The exit code is captured and can be read.  This method
      * will block until the command has finished executing.
      *
@@ -62,7 +49,7 @@ public class Executor {
     public String run() {
 
         try {
-            ProcessBuilder pb = new ProcessBuilder( elements );
+            ProcessBuilder pb = new ProcessBuilder( "bash", "-c", script );
             pb.redirectErrorStream( true );
             Process p = pb.start();
             BufferedReader br = new BufferedReader( new InputStreamReader( p.getInputStream(), StandardCharsets.US_ASCII ) );

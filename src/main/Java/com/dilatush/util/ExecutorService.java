@@ -4,7 +4,6 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.*;
-import java.util.logging.Logger;
 
 import static java.lang.Thread.sleep;
 
@@ -15,8 +14,6 @@ import static java.lang.Thread.sleep;
  * @author Tom Dilatush  tom@dilatush.com
  */
 public class ExecutorService implements java.util.concurrent.ExecutorService {
-
-    final static private Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
 
     // our captive thread pool executor...
     private final ThreadPoolExecutor executorService;
@@ -79,6 +76,7 @@ public class ExecutorService implements java.util.concurrent.ExecutorService {
      * Creates a new executor service instance with a fixed single daemon thread that will queue a maximum of 100 tasks and run them in the caller's
      * thread if the queue becomes full.
      */
+    @SuppressWarnings( "unused" )
     public ExecutorService() {
         this( 1, 1, Duration.ZERO, true, 100, true );
     }
@@ -102,6 +100,7 @@ public class ExecutorService implements java.util.concurrent.ExecutorService {
      * @param _poolSize The size of the thread pool.
      * @param _maxQueued The maximum number of tasks that may be queued when there are no threads available to run them.
      */
+    @SuppressWarnings( "unused" )
     public ExecutorService( final int _poolSize, final int _maxQueued ) {
         this( _poolSize, _poolSize, Duration.ZERO, true, _maxQueued, true );
     }
@@ -110,7 +109,6 @@ public class ExecutorService implements java.util.concurrent.ExecutorService {
     /**
      * Executes the given task sometime in the future.  The task
      * may execute in a new thread or in an existing pooled thread.
-     *
      * If the task cannot be submitted for execution, either because this
      * executor has been shutdown or because its capacity has been reached,
      * the task is handled by the current {@code RejectedExecutionHandler}.
@@ -423,6 +421,7 @@ public class ExecutorService implements java.util.concurrent.ExecutorService {
      *
      * @return the task queue
      */
+    @SuppressWarnings( "unused" )
     public BlockingQueue<Runnable> getQueue() {
         return executorService.getQueue();
     }
