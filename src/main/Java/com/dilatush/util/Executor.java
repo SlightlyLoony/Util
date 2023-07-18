@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import static com.dilatush.util.General.getLogger;
 import static java.util.Objects.isNull;
 
 /**
@@ -19,7 +20,7 @@ import static java.util.Objects.isNull;
 @SuppressWarnings( "unused" )
 public class Executor {
 
-    final static private Logger LOGGER = Logger.getLogger( new Object(){}.getClass().getEnclosingClass().getCanonicalName() );
+    final static private Logger LOGGER = getLogger();
 
     private final List<String> elements;
 
